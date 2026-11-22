@@ -39,7 +39,7 @@ describe("nookdeck install", () => {
     const stable = join(home, ".nookdeck", "bin", "nookdeck");
     expect(r).toEqual({ status: "installed", stable });
     expect(readFileSync(stable, "utf8")).toBe("bin-0.3.1");
-    expect(statSync(stable).mode & 0o111).not.toBe(0);
+    if (!WIN) expect(statSync(stable).mode & 0o111).not.toBe(0); // Windows has no exec bit
     expect(runs).toEqual([[stable, "migrate", "--no-service"], [stable, "service", "install"]]);
     expect(readdirSync(join(home, ".nookdeck", "bin")).sort()).toEqual([".installed-by", "nookdeck"]); // no temp file left
     expect(readFileSync(join(home, ".nookdeck", "bin", ".installed-by"), "utf8")).toStartWith("homebrew");
@@ -126,7 +126,7 @@ describe("nookdeck install", () => {
   test("Windows puts the copy in %LOCALAPPDATA%\\Nookdeck\\bin and stops the service first", async () => {
     expect(stablePath({ platform: "win32", home: join("C:", "Users", "me"), winLocal: join("C:", "Users", "me", "AppData", "Local") })).toBe(join("C:", "Users", "me", "AppData", "Local", "Nookdeck", "bin", "nookdeck.exe"));
     expect(stablePath({ platform: "win32", home: join("C:", "sandbox"), relocated: true })).toBe(join("C:", "sandbox", "bin", "nookdeck.exe"));
-    expect(stablePath({ platform: "darwin", home: "/Users/me" })).toBe("/Users/me/.nookdeck/bin/nookdeck");
+    expect(stablePath({ platform: "darwin", home: join("/Users", "me") })).toBe(join("/Users", "me", ".nookdeck", "bin", "nookdeck")); // host separators
     if (WIN) return;
     const order: string[] = [];
     const home = tmp();
