@@ -1,7 +1,7 @@
 {
   "id": "dev.nookdeck.crypto-price",
   "name": "Crypto price",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "nookdeck": ">=0.2.0",
   "author": "Nookdeck",
   "description": "Live price of a coin",
@@ -13,6 +13,7 @@
     "render": "stat",
     "sizes": ["2x1", "2x2"],
     "settings": [{ "key": "coin", "type": "string", "label": "Coin id", "default": "bitcoin" }],
+    "preview": { "value": 60721, "unit": "USD", "label": "bitcoin" },
     "source": {
       "http": { "url": "https://api.coingecko.com/api/v3/simple/price?ids={{coin}}&vs_currencies=usd", "every": 60 },
       "map": { "value": "$.{{coin}}.usd", "unit": "USD", "label": "{{coin}}" }

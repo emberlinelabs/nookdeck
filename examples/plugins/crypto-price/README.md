@@ -8,9 +8,11 @@ A no-code Nookdeck plugin: one tile that shows the live USD price of a coin. It 
 
 ## Try it
 
-1. Open the manage page, go to **Plugins**.
-2. Install from a folder: paste the path of this folder.
+1. Open the manage page, go to **Plugins**, then **Discover**.
+2. Find **Crypto price** and press **Add**. It comes from the [nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins) registry, pinned to the reviewed version.
 3. Read the access list, then **Allow and turn on**.
-4. Add the **Price** tile to a screen.
+4. Press **Add tile to a screen**, then pick the coin in the tile settings.
+
+Writing your own? Copy this folder, change the `id`, and install it with **Install from a link** (a GitHub URL or a local folder) while you work on it.
 
 See [docs/plugins.md](../../../docs/plugins.md) for the full manifest.
