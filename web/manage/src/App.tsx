@@ -24,12 +24,13 @@ import { useAbout } from "@/lib/about";
 import { setPlatform, usePlatform } from "@/lib/platform";
 import { needsAttention, useDoctor } from "@/lib/doctor";
 import { mergeLayouts } from "@/lib/layout-merge";
+import { PluginsPanel } from "@/components/plugins-panel";
 import { asLanguage, setLanguage, type Language, t, useLanguage } from "@/lib/i18n";
 import type { Layout } from "@/types";
 
 const REPO = "https://github.com/howznguyen/phonedesk";
 
-type Tab = "screens" | "theme" | "screen" | "sounds" | "rules" | "ai" | "permissions" | "json" | "devices";
+type Tab = "screens" | "theme" | "screen" | "sounds" | "rules" | "ai" | "permissions" | "plugins" | "json" | "devices";
 const TABS: { value: Tab; label: string }[] = [
   { value: "screens", label: "Screens" },
   { value: "theme", label: "Theme" },
@@ -37,6 +38,7 @@ const TABS: { value: Tab; label: string }[] = [
   { value: "rules", label: "Automation" },
   { value: "sounds", label: "Sounds" },
   { value: "ai", label: "AI integrations" },
+  { value: "plugins", label: "Plugins" },
   { value: "permissions", label: "Permissions" },
   { value: "json", label: "JSON" },
   { value: "devices", label: "Devices" },
@@ -336,6 +338,7 @@ export default function App() {
           {tab === "rules" && <RulesPanel layout={layout} update={update} />}
           {tab === "sounds" && <SoundsPanel />}
           {tab === "ai" && <IntegrationsPanel />}
+          {tab === "plugins" && <PluginsPanel update={update} />}
           {tab === "permissions" && <PermissionsPanel {...doctor} />}
           {tab === "json" && <JsonPanel key={jsonKey} layout={layout} onChange={(l) => update(() => l)} onError={setJsonError} />}
           {tab === "devices" && <div className="flex flex-col gap-4"><DevicesPanel /><AboutCard about={about} /></div>}

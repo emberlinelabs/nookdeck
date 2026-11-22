@@ -1,8 +1,9 @@
 import { isIconName } from "@shared/icons";
 import { t } from "@/lib/i18n";
-import type { Action, AiProvider, HassEntity, Item, MacApp, Sound, WidgetKind } from "@/types";
+import { pluginSizes } from "@/lib/plugins";
+import type { Action, AiProvider, HassEntity, Item, MacApp, PluginInfo, Sound, WidgetKind } from "@/types";
 
-export type PaletteGroup = "widget" | "media" | "sound" | "home" | "app" | "keys" | "system";
+export type PaletteGroup = "widget" | "media" | "sound" | "home" | "app" | "keys" | "system" | "plugin";
 
 export const GROUP_LABEL: Record<PaletteGroup, string> = {
   widget: "Widget",
@@ -12,6 +13,7 @@ export const GROUP_LABEL: Record<PaletteGroup, string> = {
   app: "Apps",
   keys: "Shortcuts / Typing",
   system: "System / Shell",
+  plugin: "Plugins",
 };
 
 /** What a palette entry creates, before it gets an id and a position. */
@@ -39,10 +41,10 @@ const button = (label: string, icon: string, action: Action): Omit<Item, "id" | 
 const widget = (w: WidgetKind, extra: Record<string, unknown> = {}): Omit<Item, "id" | "x" | "y"> => ({ kind: "widget", widget: w, ...extra }) as Omit<Item, "id" | "x" | "y">;
 
 /** Groups whose labels and hints are user data (app names, sounds, Home Assistant entities), never translated. */
-const RAW_GROUPS = new Set<PaletteGroup>(["app", "sound", "home"]);
+const RAW_GROUPS = new Set<PaletteGroup>(["app", "sound", "home", "plugin"]);
 /** Label to show for an entry: static entries are translated, data-driven ones are shown as they are. */
 export const entryLabel = (e: PaletteEntry): string => (RAW_GROUPS.has(e.group) && e.key !== "sound-stop" ? e.label : t(e.label));
-export const entryHint = (e: PaletteEntry): string => (e.hint === undefined ? "" : e.group === "app" || e.group === "home" ? e.hint : t(e.hint));
+export const entryHint = (e: PaletteEntry): string => (e.hint === undefined ? "" : e.group === "app" || e.group === "home" || e.group === "plugin" ? e.hint : t(e.hint));
 
 const quota = (p: AiProvider, label: string, color?: string): PaletteEntry => ({
   key: `quota-${p}`, group: "widget", path: ["AI"], label: `Quota ${label}`, hint: "Remaining quota", icon: isIconName(p) ? p : "sparkles", size: [2, 2], tags: "quota usage limit ai",
@@ -145,3 +147,23 @@ export const entityEntry = (e: HassEntity): PaletteEntry => ({
   unavailable: e.state === "unavailable", tags: `${e.id} ${e.area ?? ""} ${e.domain} home assistant`,
   make: () => ({ kind: "widget", widget: "entity", entity: { id: e.id, ...(e.name && e.name !== e.id ? { name: e.name } : {}) } }) as Omit<Item, "id" | "x" | "y">,
 });
+
+/** Tiles and buttons of the enabled plugins. Names come from the plugin, so they are shown as they are. */
+export function pluginEntries(plugins: PluginInfo[]): PaletteEntry[] {
+  return plugins.flatMap((p) => [
+    ...p.widgets.map((w): PaletteEntry => {
+      const size = pluginSizes(w.sizes)[0] ?? [2, 1];
+      return {
+        key: `pl-${p.id}-w-${w.id}`, group: "plugin", path: [p.name], label: w.name, hint: p.id, icon: "sparkles", size, tags: `${p.id} ${p.name} plugin`,
+        make: () => ({ kind: "widget", widget: "plugin", plugin: { id: p.id, widget: w.id, settings: defaults(w.settings) } }) as Omit<Item, "id" | "x" | "y">,
+      };
+    }),
+    ...p.actions.map((a): PaletteEntry => ({
+      key: `pl-${p.id}-a-${a.id}`, group: "plugin", path: [p.name], label: a.name, hint: p.id, icon: "sparkles", size: [1, 1], tags: `${p.id} ${p.name} plugin button`,
+      make: () => button(a.name, "sparkles", { type: "plugin", plugin: p.id, action: a.id, settings: defaults(a.settings) }),
+    })),
+  ]);
+}
+
+const defaults = (fields: PluginInfo["widgets"][number]["settings"]): Record<string, unknown> =>
+  Object.fromEntries(fields.filter((f) => f.default !== undefined && f.type !== "secret").map((f) => [f.key, f.default]));

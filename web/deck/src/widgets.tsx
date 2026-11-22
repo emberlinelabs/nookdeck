@@ -7,6 +7,8 @@ import { Rings, SlotSpark } from './charts'
 import { BarSpark, Donut, MeterBar, windowSeries } from './metric-charts'
 import { NowPlayingTile } from './now-playing'
 import { ClockWidget } from './clocks'
+import { PluginTile } from './plugin'
+import type { PluginSlot } from './plugin-logic'
 import { EntityTile } from './entity'
 import { NotificationsTile, ValueTile, WeatherTile } from './automation'
 import { AnimatedNumber, BAND_COLOR, DeltaPill, Gauge, type Band } from './knowns'
@@ -96,6 +98,8 @@ export interface WidgetProps {
   push?: PushOptions
   wxData?: WeatherData
   pushed?: PushedValue
+  plug?: PluginSlot | undefined
+  label?: string
   notes?: Notice[]
   hassEnt?: HassEntity
   hassForceOn?: boolean
@@ -116,6 +120,7 @@ export function Widget(props: WidgetProps) {
   if (props.kind === 'entity' && props.entity) return <EntityTile id={props.entity.id} cfg={props.entity} ent={props.hassEnt} forceOn={props.hassForceOn} pend={props.entPend} onStep={props.onStep} onLight={props.onLight} connected={props.hassConnected !== false} tw={props.tw} th={props.th} scale={props.scale} showLabel={props.showLabel} color={props.color} textColor={props.textColor} assets={props.assets} />
   if (props.kind === 'weather') return <WeatherTile opts={props.weather} data={props.wxData} tw={props.tw} th={props.th} cw={props.cw} ch={props.ch} scale={props.scale} showLabel={props.showLabel} textColor={props.textColor} assets={props.assets} />
   if (props.kind === 'value' && props.push) return <ValueTile cfg={props.push} val={props.pushed} tw={props.tw} th={props.th} scale={props.scale} showLabel={props.showLabel} color={props.color} textColor={props.textColor} />
+  if (props.kind === 'plugin') return <PluginTile entry={props.plug} tw={props.tw} th={props.th} showLabel={props.showLabel} color={props.color} textColor={props.textColor} assets={props.assets} label={props.label} />
   if (props.kind === 'notifications') return <NotificationsTile notes={props.notes || []} tw={props.tw} th={props.th} showLabel={props.showLabel} textColor={props.textColor} />
   if (props.kind === 'nowplaying') return <NowPlayingTile media={props.media} last={props.last} stats={props.stats} tw={props.tw} th={props.th} scale={props.scale} showLabel={props.showLabel} textColor={props.textColor} onMedia={props.onMedia} onVolume={props.onVolume} />
   if (props.kind === 'quota') return <QuotaWidget {...(props as AiWidgetProps)} />

@@ -14,7 +14,8 @@ import { pagePlace } from "@shared/reflow";
 import type { PaletteEntry } from "@/lib/palette";
 import { cn } from "@/lib/utils";
 import { t, useLanguage } from "@/lib/i18n";
-import { findFree, randomId, GRID_PRESETS, PROVIDER_LABEL, WIDGET_LABEL, actionSummary, duplicateItem, moveTile, newItem, repack, resizeGrid, resizeTile, setWidgetKind, uniquePageId, type GridResult, type MoveResult, moveToPage, tileName } from "@/lib/layout";
+import { snapSize, useEnabledPlugins } from "@/lib/plugins";
+import { findFree, randomId, takenIds, GRID_PRESETS, PROVIDER_LABEL, WIDGET_LABEL, actionSummary, duplicateItem, moveTile, newItem, repack, resizeGrid, resizeTile, setWidgetKind, uniquePageId, type GridResult, type MoveResult, moveToPage, tileName } from "@/lib/layout";
 import type { Item, Layout, Page, WidgetKind } from "@/types";
 
 export function ScreensPanel({ layout, pageIdx, itemId, setPageIdx, setItemId, update, orientation, onOrientation, onUndo }: {
@@ -29,6 +30,7 @@ export function ScreensPanel({ layout, pageIdx, itemId, setPageIdx, setItemId, u
   /** Undoes the last edit (the toast after a swap offers it). */
   onUndo?: () => void;
 }) {
+  const plugins = useEnabledPlugins();
   useLanguage();
   const page = layout.pages[pageIdx]!;
   const item = page.items.find((i) => i.id === itemId);
@@ -91,7 +93,7 @@ export function ScreensPanel({ layout, pageIdx, itemId, setPageIdx, setItemId, u
   const draftFor = (entry: PaletteEntry, p: Page): Item => {
     if (draft.current?.key !== entry.key) {
       const bp = entry.make();
-      const id = randomId(bp.kind === "widget" ? "w" : "b", new Set(p.items.map((i) => i.id)));
+      const id = randomId(bp.kind === "widget" ? "w" : "b", takenIds(latest.current.layout, p, bp));
       draft.current = { key: entry.key, item: { ...bp, id, x: 0, y: 0, w: entry.size[0], h: entry.size[1] } as Item };
     }
     return draft.current.item;
@@ -140,7 +142,7 @@ export function ScreensPanel({ layout, pageIdx, itemId, setPageIdx, setItemId, u
     const at = findFree(page, w, h);
     if (!at) return setToast(t("No free space big enough on this page. Drag and drop so other tiles move aside, or delete some tiles."));
     const bp = entry.make();
-    const item = { ...bp, id: randomId(bp.kind === "widget" ? "w" : "b", new Set(page.items.map((i) => i.id))), ...at, ...(w > 1 || h > 1 ? { w, h } : {}) } as Item;
+    const item = { ...bp, id: randomId(bp.kind === "widget" ? "w" : "b", takenIds(layout, page, bp)), ...at, ...(w > 1 || h > 1 ? { w, h } : {}) } as Item;
     setItems([...page.items, item]);
     select(item.id);
   };
@@ -208,7 +210,11 @@ export function ScreensPanel({ layout, pageIdx, itemId, setPageIdx, setItemId, u
             }
           }}
           onMove={(pageId, id, x, y) => apply(pageId, (p) => moveTile(p, id, x, y))}
-          onResize={(pageId, id, w, h, x, y) => apply(pageId, (p) => resizeTile(p, id, w, h, x, y))}
+          onResize={(pageId, id, w, h, x, y) => apply(pageId, (p) => {
+            // A plugin tile snaps to the nearest size its plugin lists; when the left/top edge was dragged, the far edge stays put.
+            const [nw, nh] = snapSize(plugins, p.items.find((i) => i.id === id), w, h);
+            return resizeTile(p, id, nw, nh, x === undefined ? undefined : x + (w - nw), y === undefined ? undefined : y + (h - nh));
+          })}
           onPage={switchPage}
         />
         {note && (
@@ -243,7 +249,7 @@ export function ScreensPanel({ layout, pageIdx, itemId, setPageIdx, setItemId, u
             }}
             onWidgetKind={(kind) => patchPage((p) => setWidgetKind(p, item.id, kind))}
             onDuplicate={() => {
-              const copy = duplicateItem(item, page);
+              const copy = duplicateItem(item, page, layout);
               if (!copy) return setToast(t("The grid is full, no room to duplicate."));
               setItems([...page.items, copy]);
               select(copy.id);

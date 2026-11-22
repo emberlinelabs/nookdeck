@@ -1,6 +1,6 @@
 import { t } from "./lib/i18n";
 import { asPlatform, type Platform } from "./lib/platform";
-import { AI_PROVIDERS, type IconCatalog, type MacApp, type Sound, type HassConfig, type HassEntity, type HassService, type GeoPlace, type WebhookInfo, type AiProvider, type DeviceInfo, type About, type UpdateInfo, type DoctorItem, type DoctorStatus, type Integration, type Layout, type Pairing } from "./types";
+import { AI_PROVIDERS, type IconCatalog, type MacApp, type Sound, type HassConfig, type HassEntity, type HassService, type GeoPlace, type WebhookInfo, type AiProvider, type DeviceInfo, type About, type UpdateInfo, type DoctorItem, type DoctorStatus, type Integration, type Layout, type Pairing, type PluginInfo, type PluginField, type PluginPermissions, type Theme } from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -106,6 +106,71 @@ export function normalizeIntegrations(raw: unknown): Integration[] {
     out.push({ windows, source, id, name: str(e.name) ?? NAMES[id], status, error, plan: str(e.plan) ?? str(quota.plan), updatedAt: isoOf(e.updatedAt) ?? isoOf(quota.updatedAt), hook, ...(reason ? { reason } : {}), ...(id === "opencode" || id === "grok" ? { cliInstalled: e.installed === true, version: str(e.version), line: typeof e.line === "number" ? e.line : undefined, sessions: typeof e.sessions === "number" ? e.sessions : undefined, quotaReason: str(e.quotaReason) } : {}), ...(askHook ? { askHook } : {}) });
   }
   return out;
+}
+
+const PLUGIN_FIELD_TYPES = ["string", "number", "boolean", "select", "secret", "entity"];
+function normalizeFields(raw: unknown, saved: Record<string, unknown> = {}): PluginField[] {
+  return (Array.isArray(raw) ? raw : []).flatMap((x: unknown) => {
+    const r = rec(x);
+    const key = str(r.key);
+    const type = str(r.type);
+    if (!key || !type || !PLUGIN_FIELD_TYPES.includes(type)) return [];
+    const d = r.default;
+    const options = (Array.isArray(r.options) ? r.options : []).flatMap((o: unknown) => {
+      if (typeof o === "string") return [{ value: o, label: o }];
+      const ro = rec(o);
+      const value = str(ro.value);
+      return value ? [{ value, label: str(ro.label) ?? value }] : [];
+    });
+    return [{ key, type: type as PluginField["type"], label: str(r.label) ?? key, ...(typeof d === "string" || typeof d === "number" || typeof d === "boolean" ? { default: d } : {}), ...(options.length ? { options } : {}), ...(type === "secret" ? { isSet: r.isSet === true || (saved[key] !== undefined && saved[key] !== null && saved[key] !== "") } : {}) }];
+  });
+}
+
+/** permissions: {network?: string[], shell?: bool, keyboard?: bool, storage?: bool}; anything else is ignored. */
+export function normalizePermissions(raw: unknown): PluginPermissions {
+  const r = rec(raw);
+  return {
+    network: (Array.isArray(r.network) ? r.network : []).filter((h): h is string => typeof h === "string" && !!h),
+    shell: !!r.shell,
+    keyboard: !!r.keyboard,
+    storage: !!r.storage,
+  };
+}
+
+export function normalizePlugin(raw: unknown): PluginInfo | null {
+  const r = rec(raw);
+  const id = str(r.id);
+  if (!id) return null;
+  const settings = rec(r.settings);
+  return {
+    id,
+    name: str(r.name) ?? id,
+    version: str(r.version) ?? "",
+    description: str(r.description),
+    icon: str(r.icon),
+    author: str(r.author),
+    source: str(r.source),
+    enabled: r.enabled === true,
+    unreviewed: r.unreviewed !== false,
+    needsApproval: r.needsApproval === true,
+    error: str(r.error),
+    permissions: normalizePermissions(r.permissions),
+    granted: normalizePermissions(r.granted),
+    widgets: (Array.isArray(r.widgets) ? r.widgets : []).flatMap((x: unknown) => {
+      const w = rec(x);
+      const wid = str(w.id);
+      return wid ? [{ id: wid, name: str(w.name) ?? wid, render: str(w.render) ?? "", sizes: (Array.isArray(w.sizes) ? w.sizes : []).filter((s): s is string => typeof s === "string"), settings: normalizeFields(w.settings) }] : [];
+    }),
+    actions: (Array.isArray(r.actions) ? r.actions : []).flatMap((x: unknown) => {
+      const a = rec(x);
+      const aid = str(a.id);
+      return aid ? [{ id: aid, name: str(a.name) ?? aid, settings: normalizeFields(a.settings) }] : [];
+    }),
+    themes: (Array.isArray(r.themes) ? r.themes : []).flatMap((x: unknown) => { const o = rec(x); const id = str(o.id); return id && o.theme && typeof o.theme === "object" ? [{ id, name: str(o.name) ?? id, theme: o.theme as Theme }] : []; }),
+    layouts: (Array.isArray(r.layouts) ? r.layouts : []).flatMap((x: unknown) => { const o = rec(x); const id = str(o.id); return id && o.layout && typeof o.layout === "object" ? [{ id, name: str(o.name) ?? id, layout: o.layout as Layout }] : []; }),
+    fields: normalizeFields(r.fields, settings),
+    settings,
+  };
 }
 
 function normalizeApps(raw: unknown): MacApp[] {
@@ -274,6 +339,21 @@ export const api = {
   enableAskHook: (idleOnly: boolean) => request<unknown>("/api/integrations/claude/ask-hook", json("POST", { idleOnly })),
   disableAskHook: () => request<unknown>("/api/integrations/claude/ask-hook", { method: "DELETE" }),
   disableHook: (id: AiProvider) => request<unknown>(hookUrl(id), { method: "DELETE" }),
+  getPlugins: async (): Promise<PluginInfo[]> => {
+    const raw = await request<unknown>("/api/plugins");
+    const list = Array.isArray(raw) ? raw : rec(raw).plugins;
+    return (Array.isArray(list) ? list : []).flatMap((x: unknown) => normalizePlugin(x) ?? []);
+  },
+  /** source = an https URL or a local folder; the plugin comes back disabled until its permissions are granted. */
+  installPlugin: async (source: string): Promise<PluginInfo> => {
+    const p = normalizePlugin(await request<unknown>("/api/plugins", json("POST", { source })));
+    if (!p) throw new ApiError(t("The agent did not return a plugin"), 0);
+    return p;
+  },
+  grantPlugin: (id: string, permissions: PluginPermissions) => request<unknown>(`/api/plugins/${encodeURIComponent(id)}/grant`, json("POST", { permissions })),
+  setPluginEnabled: (id: string, enabled: boolean) => request<unknown>(`/api/plugins/${encodeURIComponent(id)}/enabled`, json("POST", { enabled })),
+  putPluginSettings: (id: string, settings: Record<string, unknown>) => request<unknown>(`/api/plugins/${encodeURIComponent(id)}/settings`, json("PUT", settings)),
+  deletePlugin: (id: string) => request<unknown>(`/api/plugins/${encodeURIComponent(id)}`, { method: "DELETE" }),
   getLayout: () => request<Layout>("/api/layout"),
   putLayout: (layout: Layout) => request<unknown>("/api/layout", json("PUT", layout)),
   getDevices: () => request<DeviceInfo[]>("/api/devices"),

@@ -55,6 +55,9 @@ import { currentInstance } from "./service";
 import { platform } from "./platform";
 import pkg from "../package.json" with { type: "json" };
 import { aboutInfo } from "./about";
+import { PluginStore, PluginError } from "./plugins/store";
+import { PluginRuntime, realShell } from "./plugins/runtime";
+import type { SourceDeps } from "./plugins/sources";
 import { forbiddenPage, pickLanguage, wantsPage } from "./forbidden-page";
 
 export type { Stats };
@@ -127,6 +130,9 @@ export interface StartOptions {
   doctorWaitMs?: number;
   idleSeconds?: () => Promise<number | null>;
   questionTimeoutMs?: number;
+  /** Plugin store and the network/shell the plugins use (tests: temp dirs and fakes). */
+  plugins?: PluginStore;
+  pluginDeps?: Partial<SourceDeps>;
 }
 
 interface WsData {
@@ -246,6 +252,15 @@ export async function startServer(opts: StartOptions = {}) {
     broadcast({ type: "notify", notification });
     return notification;
   };
+  // ----- plugins (no-code, P1): installed plugins, their tiles' data, their buttons -----
+  const pluginStore = opts.plugins ?? new PluginStore({ agentVersion: aboutInfo().version });
+  await pluginStore.load().catch((e) => console.error("plugins", e));
+  const pluginRuntime = new PluginRuntime(pluginStore, {
+    fetch: opts.pluginDeps?.fetch ?? fetch,
+    shell: opts.pluginDeps?.shell ?? realShell,
+    onItems: (items) => broadcast({ type: "plugin", items }),
+  });
+  pluginRuntime.setLayout(layout);
   const findAction = (pageId: string, itemId: string) => {
     const it = layout.pages.find((p) => p.id === pageId)?.items.find((i) => i.id === itemId);
     return it && it.kind === "button" ? it.action : undefined;
@@ -275,6 +290,8 @@ export async function startServer(opts: StartOptions = {}) {
         };
         return runMacro(action.steps, ctx, depth);
       }
+      case "plugin":
+        return pluginRuntime.runAction(action, (steps) => execute({ type: "macro", steps }, depth, ws));
       case "hass":
         if (!hass.connected()) throw new Error(t("Home Assistant is not connected"));
         return hass.callService(action.service, action.entityId, action.data);
@@ -694,6 +711,7 @@ export async function startServer(opts: StartOptions = {}) {
         layout = prev;
         setLanguage(layout.theme?.language);
         syncHass();
+        pluginRuntime.setLayout(layout);
         layoutAssets = await icons.layoutAssets(layout).catch(() => ({}));
         broadcast(layoutMsg());
         return json({ ok: true, layout });
@@ -711,6 +729,7 @@ export async function startServer(opts: StartOptions = {}) {
           layout = next;
           setLanguage(layout.theme?.language);
           syncHass();
+          pluginRuntime.setLayout(layout);
           await history.push(next).catch((e) => console.error("layout history", e));
           layoutAssets = await icons.layoutAssets(layout).catch(() => ({}));
           broadcast(layoutMsg());
@@ -811,6 +830,34 @@ export async function startServer(opts: StartOptions = {}) {
         toolStates.set(b.source, b.sessionId.slice(0, 200), b.state as ToolState);
         void refreshSessions();
         return json({ ok: true });
+      }
+
+      // ----- plugins -----
+      const pluginRoute = /^\/api\/plugins(?:\/([^/]+)(?:\/(grant|enabled|settings))?)?$/.exec(path);
+      if (pluginRoute) {
+        const denied = guardLocal(server, req);
+        if (denied) return denied;
+        const [, pid, sub] = pluginRoute;
+        const fail = (err: unknown) => json({ error: err instanceof Error ? err.message : String(err) }, err instanceof PluginError ? err.status : 400);
+        try {
+          if (!pid) {
+            if (req.method === "GET") return json(pluginStore.list());
+            if (req.method === "POST") {
+              const body = await readBody(req);
+              if (typeof body?.source !== "string") return json({ error: "source must be a folder path or an https address" }, 400);
+              const r = await pluginStore.install(body.source);
+              return json(r.plugin, r.updated || r.unchanged ? 200 : 201);
+            }
+            return json({ error: "method not allowed" }, 405);
+          }
+          if (!pluginStore.has(pid)) return json({ error: "that plugin is not installed" }, 404);
+          if (!sub && req.method === "DELETE") { await pluginStore.remove(pid); return json({ ok: true }); }
+          if (sub === "grant" && req.method === "POST") return json(await pluginStore.grant(pid, (await readBody(req))?.permissions));
+          if (sub === "enabled" && req.method === "POST") return json(await pluginStore.setEnabled(pid, (await readBody(req))?.enabled));
+          if (sub === "settings" && req.method === "PUT") return json(await pluginStore.setSettings(pid, await readBody(req)));
+          if (!sub && req.method === "GET") return json(pluginStore.summary(pid));
+        } catch (err) { return fail(err); }
+        return json({ error: "method not allowed" }, 405);
       }
 
       if (path === "/api/about" && req.method === "GET") {
@@ -1124,6 +1171,8 @@ export async function startServer(opts: StartOptions = {}) {
         send(ws, { type: "notifications", items: notes.list() });
         if (hassClient) send(ws, { type: "hass", entities: hassClient.snapshot(), connected: hassClient.connected() });
         if (themeOverride) send(ws, { type: "theme-override", mode: themeOverride });
+        { const pi = pluginRuntime.snapshot(); if (Object.keys(pi).length) send(ws, { type: "plugin", items: pi }); }
+        pluginRuntime.setActive(true);
         void pushWeather(ws);
         if (!weatherTimer) weatherTimer = setInterval(() => void pushWeather(), opts.weatherMs ?? 15 * 60_000);
         startAi();
@@ -1225,6 +1274,7 @@ export async function startServer(opts: StartOptions = {}) {
           stopMediaLoop();
         }
         stopAiIfIdle();
+        if (sockets.size === 0) pluginRuntime.setActive(false);
         if (sockets.size === 0 && weatherTimer) { clearInterval(weatherTimer); weatherTimer = undefined; }
       },
     },
@@ -1239,6 +1289,7 @@ export async function startServer(opts: StartOptions = {}) {
       stopped = true;
       void lastMedia.persist(true);
       stopMediaLoop();
+      pluginRuntime.stop();
       player.stopAll();
       stopCtl.abort();
       clearInterval(rulesTimer);

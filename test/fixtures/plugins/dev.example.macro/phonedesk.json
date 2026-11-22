@@ -1,0 +1,20 @@
+{
+  "id": "dev.example.macro",
+  "name": "Select all and copy",
+  "version": "1.2.0",
+  "author": "example",
+  "permissions": { "keyboard": true, "shell": true },
+  "widgets": [{
+    "id": "mood",
+    "name": "Status",
+    "render": "status",
+    "source": { "command": { "run": "echo {\"state\":\"ok\",\"label\":\"{{label}}\"}", "parse": "json" } },
+    "settings": [{ "key": "label", "type": "string", "label": "Label", "default": "fine" }]
+  }],
+  "actions": [{
+    "id": "copy-all",
+    "name": "Select all and copy",
+    "run": { "macro": [{ "kind": "hotkey", "keys": "cmd+a" }, { "kind": "hotkey", "keys": "cmd+c" }, { "kind": "notify", "text": "copied {{what}}" }] },
+    "settings": [{ "key": "what", "type": "string", "label": "What", "default": "everything" }]
+  }]
+}

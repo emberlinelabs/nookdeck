@@ -195,4 +195,12 @@ export const ZH: { [en: string]: string } = {
   "{0} h": "{0} 小时",
   "{0} d": "{0} 天",
   "Play": "播放",
+  "Plugin unavailable": "插件不可用",
+  "Nothing to show": "没有可显示的内容",
+  "OK": "正常",
+  "Warning": "警告",
+  "Plugin missing": "插件缺失",
+  "Plugin off": "插件已关闭",
+  "Needs approval": "需要批准",
+  "Tile removed": "磁贴已移除",
 }

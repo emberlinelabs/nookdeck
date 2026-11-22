@@ -2,6 +2,8 @@ import { Soundboard, soundKey } from './sounds'
 import { t } from './i18n'
 import { setPlatform } from './platform'
 import { mediaWithPreviousArtwork } from './media-merge'
+import { mergePlugins } from './plugin-logic'
+import type { PluginSlot } from './plugin-logic'
 import type { QuestionRequest, GotoReq, Notice, PushedValue, WeatherData, HassState, AiData, Layout, Media, MediaCommand, PermissionRequest, ProcInfo, Stats } from './types'
 
 /** Connection to the PhoneDesk agent: pairing (REST) + live deck (WebSocket). No UI code here. */
@@ -31,6 +33,8 @@ export interface ClientState {
   /** weather by item id, pushed values by key, latest notifications (newest first), pending goto countdown, theme override from a rule */
   weather?: { [itemId: string]: WeatherData }
   pushed?: { [key: string]: PushedValue }
+  /** plugin tiles by item id: the validated entry, or null for the error tile */
+  plugins?: { [tileId: string]: PluginSlot }
   notes?: Notice[]
   goto?: GotoReq | null
   modeOverride?: 'dark' | 'light' | null
@@ -340,6 +344,9 @@ export class DeckClient {
         this.set({ pushed: cur })
         break
       }
+      case 'plugin':
+        this.set({ plugins: mergePlugins(this.state.plugins, msg.items) })
+        break
       case 'notifications': {
         const l = Array.isArray(msg.list) ? msg.list : Array.isArray(msg.notes) ? msg.notes : []
         this.set({ notes: l.map(toNotice).sort((a: Notice, b: Notice) => b.at - a.at).slice(0, 50) })
@@ -466,7 +473,7 @@ export class DeckClient {
     store.del(K_DEVICE)
     this.token = null
     this.teardown()
-    this.set({ status: 'pair', layout: null, stats: null, media: null, lastMedia: null, ai: null, perms: [], questions: [], notice, hass: undefined, weather: undefined, pushed: undefined, notes: undefined, goto: null, modeOverride: null })
+    this.set({ status: 'pair', layout: null, stats: null, media: null, lastMedia: null, ai: null, perms: [], questions: [], notice, hass: undefined, weather: undefined, pushed: undefined, plugins: undefined, notes: undefined, goto: null, modeOverride: null })
   }
 
   private failPending(error: string) {

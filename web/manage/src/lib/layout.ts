@@ -10,6 +10,12 @@ export function randomId(prefix: string, taken: Set<string>): string {
   }
 }
 
+/** Plugin tile ids must be unique across ALL screens (the agent keys their data by tile id); other ids only per screen. */
+export const isPluginTile = (it: { kind: string; widget?: string }): boolean => it.kind === "widget" && it.widget === "plugin";
+export function takenIds(layout: Layout, page: Page, forItem: { kind: string; widget?: string }): Set<string> {
+  return new Set((isPluginTile(forItem) ? layout.pages : [page]).flatMap((p) => p.items.map((i) => i.id)));
+}
+
 export function slug(name: string): string {
   return String(name).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\u0111/g, "d").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "page";
 }
@@ -36,6 +42,7 @@ export function defaultAction(type: ActionType, firstPage = ""): Action {
     case "sound-stop": return { type };
     case "hass": return { type, service: "" };
     case "macro": return { type, steps: [{ kind: "hotkey", keys: "" }] };
+    case "plugin": return { type, plugin: "", action: "" };
   }
 }
 
@@ -77,7 +84,7 @@ export function findFree(page: Page, w = 1, h = 1): { x: number; y: number } | u
 
 /** Preferred size of a widget: big for clock and now-playing, 2x1 for the metrics. */
 export const WIDGET_SIZE: Record<WidgetKind, [number, number]> = {
-  clock: [4, 2], nowplaying: [4, 2], cpu: [2, 1], gpu: [2, 1], memory: [2, 1], uptime: [2, 1], load: [2, 1], network: [2, 1], quota: [2, 2], sessions: [2, 3], entity: [1, 1], weather: [2, 2], value: [2, 1], notifications: [2, 2],
+  clock: [4, 2], nowplaying: [4, 2], cpu: [2, 1], gpu: [2, 1], memory: [2, 1], uptime: [2, 1], load: [2, 1], network: [2, 1], quota: [2, 2], sessions: [2, 3], entity: [1, 1], weather: [2, 2], value: [2, 1], notifications: [2, 2], plugin: [2, 1],
 };
 
 /** Candidate sizes, largest first, ending with 1x1. */
@@ -103,7 +110,8 @@ export function newItem(kind: "button" | "widget", page: Page, at?: { x: number;
 export function setWidgetKind(page: Page, id: string, widget: WidgetKind): Page {
   const items = page.items.map((i) => {
     if (i.id !== id || i.kind !== "widget") return i;
-    const { provider, clock, metric, quota, entity, weather, push, ...rest } = i;
+    const { provider, clock, metric, quota, entity, weather, push, plugin, ...rest } = i;
+    void plugin;
     // Keep the metric options only when the new widget still allows the chosen chart (the agent rejects the rest).
     const keepMetric = metric && (METRIC_WIDGETS as readonly string[]).includes(widget) && (!metric.chart || METRIC_CHARTS_FOR[widget as MetricWidget].includes(metric.chart));
     return { ...rest, widget, ...(widget === "clock" && clock ? { clock } : {}), ...(widget === "entity" && entity ? { entity } : {}), ...(widget === "weather" && weather ? { weather } : {}), ...(widget === "value" ? { push: push ?? { key: "value" } } : {}), ...(keepMetric ? { metric } : {}), ...(widget === "quota" ? { provider: provider ?? ("claude" as const), ...(quota ? { quota } : {}) } : {}) };
@@ -120,11 +128,11 @@ export function setWidgetKind(page: Page, id: string, widget: WidgetKind): Page 
   return cur;
 }
 
-export function duplicateItem(it: Item, page: Page): Item | undefined {
+export function duplicateItem(it: Item, page: Page, layout?: Layout): Item | undefined {
   const r = rectOf(it);
   const cell = findFree(page, r.w, r.h);
   if (!cell) return undefined;
-  const id = randomId(it.kind === "widget" ? "w" : "b", new Set(page.items.map((i) => i.id)));
+  const id = randomId(it.kind === "widget" ? "w" : "b", layout ? takenIds(layout, page, it) : new Set(page.items.map((i) => i.id)));
   return { ...structuredClone(it), id, ...cell };
 }
 
@@ -341,11 +349,11 @@ export const PROVIDER_LABEL: Record<string, string> = { claude: "Claude", codex:
 
 export const WIDGET_HINT: Record<WidgetKind, string> = {
   clock: "Time and date", nowplaying: "Current track", cpu: "CPU usage (click to see processes)", gpu: "Graphics card load and memory (no data on Linux)", memory: "Memory in use",
-  uptime: "How long the Mac has been running", load: "System load", network: "Network speed", quota: "Claude / Codex / Antigravity quota", sessions: "Running AI sessions", entity: "Home Assistant device", weather: "Weather", value: "Value pushed from outside (webhook)", notifications: "Recent notifications",
+  uptime: "How long the Mac has been running", load: "System load", network: "Network speed", quota: "Claude / Codex / Antigravity quota", sessions: "Running AI sessions", entity: "Home Assistant device", weather: "Weather", value: "Value pushed from outside (webhook)", notifications: "Recent notifications", plugin: "Tile from a plugin",
 };
 
 export const WIDGET_LABEL: Record<string, string> = {
-  clock: "Clock", cpu: "CPU", gpu: "GPU", memory: "Memory", uptime: "Uptime", load: "System load", network: "Network", nowplaying: "Now playing", quota: "AI quota", sessions: "AI sessions", entity: "Home (Home Assistant)", weather: "Weather", value: "Pushed value", notifications: "Notifications",
+  clock: "Clock", cpu: "CPU", gpu: "GPU", memory: "Memory", uptime: "Uptime", load: "System load", network: "Network", nowplaying: "Now playing", quota: "AI quota", sessions: "AI sessions", entity: "Home (Home Assistant)", weather: "Weather", value: "Pushed value", notifications: "Notifications", plugin: "Plugin tile",
 };
 
 export const ACTION_LABEL: Record<ActionType, string> = {
@@ -359,6 +367,7 @@ export const ACTION_LABEL: Record<ActionType, string> = {
   sound: "Play sound",
   hass: "Home Assistant",
   macro: "Multi-step macro",
+  plugin: "Plugin action",
   "sound-stop": "Stop all sounds",
 };
 
@@ -367,11 +376,11 @@ export const VOLUME_LABEL: Record<string, string> = { up: "Increase", down: "Dec
 
 export const ACTION_ICON: Record<ActionType, string> = {
   open: "external-link", hotkey: "keyboard", type: "type", shell: "square-terminal",
-  media: "play", volume: "volume-2", page: "layout-grid", sound: "music", "sound-stop": "player-stop", hass: "home", macro: "bolt",
+  media: "play", volume: "volume-2", page: "layout-grid", sound: "music", "sound-stop": "player-stop", hass: "home", macro: "bolt", plugin: "sparkles",
 };
 
 export const ACTION_SHORT: Record<ActionType, string> = {
-  open: "Open", hotkey: "Hotkey", type: "Type", shell: "Command", media: "Music", volume: "Volume", page: "Screen", sound: "Sound", "sound-stop": "Stop sound", hass: "Home", macro: "Macro",
+  open: "Open", hotkey: "Hotkey", type: "Type", shell: "Command", media: "Music", volume: "Volume", page: "Screen", sound: "Sound", "sound-stop": "Stop sound", hass: "Home", macro: "Macro", plugin: "Plugin",
 };
 
 /** One-line summary of what a button does, for the item list. */
@@ -388,6 +397,7 @@ export function actionSummary(a: Action | undefined): string {
     case "sound": return a.sound ? t("Play sound") : t("Play sound (no clip selected)");
     case "sound-stop": return t("Stop all sounds");
     case "macro": return t("Macro steps: {n}", { n: a.steps.length });
+    case "plugin": return t("Plugin: {name}", { name: a.action || "…" });
     case "hass": return a.service ? t("Home Assistant: {service}", { service: `${a.service}${a.entityId ? ` → ${a.entityId}` : ""}` }) : t("Home Assistant (no service selected)");
   }
 }

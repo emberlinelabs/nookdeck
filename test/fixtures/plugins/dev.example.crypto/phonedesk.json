@@ -1,0 +1,41 @@
+{
+  "id": "dev.example.crypto",
+  "name": "Crypto price",
+  "version": "1.0.0",
+  "phonedesk": ">=0.1.0",
+  "author": "example",
+  "description": "Live price of a coin (a no-code plugin: one HTTP source, one renderer)",
+  "permissions": { "network": ["api.example.com"] },
+  "settings": [
+    { "key": "apiKey", "type": "secret", "label": "API key" }
+  ],
+  "widgets": [{
+    "id": "price",
+    "name": "Price",
+    "render": "stat",
+    "sizes": ["2x1", "2x2"],
+    "settings": [
+      { "key": "coin", "type": "string", "label": "Coin id", "default": "bitcoin" },
+      { "key": "currency", "type": "select", "label": "Currency", "options": ["usd", "eur"], "default": "usd" }
+    ],
+    "source": {
+      "http": { "url": "https://api.example.com/v3/price?ids={{coin}}&vs={{currency}}", "every": 5, "headers": { "x-key": "{{apiKey}}" } },
+      "map": { "value": "$.{{coin}}.{{currency}}", "unit": "{{currency}}", "label": "{{coin}}" }
+    }
+  }, {
+    "id": "top",
+    "name": "Top coins",
+    "render": "list",
+    "sizes": ["2x2"],
+    "source": {
+      "http": { "url": "https://api.example.com/v3/top" },
+      "map": { "items": "$.coins", "itemMap": { "title": "$.name", "value": "$.price" } }
+    }
+  }],
+  "actions": [{
+    "id": "refresh",
+    "name": "Ping the API",
+    "run": { "http": { "url": "https://api.example.com/v3/ping", "method": "POST", "body": "{\"coin\":\"{{coin}}\"}" } },
+    "settings": [{ "key": "coin", "type": "string", "label": "Coin", "default": "bitcoin" }]
+  }]
+}

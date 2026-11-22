@@ -104,6 +104,7 @@ export function buildCommand(a: Action, platform: NodeJS.Platform): string[] {
   if (a.type === "sound" || a.type === "sound-stop") throw new Error("sound actions are handled by the sound player");
   if (a.type === "hass") throw new Error("Home Assistant actions are handled by the HA client");
   if (a.type === "macro") throw new Error("macros are run step by step by the macro runner");
+  if (a.type === "plugin") throw new Error("plugin actions are run by the plugin host");
 
   const isWin = platform === "win32";
   const isMac = platform === "darwin";

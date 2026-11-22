@@ -11,6 +11,8 @@ import { PROVIDER_COLOR } from './ai'
 import { PermissionSheet, ProcessSheet, QuestionSheet } from './sheets'
 import { ScreenLayer, ScreenSheet } from './screen'
 import { swapPreview } from './swap'
+import { samplePlugin } from './plugin-logic'
+import type { PluginSlot } from './plugin-logic'
 import { headerMode, keepAwakeOn, liteOn, onLocalScreen } from './screen-logic'
 import type { QuestionRequest, WeatherData, PushedValue, Notice, GotoReq, HassEntity, HassState, IconAssets, AiData, Item, Layout, Media, MediaCommand, Orientation, Page, Stats, TileStyle } from './types'
 
@@ -454,6 +456,7 @@ function Tile(props: {
   hassConnected?: boolean
   wxData?: WeatherData
   pushed?: PushedValue
+  plug?: PluginSlot
   notes?: Notice[]
   busy?: boolean
   entPend?: number
@@ -595,6 +598,8 @@ function Tile(props: {
           push={item.push}
           wxData={props.wxData}
           pushed={props.pushed}
+          plug={props.plug}
+          label={item.label}
           notes={props.notes}
           hassEnt={props.hassEnt}
           hassForceOn={props.hassForceOn}
@@ -1892,6 +1897,7 @@ export function Deck(props: DeckProps) {
                             hassConnected={hass ? hass.connected : true}
                             wxData={st.weather ? st.weather[it.id] : undefined}
                             pushed={it.push && st.pushed ? st.pushed[it.push.key] : undefined}
+                            plug={it.widget === 'plugin' ? (preview ? samplePlugin(it.plugin ? it.plugin.widget : it.id) : st.plugins ? st.plugins[it.id] : null) : undefined}
                             notes={st.notes}
                             entPend={it.entity ? pend[it.entity.id] : undefined}
                             onEntity={(pg, itm) => setSheet({ page: pg, item: itm })}

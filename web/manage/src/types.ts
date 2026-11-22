@@ -10,7 +10,8 @@ export type Action =
   | { type: "sound"; sound: string; on?: SoundTarget; volume?: number; mode?: SoundMode }
   | { type: "sound-stop" }
   | { type: "hass"; service: string; entityId?: string; data?: Record<string, unknown> }
-  | { type: "macro"; steps: MacroStep[] };
+  | { type: "macro"; steps: MacroStep[] }
+  | { type: "plugin"; plugin: string; action: string; settings?: Record<string, unknown> };
 
 export type SoundTarget = "mac" | "phone" | "both";
 export type SoundMode = "overlap" | "restart" | "toggle";
@@ -99,8 +100,10 @@ export interface MetricOptions {
   showSub?: boolean;
 }
 
-export type WidgetKind = "clock" | "cpu" | "gpu" | "memory" | "uptime" | "load" | "network" | "nowplaying" | "quota" | "sessions" | "entity" | "weather" | "value" | "notifications";
+export type WidgetKind = "clock" | "cpu" | "gpu" | "memory" | "uptime" | "load" | "network" | "nowplaying" | "quota" | "sessions" | "entity" | "weather" | "value" | "notifications" | "plugin";
 export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "gpu", "memory", "uptime", "load", "network", "nowplaying", "quota", "sessions", "entity", "weather", "value", "notifications"];
+/** A plugin tile or button points at the plugin by id (see GET /api/plugins). */
+export interface PluginRef { id: string; widget: string; settings?: Record<string, unknown> }
 
 export interface WeatherOptions {
   source?: "auto" | "hass" | "open-meteo";
@@ -209,7 +212,7 @@ export interface ItemStyle {
 
 export type Item =
   | ({ id: string; kind: "button"; label: string; icon?: string; color?: string; action?: Action } & Size & ItemStyle)
-  | ({ id: string; kind: "widget"; widget: WidgetKind; color?: string; provider?: AiProvider; clock?: ClockOptions; metric?: MetricOptions; quota?: QuotaOptions; entity?: EntityOptions; weather?: WeatherOptions; push?: PushOptions } & Size & ItemStyle);
+  | ({ id: string; kind: "widget"; widget: WidgetKind; color?: string; provider?: AiProvider; clock?: ClockOptions; metric?: MetricOptions; quota?: QuotaOptions; entity?: EntityOptions; weather?: WeatherOptions; push?: PushOptions; plugin?: PluginRef } & Size & ItemStyle);
 
 export type ThemeOrientation = "landscape" | "portrait" | "auto";
 
@@ -380,3 +383,46 @@ export interface Integration {
   askHook?: { enabled: boolean; idleOnly: boolean };
 }
 
+
+// Plugins (GET /api/plugins). Mirrors the manifest of specs/plugin-system; the agent adds enabled, granted and the saved settings.
+export type PluginFieldType = "string" | "number" | "boolean" | "select" | "secret" | "entity";
+export interface PluginField {
+  key: string;
+  type: PluginFieldType;
+  label: string;
+  default?: string | number | boolean;
+  options?: { value: string; label: string }[];
+  /** A secret that already has a value on the agent (the value itself is never sent back). */
+  isSet?: boolean;
+}
+export interface PluginPermissions {
+  network: string[];
+  shell: boolean;
+  keyboard: boolean;
+  storage: boolean;
+}
+export interface PluginInfo {
+  id: string;
+  name: string;
+  version: string;
+  description?: string;
+  icon?: string;
+  author?: string;
+  source?: string;
+  enabled: boolean;
+  /** Everything installed from a link or folder is unreviewed (the agent says so). */
+  unreviewed: boolean;
+  /** The manifest asks for something that is not granted yet. */
+  needsApproval: boolean;
+  /** Set when the plugin is installed but cannot run, for example "files changed, disabled". */
+  error?: string;
+  permissions: PluginPermissions;
+  granted: PluginPermissions;
+  widgets: { id: string; name: string; render: string; sizes: string[]; settings: PluginField[] }[];
+  actions: { id: string; name: string; settings: PluginField[] }[];
+  themes: { id: string; name: string; theme: Theme }[];
+  layouts: { id: string; name: string; layout: Layout }[];
+  /** Plugin-level fields (optional manifest "settings") and their saved values. */
+  fields: PluginField[];
+  settings: Record<string, unknown>;
+}

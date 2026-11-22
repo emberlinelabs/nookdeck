@@ -7,12 +7,13 @@ import { useSounds } from "@/lib/sounds";
 import { useApps } from "@/components/app-picker";
 import { ItemIcon } from "@/components/icon";
 import { useLanguage, t } from "@/lib/i18n";
-import { GROUP_LABEL, STATIC_ENTRIES, entryLabel, appEntry, entityEntry, soundEntry, type PaletteEntry, type PaletteGroup } from "@/lib/palette";
+import { GROUP_LABEL, STATIC_ENTRIES, entryLabel, appEntry, entityEntry, soundEntry, pluginEntries, type PaletteEntry, type PaletteGroup } from "@/lib/palette";
 import { buildTree, highlight, matches, norm, type TreeNode } from "@/lib/palette-tree";
+import { useEnabledPlugins } from "@/lib/plugins";
 import { MAC_ONLY_ENTRIES, usePlatform } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 
-const ORDER: PaletteGroup[] = ["widget", "home", "app", "keys", "media", "sound", "system"];
+const ORDER: PaletteGroup[] = ["widget", "home", "app", "keys", "media", "sound", "system", "plugin"];
 const DRAG_THRESHOLD = 5;
 const OPEN_KEY = "pd.palette.open";
 
@@ -54,6 +55,7 @@ export function PalettePanel({ onDragMove, onDragEnd, onAdd }: PaletteHandlers) 
   const [showUnavailable, setShowUnavailable] = useState(false);
   const { apps, error: appsError } = useApps();
   const { sounds } = useSounds();
+  const plugins = useEnabledPlugins();
   const { data: hass, missing: hassMissing } = useHassEntities();
   const [ghost, setGhost] = useState<{ entry: PaletteEntry; x: number; y: number } | null>(null);
   const session = useRef<{ entry: PaletteEntry; id: number; sx: number; sy: number; active: boolean; dead: boolean } | null>(null);
@@ -62,7 +64,7 @@ export function PalettePanel({ onDragMove, onDragEnd, onAdd }: PaletteHandlers) 
   const searching = nq.length > 0;
 
   const platform = usePlatform();
-  const entries = useMemo(() => [...STATIC_ENTRIES.filter((e) => platform === "darwin" || !MAC_ONLY_ENTRIES.has(e.key)), ...(sounds ?? []).map(soundEntry), ...(hass ?? []).map(entityEntry), ...(apps ?? []).map(appEntry)], [apps, sounds, hass, platform]);
+  const entries = useMemo(() => [...STATIC_ENTRIES.filter((e) => platform === "darwin" || !MAC_ONLY_ENTRIES.has(e.key)), ...(sounds ?? []).map(soundEntry), ...(hass ?? []).map(entityEntry), ...(apps ?? []).map(appEntry), ...pluginEntries(plugins)], [apps, sounds, hass, platform, plugins]);
   const hiddenUnavailable = useMemo(() => entries.filter((e) => e.unavailable).length, [entries]);
   const trees = useMemo(
     () => ORDER.map((g) => buildTree(g, t(GROUP_LABEL[g]), entries.filter((e) => e.group === g && (showUnavailable || !e.unavailable) && matches(e, nq, t(GROUP_LABEL[g]))))),

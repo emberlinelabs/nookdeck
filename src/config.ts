@@ -19,7 +19,15 @@ export type Action =
   /** Home Assistant service call through the agent's HA connection, e.g. {service:"scene.turn_on", entityId:"scene.movie"}. */
   | { type: "hass"; service: string; entityId?: string; data?: Record<string, unknown> }
   /** Several steps in order (keys, text, waits, other buttons, HA calls…), see src/automation.ts. */
-  | { type: "macro"; steps: MacroStep[] };
+  | { type: "macro"; steps: MacroStep[] }
+  /** A no-code action of an installed plugin (src/plugins). `settings` override the plugin's own for this button. */
+  | { type: "plugin"; plugin: string; action: string; settings?: Record<string, string | number | boolean> };
+
+/** Plugin ids are reverse-DNS style ("dev.author.name"); "core.*" is reserved for plugins that ship with PhoneDesk. */
+export const PLUGIN_ID_RE = /^[a-z0-9][a-z0-9_-]{0,31}(\.[a-z0-9][a-z0-9_-]{0,47}){1,4}$/;
+export const PLUGIN_PART_RE = /^[a-z0-9][a-z0-9_-]{0,47}$/;
+/** A plugin widget on a tile: which plugin and widget, and the tile's own settings. */
+export interface PluginRef { id: string; widget: string; settings?: Record<string, string | number | boolean> }
 
 export const HASS_ENTITY_RE = /^[a-z_]+\.[a-z0-9_]+$/;
 export const HASS_SERVICE_RE = /^[a-z_]+\.[a-z0-9_]+$/;
@@ -41,7 +49,7 @@ export type SoundMode = "overlap" | "restart" | "toggle";
 export const SOUND_ID_RE = /^snd:[a-f0-9]{16}$/;
 
 /** nowplaying = current track + transport + volume (agent sends {type:"media"}); network = rx/tx rates. */
-export type WidgetKind = "clock" | "cpu" | "gpu" | "memory" | "uptime" | "load" | "network" | "nowplaying" | "quota" | "sessions" | "entity" | "weather" | "value" | "notifications";
+export type WidgetKind = "clock" | "cpu" | "gpu" | "memory" | "uptime" | "load" | "network" | "nowplaying" | "quota" | "sessions" | "entity" | "weather" | "value" | "notifications" | "plugin";
 
 /** AI coding tools PhoneDesk reads quotas/sessions from. A "quota" widget shows one provider (item.provider). */
 export type AiProvider = "claude" | "codex" | "antigravity" | "opencode" | "grok";
@@ -67,7 +75,7 @@ export interface ItemStyle {
 
 export type Item =
   | ({ id: string; kind: "button"; label: string; icon?: string; color?: string; action?: Action } & Size & ItemStyle)
-  | ({ id: string; kind: "widget"; widget: WidgetKind; color?: string; provider?: AiProvider; clock?: ClockOptions; metric?: MetricOptions; quota?: QuotaOptions; entity?: EntityOptions; weather?: WeatherOptions; push?: PushOptions } & Size & ItemStyle);
+  | ({ id: string; kind: "widget"; widget: WidgetKind; color?: string; provider?: AiProvider; clock?: ClockOptions; metric?: MetricOptions; quota?: QuotaOptions; entity?: EntityOptions; weather?: WeatherOptions; push?: PushOptions; plugin?: PluginRef } & Size & ItemStyle);
 
 /**
  * Quota widget looks. auto (default) picks by tile width: ring on small tiles, bars when wide, meter when wide and tall.
@@ -251,8 +259,8 @@ export const HOME = process.env.PHONEDESK_HOME ?? join(homedir(), ".phonedesk");
 const LAYOUT_FILE = join(HOME, "layout.json");
 const DEVICES_FILE = join(HOME, "devices.json");
 
-export const ACTION_TYPES = ["open", "hotkey", "type", "shell", "media", "volume", "page", "sound", "sound-stop", "hass", "macro"] as const;
-export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "gpu", "memory", "uptime", "load", "network", "nowplaying", "quota", "sessions", "entity", "weather", "value", "notifications"];
+export const ACTION_TYPES = ["open", "hotkey", "type", "shell", "media", "volume", "page", "sound", "sound-stop", "hass", "macro", "plugin"] as const;
+export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "gpu", "memory", "uptime", "load", "network", "nowplaying", "quota", "sessions", "entity", "weather", "value", "notifications", "plugin"];
 
 export function defaultLayout(): Layout {
   return {
@@ -387,7 +395,7 @@ const optColor = (v: unknown, field: string): string | undefined => {
   return c;
 };
 
-function validateTheme(t: any): Theme | undefined {
+export function validateTheme(t: any): Theme | undefined {
   if (t === undefined || t === null) return undefined;
   if (typeof t !== "object") throw new Error("theme must be an object");
   const out: Theme = {};
@@ -674,6 +682,23 @@ function str(v: unknown, field: string): string {
   return v;
 }
 
+/** Plugin settings on a tile or button: a small flat object of strings, numbers and booleans. */
+function pluginSettings(v: unknown, where: string): Record<string, string | number | boolean> | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== "object" || Array.isArray(v)) throw new Error(`${where} must be an object`);
+  const out: Record<string, string | number | boolean> = {};
+  const entries = Object.entries(v as Record<string, unknown>);
+  if (entries.length > 30) throw new Error(`${where} can have at most 30 settings`);
+  for (const [k, val] of entries) {
+    if (!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(k)) throw new Error(`${where}.${k} is not a valid setting name`);
+    if (typeof val === "string") { if (val.length > 2000) throw new Error(`${where}.${k} is too long`); out[k] = val; }
+    else if (typeof val === "number" && Number.isFinite(val)) out[k] = val;
+    else if (typeof val === "boolean") out[k] = val;
+    else throw new Error(`${where}.${k} must be a string, number or boolean`);
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 function validateAction(a: any, where: string): Action {
   if (!a || typeof a !== "object") throw new Error(`${where}.action must be an object`);
   switch (a.type) {
@@ -693,6 +718,14 @@ function validateAction(a: any, where: string): Action {
     }
     case "sound-stop": return { type: "sound-stop" };
     case "macro": return { type: "macro", steps: macroSteps(a.steps, `${where}.action.steps`) };
+    case "plugin": {
+      const plugin = str(a.plugin, `${where}.action.plugin`);
+      if (!PLUGIN_ID_RE.test(plugin)) throw new Error(`${where}.action.plugin must be a plugin id like dev.author.name`);
+      const action = str(a.action, `${where}.action.action`);
+      if (!PLUGIN_PART_RE.test(action)) throw new Error(`${where}.action.action must be an action id of that plugin`);
+      const settings = pluginSettings(a.settings, `${where}.action.settings`);
+      return { type: "plugin", plugin, action, ...(settings ? { settings } : {}) };
+    }
     case "hass": {
       const service = str(a.service, `${where}.action.service`);
       if (!HASS_SERVICE_RE.test(service)) throw new Error(`${where}.action.service must look like "domain.service"`);
@@ -773,7 +806,18 @@ export function validateLayout(raw: any): Layout {
           if (e.inlineControls !== undefined) entity.inlineControls = bool(e.inlineControls, `${w}.entity.inlineControls`);
           if (e.show !== undefined) { if (!["auto", "state", "value", "toggle"].includes(e.show)) throw new Error(`${w}.entity.show is invalid`); entity.show = e.show; }
         }
-        return { id: itemId, kind: "widget", widget: it.widget, color, ...(provider ? { provider } : {}), ...(clock ? { clock } : {}), ...(metric ? { metric } : {}), ...(quota ? { quota } : {}), ...(entity ? { entity } : {}), ...(weather ? { weather } : {}), ...(push ? { push } : {}), ...size, ...itemStyle(it, w) };
+        let plugin: PluginRef | undefined;
+        if (it.widget === "plugin") {
+          const pr = it.plugin;
+          if (!pr || typeof pr !== "object") throw new Error(`${w}: a plugin widget needs plugin.id and plugin.widget`);
+          const pid = str(pr.id, `${w}.plugin.id`);
+          if (!PLUGIN_ID_RE.test(pid)) throw new Error(`${w}.plugin.id must be a plugin id like dev.author.name`);
+          const pw = str(pr.widget, `${w}.plugin.widget`);
+          if (!PLUGIN_PART_RE.test(pw)) throw new Error(`${w}.plugin.widget must be a widget id of that plugin`);
+          const ps = pluginSettings(pr.settings, `${w}.plugin.settings`);
+          plugin = { id: pid, widget: pw, ...(ps ? { settings: ps } : {}) };
+        }
+        return { id: itemId, kind: "widget", widget: it.widget, color, ...(plugin ? { plugin } : {}), ...(provider ? { provider } : {}), ...(clock ? { clock } : {}), ...(metric ? { metric } : {}), ...(quota ? { quota } : {}), ...(entity ? { entity } : {}), ...(weather ? { weather } : {}), ...(push ? { push } : {}), ...size, ...itemStyle(it, w) };
       }
       if (it.kind === "button") {
         return {
@@ -792,6 +836,13 @@ export function validateLayout(raw: any): Layout {
     const placed = placeItems(items, columns, rows, `page "${id}"`);
     return { id, name: str(p.name ?? id, `${where}.name`), columns, rows: placed.rows, items: placed.items };
   });
+  // the phone gets plugin data keyed by tile id, so a plugin tile id must be unique in the whole layout
+  const pluginTiles = new Set<string>();
+  for (const pg of pages) for (const it of pg.items) {
+    if (it.kind !== "widget" || it.widget !== "plugin") continue;
+    if (pluginTiles.has(it.id)) throw new Error(`plugin tile id "${it.id}" is used twice: plugin tiles need ids that are unique across all pages`);
+    pluginTiles.add(it.id);
+  }
   const theme = validateTheme(raw.theme);
   const rules = validateRules(raw.rules, new Set(pages.map((p) => p.id)));
   const alarms = validateAlarms(raw.alarms);

@@ -211,4 +211,12 @@ export const VI: { [en: string]: string } = {
   "Amber": "Hổ phách",
   "No usage data from Grok": "Grok không có dữ liệu mức dùng",
   "Question from": "Câu hỏi từ",
+  "Plugin unavailable": "Plugin không khả dụng",
+  "Nothing to show": "Không có gì để hiển thị",
+  "OK": "Ổn",
+  "Warning": "Cảnh báo",
+  "Plugin missing": "Thiếu plugin",
+  "Plugin off": "Plugin đang tắt",
+  "Needs approval": "Cần được duyệt",
+  "Tile removed": "Ô đã bị gỡ",
 }

@@ -10,9 +10,10 @@ export type Action =
   | { type: 'sound'; sound: string; on?: 'mac' | 'phone' | 'both'; volume?: number; mode?: 'overlap' | 'restart' | 'toggle' }
   | { type: 'sound-stop' }
   | { type: 'macro'; steps: { kind: string; [k: string]: unknown }[] }
+  | { type: 'plugin'; plugin: string; action: string; args?: { [k: string]: unknown } }
   | { type: 'hass'; service: string; entityId?: string; data?: { [k: string]: unknown } }
 
-export type WidgetKind = 'clock' | 'cpu' | 'gpu' | 'memory' | 'uptime' | 'load' | 'network' | 'nowplaying' | 'quota' | 'sessions' | 'entity' | 'weather' | 'value' | 'notifications'
+export type WidgetKind = 'clock' | 'cpu' | 'gpu' | 'memory' | 'uptime' | 'load' | 'network' | 'nowplaying' | 'quota' | 'sessions' | 'entity' | 'weather' | 'value' | 'notifications' | 'plugin'
 
 export type ClockStyle = 'digital' | 'flip' | 'analog' | 'minimal' | 'word' | 'world'
 export interface ClockOptions {
@@ -125,6 +126,8 @@ export type Item = {
   entity?: EntityOptions
   weather?: WeatherOptions
   push?: PushOptions
+  /** widget 'plugin': which plugin widget this tile shows, with its settings (secrets stay on the agent) */
+  plugin?: { id: string; widget: string; settings?: { [k: string]: unknown } }
   label?: string
   icon?: string
   color?: string

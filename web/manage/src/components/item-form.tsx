@@ -29,6 +29,9 @@ import { api } from "@/api";
 import { useHassServices } from "@/lib/hass";
 import { Slider } from "@/components/ui/knowns/slider";
 import { useSounds } from "@/lib/sounds";
+import { FieldInput } from "@/components/plugins-panel";
+import { pluginSizes, useEnabledPlugins } from "@/lib/plugins";
+import type { PluginField, PluginInfo, PluginRef } from "@/types";
 import { ACTION_TYPES, AI_PROVIDERS, WIDGET_KINDS, METRIC_WIDGETS, type MetricWidget, type EntityOptions, type GeoPlace, type PushOptions, type WeatherOptions, type MacApp, type Action, type ActionType, type AiProvider, type Item, type Page, type WidgetKind } from "@/types";
 
 export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onDelete, onResize, onWidgetKind, onMoveToPage }: {
@@ -59,7 +62,10 @@ export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onD
   }, [armed]);
 
   const set = (patch: Record<string, unknown>) => onChange({ ...item, ...patch } as Item);
+  // Plugin tile ids must be unique across ALL screens (the agent rejects the layout otherwise); other ids only per screen.
+  const pluginTile = item.kind === "widget" && item.widget === "plugin";
   const idTaken = page.items.some((o) => o.id === item.id && o !== item);
+  const idTakenElsewhere = pluginTile && pages.some((p) => p !== page && p.items.some((o) => o.id === item.id));
 
   const setKind = (kind: string) => {
     if (kind === item.kind) return;
@@ -70,6 +76,9 @@ export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onD
     onChange(JSON.parse(JSON.stringify(next)) as Item);
   };
 
+  const plugins = useEnabledPlugins();
+  // A plugin tile only comes in the sizes its manifest lists.
+  const allowedSizes = item.kind === "widget" && item.widget === "plugin" ? pluginSizes(findPluginWidget(plugins, item.plugin)?.widget.sizes ?? []) : [];
   const w = item.w ?? 1;
   const h = item.h ?? 1;
   const resize = (nw: number, nh: number) => setSizeError(onResize(nw, nh));
@@ -96,8 +105,9 @@ export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onD
           <>
             <Field label="Widget" id="f-widget">
               <Select id="f-widget" value={item.widget} onChange={(e) => onWidgetKind(e.target.value as WidgetKind)}
-                options={WIDGET_KINDS.filter((w) => w !== "entity" || item.widget === "entity").map((w) => ({ value: w, label: t(WIDGET_LABEL[w] ?? w) }))} />
+                options={[...WIDGET_KINDS.filter((w) => w !== "entity" || item.widget === "entity"), ...(item.widget === "plugin" ? (["plugin"] as WidgetKind[]) : [])].map((w) => ({ value: w, label: t(WIDGET_LABEL[w] ?? w) }))} />
             </Field>
+            {item.widget === "plugin" && <PluginWidgetForm item={item} plugins={plugins} onChange={(plugin) => set({ plugin })} />}
             {item.widget === "clock" && <ClockOptionsForm value={item.clock} onChange={(clock) => set({ clock })} />}
             {(METRIC_WIDGETS as readonly string[]).includes(item.widget) && (
               <MetricOptionsForm widget={item.widget as MetricWidget} value={item.metric} onChange={(metric) => set({ metric })} />
@@ -126,6 +136,13 @@ export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onD
         <Field label={t("Color")} id="f-color">
           <ColorField value={item.color} onChange={(v) => set({ color: v })} />
         </Field>
+        {allowedSizes.length > 0 ? (
+          <Field label={t("Size")} id="f-size" hint={t("The sizes this plugin tile supports.")}>
+            <Select id="f-size" value={`${w}x${h}`} onChange={(e) => { const [nw, nh] = e.target.value.split("x").map(Number); resize(nw!, nh!); }}
+              options={[...(allowedSizes.some(([sw, sh]) => sw === w && sh === h) ? [] : [{ value: `${w}x${h}`, label: `${w}×${h} (${t("not supported")})` }]), ...allowedSizes.map(([sw, sh]) => ({ value: `${sw}x${sh}`, label: `${sw}×${sh}` }))]} />
+          </Field>
+        ) : (
+        <>
         <div className="grid grid-cols-2 gap-3">
           <Field label={t("Width (tiles)")} id="f-w">
             <Stepper id="f-w" value={w} min={1} max={page.columns} onChange={(v) => resize(v, h)} />
@@ -135,6 +152,8 @@ export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onD
           </Field>
         </div>
         <SizeGrid w={w} h={h} maxW={page.columns} maxH={page.rows} onPick={resize} />
+        </>
+        )}
         {sizeError && <p role="alert" className="-mt-1.5 text-xs text-destructive">{sizeError}</p>}
         <p className="-mt-1.5 text-xs text-muted-foreground">{t("Drag a tile corner on the phone to resize, drag the tile to move it.")}</p>
       </Section>
@@ -169,7 +188,7 @@ export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onD
       )}
 
       <Field label={t("Tile ID")} id="f-id" hint={t("The phone sends this ID when pressed. Only change it if needed.")}
-        error={!item.id ? t("ID cannot be empty") : idTaken ? t("ID already used on this screen") : undefined}>
+        error={!item.id ? t("ID cannot be empty") : idTaken ? t("ID already used on this screen") : idTakenElsewhere ? t("A plugin tile ID must be different on every screen") : undefined}>
         <Input id="f-id" value={item.id} onChange={(e) => set({ id: e.target.value })} />
       </Field>
     </div>
@@ -193,11 +212,13 @@ function ActionFields({ action, pages, onChange, onPickApp }: { action: Action |
     <>
       <div role="radiogroup" aria-label={t("Action type")} className="grid grid-cols-4 gap-1.5">
         <ActionChip label={t("None")} selected={!a} onClick={() => onChange(undefined)} icon={<Ban className="size-[18px]" />} />
+        {a?.type === "plugin" && <ActionChip label={t(ACTION_SHORT.plugin)} selected onClick={() => undefined} icon={<Icon name={ACTION_ICON.plugin} size={18} />} />}
         {ACTION_TYPES.map((at: ActionType) => (
           <ActionChip key={at} label={t(ACTION_SHORT[at])} selected={a?.type === at} onClick={() => a?.type !== at && onChange(defaultAction(at, pages[0]?.id))} icon={<Icon name={ACTION_ICON[at]} size={18} />} />
         ))}
       </div>
 
+      {a?.type === "plugin" && <PluginActionForm action={a} onChange={onChange} />}
       {a?.type === "open" && (
         <>
           <Field label={t("App")} id="f-app" hint={t("Pick an app installed on the computer.")}>
@@ -552,5 +573,50 @@ function MoveToScreen({ item, page, pages, onMove }: { item: Item; page: Page; p
         </div>
       )}
     </div>
+  );
+}
+
+const findPluginWidget = (plugins: PluginInfo[], ref: { id: string; widget: string } | undefined) => {
+  const plugin = plugins.find((p) => p.id === ref?.id);
+  const widget = plugin?.widgets.find((w) => w.id === ref?.widget);
+  return plugin && widget ? { plugin, widget } : undefined;
+};
+
+/** Per-tile settings of a plugin. Secrets are not shown here: they are set once in the Plugins tab and stay on the computer. */
+function PluginSettings({ idBase, fields, value, onChange }: { idBase: string; fields: PluginField[]; value: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void }) {
+  const shown = fields.filter((f) => f.type !== "secret");
+  if (!shown.length) return null;
+  return (
+    <>
+      {shown.map((f) => (
+        <FieldInput key={f.key} id={`${idBase}-${f.key}`} field={f} value={value[f.key] ?? f.default ?? (f.type === "boolean" ? false : "")} secret="" onSecret={() => undefined} onChange={(v) => onChange({ ...value, [f.key]: v })} />
+      ))}
+    </>
+  );
+}
+
+function PluginWidgetForm({ item, plugins, onChange }: { item: Extract<Item, { kind: "widget" }>; plugins: PluginInfo[]; onChange: (p: PluginRef) => void }) {
+  const ref = item.plugin;
+  const found = findPluginWidget(plugins, ref);
+  if (!ref) return <Alert tone="warning" icon={<AlertTriangle className="size-4" />}>{t("This tile has no plugin set.")}</Alert>;
+  if (!found) return <Alert tone="warning" icon={<AlertTriangle className="size-4" />}>{t("The plugin {id} is missing or off. The tile shows a placeholder until it is back.", { id: ref.id })}</Alert>;
+  return (
+    <>
+      <p className="text-xs text-muted-foreground">{found.plugin.name} · {found.widget.name}</p>
+      <PluginSettings idBase="f-pl" fields={found.widget.settings} value={ref.settings ?? {}} onChange={(settings) => onChange({ ...ref, settings })} />
+    </>
+  );
+}
+
+function PluginActionForm({ action: a, onChange }: { action: Extract<Action, { type: "plugin" }>; onChange: (a: Action) => void }) {
+  const plugins = useEnabledPlugins();
+  const plugin = plugins.find((p) => p.id === a.plugin);
+  const def = plugin?.actions.find((x) => x.id === a.action);
+  if (!def) return <Alert tone="warning" icon={<AlertTriangle className="size-4" />}>{t("The plugin {id} is missing or off. The button does nothing until it is back.", { id: a.plugin })}</Alert>;
+  return (
+    <>
+      <p className="text-xs text-muted-foreground">{plugin!.name} · {def.name}</p>
+      <PluginSettings idBase="f-pla" fields={def.settings} value={a.settings ?? {}} onChange={(settings) => onChange({ ...a, settings })} />
+    </>
   );
 }
