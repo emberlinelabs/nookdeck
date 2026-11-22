@@ -1,0 +1,302 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* Evening desk (dark, default) and morning desk (light). The phone's cyan is the only cool colour. */
+:root {
+  --background: #fafafa;
+  --foreground: #09090b;
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  --popover: #ffffff;
+  --popover-foreground: #09090b;
+  --muted: #f0f0f1;
+  --muted-foreground: #52525b;
+  --accent: #f0f0f1;
+  --accent-foreground: #09090b;
+  --border: #e2e2e5;
+  --input: #e2e2e5;
+  --ring: #3f3f46;
+  --primary: #09090b;
+  --primary-foreground: #fafafa;
+  --secondary: #f0f0f1;
+  --secondary-foreground: #09090b;
+  --destructive: #b91c1c;
+  --radius: 0.75rem;
+    --kn-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --kn-ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --kn-ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+    --kn-dur-fast: 120ms;
+    --kn-dur: 180ms;
+    --kn-dur-slow: 280ms;
+}
+[data-theme=dark] {
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: #0f0f12;
+  --card-foreground: #fafafa;
+  --popover: #0f0f12;
+  --popover-foreground: #fafafa;
+  --muted: #17171b;
+  --muted-foreground: #a1a1aa;
+  --accent: #17171b;
+  --accent-foreground: #fafafa;
+  --border: #26262b;
+  --input: #26262b;
+  --ring: #a1a1aa;
+  --primary: #fafafa;
+  --primary-foreground: #09090b;
+  --secondary: #17171b;
+  --secondary-foreground: #fafafa;
+  --destructive: #f87171;
+}
+
+@layer base {
+  *, ::after, ::before, ::backdrop { border-color: var(--border); }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --font-sans: "Geist Variable", "Geist", system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-xl: 1rem;
+  @keyframes kn-breathe {
+  0%, 100% {
+    box-shadow: 0 0 0 0 transparent;
+    }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--hue, currentColor) 16%, transparent);
+    }
+  }
+  @keyframes kn-rise {
+  from {
+    transform: translateY(6px);
+    }
+  }
+  @keyframes kn-shimmer {
+  to {
+    transform: translateX(300%);
+    }
+  }
+  @keyframes kn-sweep {
+  from {
+    transform: translateX(-100%);
+    }
+  to {
+    transform: translateX(250%);
+    }
+  }
+  @keyframes kn-sweep-rtl {
+  from {
+    transform: translateX(100%);
+    }
+  to {
+    transform: translateX(-250%);
+    }
+  }
+  @keyframes kn-word {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+    }
+  }
+  @keyframes kn-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+    }
+  }
+  @keyframes kn-fall {
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+    }
+  }
+  @keyframes kn-fade-in {
+  from {
+    opacity: 0.35;
+    }
+  }
+  @keyframes kn-fade-out {
+  to {
+    opacity: 0;
+    }
+  }
+  @keyframes kn-fade-x {
+  0% {
+    --kn-fade-l: 0px;
+    --kn-fade-r: 28px;
+    }
+  6%, 94% {
+    --kn-fade-l: 28px;
+    --kn-fade-r: 28px;
+    }
+  100% {
+    --kn-fade-l: 28px;
+    --kn-fade-r: 0px;
+    }
+  }
+}
+  :root {
+    --kn-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --kn-ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --kn-ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+    --kn-dur-fast: 120ms;
+    --kn-dur: 180ms;
+    --kn-dur-slow: 280ms;
+}
+
+@theme inline {
+  @keyframes kn-breathe {
+  0%, 100% {
+    box-shadow: 0 0 0 0 transparent;
+        }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--hue, currentColor) 16%, transparent);
+        }
+    }
+  @keyframes kn-rise {
+  from {
+    transform: translateY(6px);
+        }
+    }
+  @keyframes kn-shimmer {
+  to {
+    transform: translateX(300%);
+        }
+    }
+  @keyframes kn-sweep {
+  from {
+    transform: translateX(-100%);
+        }
+  to {
+    transform: translateX(250%);
+        }
+    }
+  @keyframes kn-sweep-rtl {
+  from {
+    transform: translateX(100%);
+        }
+  to {
+    transform: translateX(-250%);
+        }
+    }
+  @keyframes kn-word {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+        }
+    }
+  @keyframes kn-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+        }
+    }
+  @keyframes kn-fall {
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+        }
+    }
+  @keyframes kn-fade-in {
+  from {
+    opacity: 0.35;
+        }
+    }
+  @keyframes kn-fade-out {
+  to {
+    opacity: 0;
+        }
+    }
+  @keyframes kn-fade-x {
+  0% {
+    --kn-fade-l: 0px;
+    --kn-fade-r: 28px;
+        }
+  6%, 94% {
+    --kn-fade-l: 28px;
+    --kn-fade-r: 28px;
+        }
+  100% {
+    --kn-fade-l: 28px;
+    --kn-fade-r: 0px;
+        }
+    }
+}
+  .kn-scroll, .kn-scroll-auto {
+    --kn-thumb: color-mix(in oklch, var(--foreground) 22%, transparent);
+    --kn-thumb-hover: color-mix(in oklch, var(--foreground) 38%, transparent);
+}
+  .kn-scroll-auto {
+    --kn-thumb: color-mix(in oklch, var(--foreground) 9%, transparent);
+    scrollbar-gutter: stable;
+}
+  .kn-scroll-auto:hover, .kn-scroll-auto:focus-within {
+    --kn-thumb: color-mix(in oklch, var(--foreground) 22%, transparent);
+}
+  .kn-scroll::-webkit-scrollbar, .kn-scroll-auto::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+  .kn-scroll::-webkit-scrollbar-track, .kn-scroll::-webkit-scrollbar-corner, .kn-scroll-auto::-webkit-scrollbar-track, .kn-scroll-auto::-webkit-scrollbar-corner {
+    background: transparent;
+}
+  .kn-scroll::-webkit-scrollbar-thumb, .kn-scroll-auto::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: var(--kn-thumb) padding-box;
+}
+  .kn-scroll-auto:hover::-webkit-scrollbar-thumb, .kn-scroll-auto:focus-within::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklch, var(--foreground) 22%, transparent);
+}
+  .kn-scroll::-webkit-scrollbar-thumb:hover, .kn-scroll-auto::-webkit-scrollbar-thumb:hover {
+    background-color: var(--kn-thumb-hover);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .kn-scroll, .kn-scroll-auto {
+    scrollbar-width: thin;
+    scrollbar-color: var(--kn-thumb) transparent;
+    }
+}
+  .kn-scroll-fade-x {
+    mask-image: linear-gradient(to right, #000 var(--kn-fade-inset-l, 0px), transparent var(--kn-fade-inset-l, 0px), #000 calc(var(--kn-fade-inset-l, 0px) + var(--kn-fade-l)), #000 calc(100% - var(--kn-fade-r)), transparent), linear-gradient(#000, #000);
+    mask-size: 100% calc(100% - 10px), 100% 10px;
+    mask-position: top, bottom;
+    mask-repeat: no-repeat;
+}
+
+@supports (animation-timeline: scroll()) {
+  .kn-scroll-fade-x {
+    animation: kn-fade-x linear both;
+    animation-timeline: scroll(self inline);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="kn-"], [class*="kn-"]::before, [class*="kn-"]::after, [data-kn-m], [data-kn-m] * {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    }
+}
