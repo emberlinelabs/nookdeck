@@ -3,8 +3,11 @@
 #   copies the shared strings and icons next to the code (go:embed cannot reach ../shared), runs the tests, then cross-compiles
 #   dist/Nookdeck.exe (GUI subsystem, no console, no cgo). Works on macOS, Linux and Windows (Git Bash).
 set -e
-cd "$(dirname "$0")"
-out="${1:-dist}"
+here="$(cd "$(dirname "$0")" && pwd)"
+# an outdir given relative is relative to where the script was run from, not to apps/windows
+case "${1:-}" in "") out="$here/dist" ;; /*|[A-Za-z]:*) out="$1" ;; *) out="$PWD/$1" ;; esac
+[ -z "${AGENT_EXE:-}" ] || case "$AGENT_EXE" in /*|[A-Za-z]:*) ;; *) AGENT_EXE="$PWD/$AGENT_EXE" ;; esac
+cd "$here"
 mkdir -p internal/core/assets cmd/nookdeck-tray/assets "$out"
 cp ../shared/strings.json internal/core/assets/strings.json
 cp ../shared/icons/windows/tray-*.ico ../shared/icons/windows/app.ico cmd/nookdeck-tray/assets/

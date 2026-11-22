@@ -132,7 +132,17 @@ export function build(o: Options): { app: string; dmg?: string } {
   run(["ditto", app, join(stage, "Nookdeck.app")]);
   symlinkSync("/Applications", join(stage, "Applications"));
   const dmg = join(o.out, "Nookdeck.dmg");
-  run(["hdiutil", "create", "-volname", "Nookdeck", "-srcfolder", stage, "-ov", "-format", "UDZO", dmg]);
+  // hdiutil's own size estimate is sometimes too small on CI runners ("No space left on device" while copying the agent): give it room explicitly, and retry once or twice
+  const mb = Math.ceil(Number(run(["du", "-sk", stage]).trim().split(/\s+/)[0]) / 1024 * 1.5) + 64;
+  for (let attempt = 1; ; attempt++) {
+    try { run(["hdiutil", "create", "-volname", "Nookdeck", "-srcfolder", stage, "-fs", "HFS+", "-size", `${mb}m`, "-ov", "-format", "UDZO", dmg]); break; }
+    catch (e) {
+      if (attempt >= 3) throw e;
+      console.warn(`hdiutil failed (attempt ${attempt}), retrying: ${e instanceof Error ? e.message : e}`);
+      try { run(["hdiutil", "detach", "/Volumes/Nookdeck", "-force"]); } catch {}
+      rmSync(dmg, { force: true });
+    }
+  }
   rmSync(stage, { recursive: true, force: true });
   writeFileSync(`${dmg}.sha256`, `${sha256(dmg)}  Nookdeck.dmg\n`);
   console.log(`built ${at(app)}\nbuilt ${at(dmg)} (${Math.round(statSync(dmg).size / 1e6)} MB)`);
