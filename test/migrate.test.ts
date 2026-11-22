@@ -1,3 +1,4 @@
+import { WIN } from "./_os";
 import "./_fetch";
 import { describe, expect, test } from "bun:test";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, writeFileSync, readdirSync } from "node:fs";
@@ -39,7 +40,7 @@ function fakeInstall() {
   return { home, old, agents, claude, foreign, calls, svc };
 }
 
-describe("migration from 0.1.x (macOS)", () => {
+describe.skipIf(WIN)("migration from 0.1.x (macOS)", () => {
   test("data is copied, the old path links to it, the service, PATH line and hooks move; a second run changes nothing", async () => {
     const f = fakeInstall();
     process.env.NOOKDECK_LAUNCH_AGENTS_DIR = f.agents;

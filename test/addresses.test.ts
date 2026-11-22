@@ -104,7 +104,7 @@ describe("tailnetName", () => {
     resetTailscaleCache();
     expect(await tailnetName(run, null, 1)).toBeNull();
   });
-  test("a fake tailscale CLI found in an extra dir and run for real", async () => {
+  test.skipIf(process.platform === "win32")("a fake tailscale CLI found in an extra dir and run for real", async () => {
     const dir = mkdtempSync(join(tmpdir(), "pd-ts-"));
     mkdirSync(dir, { recursive: true });
     const bin = join(dir, "tailscale");
@@ -136,7 +136,8 @@ describe("GET /api/pairing and the phone Host check", () => {
   test("addresses, default and the old fields", async () => {
     await start();
     const a = await (await rawFetch(`http://localhost:${app.port}/api/pairing`)).json() as any;
-    expect(a.defaultAddress).toBe("local");
+    // ".local" is the default only on macOS (the server uses the real platform)
+    expect(a.defaultAddress).toBe(process.platform === "darwin" ? "local" : "lan:192.168.1.20");
     expect(a.addresses.map((x: any) => x.id)).toEqual(["local", "lan:192.168.1.20", "lan:10.0.0.7", "tailscale:dns", "tailscale:100.101.102.103", "vpn:10.8.0.2"]);
     expect(a.addresses[3].url).toBe(`http://my-mac.tail1234.ts.net:${app.port}/?pin=111111`);
     expect(a.url).toContain("/?pin=111111");

@@ -22,10 +22,13 @@ export function cliDirs(home: string = safeHome() || homedir(), id: string = pla
  */
 export function findCli(name: string, extraDirs: string[] = [], o: { home?: string; id?: string; env?: Record<string, string | undefined> } = {}): string | null {
   const env = o.env ?? process.env;
-  const onPath = Bun.which(name, { PATH: env.PATH ?? "" });
-  if (onPath) return onPath;
   const id = o.id ?? platform.id;
-  const exts = id === "win32" ? [".exe", ".cmd"] : [""];
+  const exts = id === "win32" ? [".exe", ".cmd", ".bat"] : [""];
+  // PATH in its own order (our own scan: the same on every OS, and a Windows file is found by its .exe/.cmd/.bat)
+  const sep = id === "win32" ? ";" : ":";
+  for (const d of (env.PATH ?? env.Path ?? "").split(sep).filter(Boolean)) {
+    for (const e of exts) { const f = join(d, `${name}${e}`); if (existsSync(f)) return f; }
+  }
   for (const d of [...extraDirs, ...cliDirs(o.home, id, env)]) for (const e of exts) { const f = join(d, `${name}${e}`); if (existsSync(f)) return f; }
   return null;
 }

@@ -555,7 +555,7 @@ describe.skipIf(!mac)("setup.sh: a release from before the rename (phonedesk-* a
 
 // no PowerShell on this machine to run setup.ps1: pin the pieces of the same fallback by reading it
 describe("setup.ps1: the pre-rename release fallback (static)", () => {
-  const ps = readFileSync(join(root, "setup.ps1"), "utf8");
+  const ps = readFileSync(join(root, "setup.ps1"), "utf8").replace(/\r\n/g, "\n");
   test("looks for nookdeck-* first, falls back to phonedesk-*, shows it as nookdeck, skips migrate for it", () => {
     expect(ps).toContain("$asset -replace '^nookdeck-', 'phonedesk-'");
     expect(ps.indexOf("if (-not (Sum-For $asset))")).toBeLessThan(ps.indexOf("Probe-Installed", ps.indexOf("function Fetch-Binary")));
@@ -632,7 +632,7 @@ describe.skipIf(!mac)("setup.sh: signature and the port of our own agent", () =>
 });
 
 describe("setup.ps1: the same port rule (static)", () => {
-  const ps = readFileSync(join(root, "setup.ps1"), "utf8");
+  const ps = readFileSync(join(root, "setup.ps1"), "utf8").replace(/\r\n/g, "\n");
   test("our own program on the port is stopped and the rest of setup goes on; migrate runs in two steps", () => {
     expect(ps).toContain("$hp.Path -ieq $exe");
     expect(ps.indexOf("Stop-Process -Id $hp.Id")).toBeLessThan(ps.indexOf('Fail "port $Port is taken by $who"'));
@@ -770,8 +770,8 @@ describe.skipIf(!mac)("installers: the anonymous install count", () => {
 
 // no PowerShell here: pin the shape of the Windows scripts by reading them (a PC run checks the behaviour)
 describe("setup.ps1 / uninstall.ps1: the anonymous install count (static)", () => {
-  const setup = readFileSync(join(root, "setup.ps1"), "utf8");
-  const un = readFileSync(join(root, "uninstall.ps1"), "utf8");
+  const setup = readFileSync(join(root, "setup.ps1"), "utf8").replace(/\r\n/g, "\n");
+  const un = readFileSync(join(root, "uninstall.ps1"), "utf8").replace(/\r\n/g, "\n");
   test("opt-outs, skips, notice, no secret and a short timeout", () => {
     for (const src of [setup, un]) {
       expect(src).toContain("NOOKDECK_NO_ANALYTICS");

@@ -2,28 +2,31 @@ import { describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { WIN } from "./_os";
 import { findCli } from "../src/ai/find-cli";
-import { AGY_AUTH_BACKOFF_MS, fetchAntigravityQuota, resetAgyBackoff, runAgy } from "../src/ai/antigravity";
+import { AgyAuthRequired, AGY_AUTH_BACKOFF_MS, fetchAntigravityQuota, resetAgyBackoff, runAgy } from "../src/ai/antigravity";
 import { buildPlist } from "../src/service";
 import { t, setLanguage } from "../src/i18n";
 
 const tmp = () => mkdtempSync(join(tmpdir(), "nd-cli-"));
+const ID = WIN ? "win32" : "darwin";
+const X = WIN ? ".cmd" : "";
 const exe = (f: string, body = "#!/bin/sh\nexit 0\n") => { mkdirSync(join(f, ".."), { recursive: true }); writeFileSync(f, body); chmodSync(f, 0o755); return f; };
 
 describe("findCli", () => {
   test("PATH wins; then ~/.local/bin and ~/.bun/bin; then extra dirs; null when nowhere", () => {
     const home = tmp(), onPath = tmp(), extra = tmp();
     const empty = { PATH: "/nonexistent" };
-    expect(findCli("zzcli", [], { home, id: "darwin", env: empty })).toBeNull();
-    const a = exe(join(home, ".local", "bin", "zzcli"));
-    expect(findCli("zzcli", [], { home, id: "darwin", env: empty })).toBe(a);
-    const b = exe(join(home, ".bun", "bin", "zzcli2"));
-    expect(findCli("zzcli2", [], { home, id: "darwin", env: empty })).toBe(b);
-    const c = exe(join(extra, "zzcli3"));
-    expect(findCli("zzcli3", [], { home, id: "darwin", env: empty })).toBeNull();
-    expect(findCli("zzcli3", [extra], { home, id: "darwin", env: empty })).toBe(c);
-    const d = exe(join(onPath, "zzcli"));
-    expect(findCli("zzcli", [], { home, id: "darwin", env: { PATH: onPath } })).toBe(d);
+    expect(findCli("zzcli", [], { home, id: ID, env: empty })).toBeNull();
+    const a = exe(join(home, ".local", "bin", `zzcli${X}`));
+    expect(findCli("zzcli", [], { home, id: ID, env: empty })).toBe(a);
+    const b = exe(join(home, ".bun", "bin", `zzcli2${X}`));
+    expect(findCli("zzcli2", [], { home, id: ID, env: empty })).toBe(b);
+    const c = exe(join(extra, `zzcli3${X}`));
+    expect(findCli("zzcli3", [], { home, id: ID, env: empty })).toBeNull();
+    expect(findCli("zzcli3", [extra], { home, id: ID, env: empty })).toBe(c);
+    const d = exe(join(onPath, `zzcli${X}`));
+    expect(findCli("zzcli", [], { home, id: ID, env: { PATH: onPath } })).toBe(d);
   });
   test("Windows: %APPDATA%\\npm and the extra agy dir, .exe and .cmd", () => {
     const home = tmp(), appdata = tmp(), agy = tmp();
@@ -41,16 +44,17 @@ describe("findCli", () => {
 describe("agy not signed in", () => {
   const fake = (body: string) => exe(join(tmp(), "agy"), `#!/bin/bash\n${body}\n`);
   const AUTH = `echo "Authentication required. Please visit the URL to log in: https://accounts.google.com/o/oauth2/auth?secret=1" >&2\nsleep 30`;
-  test("runAgy stops at the message, fast", async () => {
+  test.skipIf(WIN)("runAgy stops at the message, fast", async () => {
     const t0 = Date.now();
     await expect(runAgy([fake(AUTH), "-p", "/usage"], 20_000)).rejects.toThrow("not signed in");
     expect(Date.now() - t0).toBeLessThan(5000);
   });
   test("a clear error without the URL, then a 30 min back-off, lifted by force", async () => {
     resetAgyBackoff();
-    const bin = fake(AUTH);
+    const bin = "/x/agy";
     let runs = 0;
-    const run = (a: string[], ms: number) => { runs++; return runAgy(a, ms); };
+    // a runner that behaves like runAgy meeting the message (the real process is covered by the test above, off Windows)
+    const run = async (_a: string[], _ms: number): Promise<string> => { runs++; throw new AgyAuthRequired(); };
     const now = 1_000_000;
     const q = await fetchAntigravityQuota(run, now, bin);
     expect(q.error).toBe("Antigravity CLI is not signed in on this computer. Open a terminal, run `agy` once and sign in.");
@@ -79,8 +83,8 @@ describe("agy not signed in", () => {
     }
   });
   test("a working agy still parses", async () => {
-    const bin = fake(`echo '{"response":"Gemini Models\\tweekly\\t80%\\t2030-01-01T00:00:00Z"}'`);
-    const q = await fetchAntigravityQuota(undefined, 1, bin);
+    const out = JSON.stringify({ response: "Gemini Models\tweekly\t80%\t2030-01-01T00:00:00Z" });
+    const q = await fetchAntigravityQuota(async () => out, 1, "/x/agy");
     expect(q.windows.length).toBe(1);
   });
 });
