@@ -212,7 +212,7 @@ export interface Alarm {
 
 export type Orientation = "landscape" | "portrait" | "auto";
 export const ORIENTATIONS: Orientation[] = ["landscape", "portrait", "auto"];
-export const LANGUAGES = ["en", "vi"] as const;
+export const LANGUAGES = ["en", "vi", "zh"] as const;
 export type Language = (typeof LANGUAGES)[number];
 
 /** A fixed Stream Deck-style grid of square cells: columns x rows. */
