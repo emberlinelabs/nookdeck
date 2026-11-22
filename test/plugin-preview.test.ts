@@ -60,7 +60,7 @@ describe("widget preview", () => {
     expect(calls).toBe(0);
   });
   test("the example plugin has a preview and is 1.0.1", () => {
-    const m = parseManifest(JSON.parse(readFileSync(join(import.meta.dir, "..", "examples/plugins/crypto-price/nookdeck.json"), "utf8")));
+    const m = parseManifest(JSON.parse(readFileSync(join(import.meta.dir, "fixtures/plugins/crypto-price/nookdeck.json"), "utf8")));
     expect(m.version).toBe("1.0.1");
     expect(m.widgets[0]!.preview).toEqual({ value: 60721, unit: "USD", label: "bitcoin" });
   });

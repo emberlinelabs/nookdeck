@@ -1,4 +1,4 @@
-import { PLUGIN_ID_RE, validateLayout, validateTheme, type MacroStep } from "../config";
+import { PLUGIN_ID_RE, STYLES, validateLayout, validateLook, validatePackLook, validateTheme, type Look, type PackLook, type MacroStep } from "../config";
 import { macroSteps } from "../automation";
 import { cleanRender } from "./sources";
 import {
@@ -25,6 +25,7 @@ function text(v: unknown, where: string, max: number, required = true): string {
 
 /** `>=1.2.3`, `1.2`, `^1.2.3` (treated as >=): is `have` at least that version? Only the numeric core is compared. */
 export function versionAtLeast(have: string, range: string): boolean {
+  if (/dev|dirty/i.test(have)) return true; // a development or modified build satisfies any minimum
   const nums = (s: string) => (/(\d+)(?:\.(\d+))?(?:\.(\d+))?/.exec(s) ?? []).slice(1).map((x) => Number(x ?? 0));
   const [a, b] = [nums(have), nums(range.replace(/^[>=^~\s]+/, ""))];
   for (let i = 0; i < 3; i++) {
@@ -251,7 +252,8 @@ function parseWidget(w: unknown, perms: Permissions, shared: SettingField[], i: 
     if ("error" in cleaned) return fail(`${where}.preview is not valid ${w.render} data: ${cleaned.error}`);
     preview = cleaned.data;
   }
-  return { id, name: text(w.name ?? id, `${where}.name`, 60), render: w.render as Renderer, sizes, settings, ...(preview !== undefined ? { preview } : {}), source: parseSource(w.source, [...shared, ...settings], perms, `${where}.source`, hasMain) };
+  if (w.style !== undefined && (typeof w.style !== "string" || !(STYLES[w.render as string] ?? []).includes(w.style))) return fail(`${where}.style must be one of: ${(STYLES[w.render as string] ?? []).join(", ") || "(none)"}`);
+  return { id, name: text(w.name ?? id, `${where}.name`, 60), render: w.render as Renderer, sizes, settings, ...(w.style !== undefined && w.style !== (STYLES[w.render as string] ?? [])[0] ? { style: w.style as string } : {}), ...(preview !== undefined ? { preview } : {}), source: parseSource(w.source, [...shared, ...settings], perms, `${where}.source`, hasMain) };
 }
 
 const MAIN_RE = /^[A-Za-z0-9_][A-Za-z0-9_./-]{0,98}\.(?:js|mjs|cjs|ts|mts)$/;
@@ -270,6 +272,8 @@ export function parseMain(v: unknown): string | null {
  */
 export function parseManifest(raw: unknown, opts: { agentVersion?: string; allowCore?: boolean } = {}): Manifest {
   if (!isObj(raw)) return fail("nookdeck.json must be a JSON object");
+  if (raw.type === "theme") return fail("this is a theme package, not a plugin: install it from the Themes page");
+  if (raw.type !== undefined && raw.type !== "plugin") return fail('type must be "plugin" or "theme"');
   const id = text(raw.id, "id", 100);
   if (!PLUGIN_ID_RE.test(id)) fail('id must look like "dev.author.name" (lowercase letters, digits, - and _, at least two parts separated by dots)');
   if (id.startsWith("core.") && !opts.allowCore) fail('ids starting with "core." are reserved for the plugins that ship with Nookdeck');
@@ -315,4 +319,144 @@ export function parseManifest(raw: unknown, opts: { agentVersion?: string; allow
     ...(raw.icon !== undefined ? { icon: text(raw.icon, "icon", 140, false) } : {}),
     permissions, settings, widgets, actions, themes, layouts, main,
   };
+}
+
+/** A theme package manifest ("type": "theme"): a pack of variants, look fields only, never code or permissions (spec D14-D16). */
+export interface ThemeVariant { id: string; name: string; mode: "light" | "dark"; theme: PackLook; css?: string; preview?: string }
+/** An option value patches look fields: `theme` for every variant, and `variants.<id>` replaces it for one variant (Catppuccin accents differ per flavour). */
+export interface ThemeOption { id: string; name: string; values: Array<{ id: string; name: string; theme: Look; variants?: Record<string, Look> }> }
+export interface ThemeManifest {
+  type: "theme";
+  id: string; name: string; version: string; nookdeck?: string; author?: string; description?: string;
+  /** Shared base look every variant inherits (a package file in backgroundImage is already "theme:<id>/<file>"). */
+  base: PackLook;
+  /** Shared base CSS file. */
+  css?: string;
+  variants: ThemeVariant[];
+  options: ThemeOption[];
+  /** The light and dark variants Auto uses by default. */
+  auto?: { light: string; dark: string };
+  /** A png/jpg in the package (at most 1 MB). */
+  preview?: string;
+}
+export const THEME_PREVIEW_MAX = 1024 * 1024;
+export const THEME_CSS_MAX = 64 * 1024;
+const THEME_REJECT = ["main", "permissions", "widgets", "actions", "settings", "layouts", "themes"];
+const PKG_FILE_RE = /^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/;
+
+export function parseThemeManifest(raw: unknown, opts: { agentVersion?: string } = {}): ThemeManifest {
+  if (!isObj(raw)) return fail("nookdeck.json must be a JSON object");
+  if (raw.type !== "theme") return fail('a theme package needs "type": "theme"');
+  for (const k of THEME_REJECT) if (raw[k] !== undefined && raw[k] !== null && !(Array.isArray(raw[k]) && raw[k].length === 0)) fail(`a theme cannot have "${k}": themes carry look fields only, no code and no permissions`);
+  const id = text(raw.id, "id", 100);
+  if (!PLUGIN_ID_RE.test(id)) fail('id must look like "dev.author.name" (lowercase letters, digits, - and _, at least two parts separated by dots)');
+  if (id.startsWith("core.")) fail('ids starting with "core." are reserved');
+  const version = text(raw.version, "version", 40);
+  if (!VERSION_RE.test(version)) fail('version must look like "1.2.3"');
+  let nookdeck: string | undefined;
+  if (raw.nookdeck !== undefined) {
+    nookdeck = text(raw.nookdeck, "nookdeck", 40);
+    if (!/^[>=^~\s]*\d+(\.\d+){0,2}\s*$/.test(nookdeck)) fail('nookdeck must look like ">=0.3.1"');
+    if (opts.agentVersion && !versionAtLeast(opts.agentVersion, nookdeck)) fail(`this theme needs Nookdeck ${nookdeck}, you have ${opts.agentVersion}. Update Nookdeck first.`);
+  }
+  // a package file is written as a plain relative path in the manifest; the agent keeps it as "theme:<id>/<path>"
+  const look = (v: unknown, where: string): PackLook => {
+    if (v === undefined || v === null) return {};
+    if (!isObj(v)) return fail(`${where} must be an object with look fields`);
+    const src: Record<string, any> = { ...v };
+    if (typeof src.backgroundImage === "string" && PKG_FILE_RE.test(src.backgroundImage) && !src.backgroundImage.includes("..")) src.backgroundImage = `theme:${id}/${src.backgroundImage}`;
+    try { return validatePackLook(src, where); } catch (e: any) { return fail(e?.message ?? String(e)); }
+  };
+  const file = (v: unknown, where: string, ext: RegExp, what: string): string | undefined => {
+    if (v === undefined || v === null) return undefined;
+    const f = text(v, where, 140);
+    if (!PKG_FILE_RE.test(f) || f.includes("..") || !ext.test(f)) fail(`${where} must be ${what} in the package`);
+    return f;
+  };
+  const base = look(raw.theme, "theme");
+  const css = file(raw.css, "css", /\.css$/i, "a .css file");
+  let variants: ThemeVariant[];
+  if (raw.variants === undefined) {
+    if (raw.theme === undefined) fail("a theme needs variants, or a theme with the look fields");
+    const mode = base.mode === "light" ? "light" : "dark";
+    variants = [{ id: "default", name: text(raw.name, "name", 60), mode, theme: {} }];
+  } else {
+    if (!Array.isArray(raw.variants) || raw.variants.length < 1 || raw.variants.length > 12) fail("variants must be a list of 1 to 12 variants");
+    const seen = new Set<string>();
+    variants = (raw.variants as unknown[]).map((v, i) => {
+      if (!isObj(v)) return fail(`variants[${i}] must be an object`);
+      const vid = text(v.id, `variants[${i}].id`, 48);
+      if (!ID_PART_RE.test(vid)) fail(`variants[${i}].id must be lowercase letters, digits, - and _`);
+      if (seen.has(vid)) fail(`variants: id "${vid}" is used twice`);
+      seen.add(vid);
+      if (v.mode !== "light" && v.mode !== "dark") fail(`variants[${i}].mode must be "light" or "dark"`);
+      return { id: vid, name: text(v.name ?? vid, `variants[${i}].name`, 60), mode: v.mode as "light" | "dark", theme: look(v.theme, `variants[${i}].theme`), ...(file(v.css, `variants[${i}].css`, /\.css$/i, "a .css file") ? { css: file(v.css, `variants[${i}].css`, /\.css$/i, "a .css file")! } : {}), ...(file(v.preview, `variants[${i}].preview`, /\.(png|jpe?g)$/i, "a .png or .jpg file") ? { preview: file(v.preview, `variants[${i}].preview`, /\.(png|jpe?g)$/i, "a .png or .jpg file")! } : {}) };
+    });
+  }
+  const options: ThemeOption[] = [];
+  if (raw.options !== undefined) {
+    if (!Array.isArray(raw.options) || raw.options.length > 4) fail("options must be a list of up to 4 options");
+    const seen = new Set<string>();
+    for (const [i, o] of (raw.options as unknown[]).entries()) {
+      if (!isObj(o)) return fail(`options[${i}] must be an object`);
+      const oid = text(o.id, `options[${i}].id`, 48);
+      if (!ID_PART_RE.test(oid)) fail(`options[${i}].id must be lowercase letters, digits, - and _`);
+      if (seen.has(oid)) fail(`options: id "${oid}" is used twice`);
+      seen.add(oid);
+      if (!Array.isArray(o.values) || o.values.length < 1 || o.values.length > 16) fail(`options[${i}].values must be a list of 1 to 16 values`);
+      const vs = new Set<string>();
+      options.push({ id: oid, name: text(o.name ?? oid, `options[${i}].name`, 60), values: (o.values as unknown[]).map((val, j) => {
+        if (!isObj(val)) return fail(`options[${i}].values[${j}] must be an object`);
+        const vid = text(val.id, `options[${i}].values[${j}].id`, 48);
+        if (!ID_PART_RE.test(vid)) fail(`options[${i}].values[${j}].id must be lowercase letters, digits, - and _`);
+        if (vs.has(vid)) fail(`options[${i}]: value id "${vid}" is used twice`);
+        vs.add(vid);
+        const patch = look(val.theme, `options[${i}].values[${j}].theme`);
+        if ((patch as any).kinds || (patch as any).fonts) fail(`options[${i}].values[${j}].theme can only patch look fields`);
+        let per: Record<string, Look> | undefined;
+        if (val.variants !== undefined) {
+          if (!isObj(val.variants)) return fail(`options[${i}].values[${j}].variants must be an object keyed by variant id`);
+          per = {};
+          for (const [kv, pv] of Object.entries(val.variants)) {
+            if (!variants.some((x) => x.id === kv)) fail(`options[${i}].values[${j}].variants: there is no variant "${kv}"`);
+            const pl = look(pv, `options[${i}].values[${j}].variants.${kv}`);
+            if ((pl as any).kinds || (pl as any).fonts) fail(`options[${i}].values[${j}].variants.${kv} can only patch look fields`);
+            per[kv] = pl;
+          }
+        }
+        return { id: vid, name: text(val.name ?? vid, `options[${i}].values[${j}].name`, 60), theme: patch, ...(per ? { variants: per } : {}) };
+      }) });
+    }
+  }
+  let auto: { light: string; dark: string } | undefined;
+  if (raw.auto !== undefined) {
+    if (!isObj(raw.auto) || typeof raw.auto.light !== "string" || typeof raw.auto.dark !== "string") fail("auto must be { light, dark } variant ids");
+    const l = variants.find((v) => v.id === raw.auto.light), d = variants.find((v) => v.id === raw.auto.dark);
+    if (!l || !d) fail("auto names a variant that does not exist");
+    auto = { light: raw.auto.light, dark: raw.auto.dark };
+  }
+  const preview = file(raw.preview, "preview", /\.(png|jpe?g)$/i, "a .png or .jpg file");
+  return {
+    type: "theme", id, name: text(raw.name, "name", 60), version,
+    ...(nookdeck ? { nookdeck } : {}),
+    ...(raw.author !== undefined ? { author: text(raw.author, "author", 80, false) } : {}),
+    ...(raw.description !== undefined ? { description: text(raw.description, "description", 300, false) } : {}),
+    base, ...(css ? { css } : {}), variants, options, ...(auto ? { auto } : {}), ...(preview ? { preview } : {}),
+  };
+}
+
+/** The look for one variant with option values applied: base, then variant, then each chosen option value. Throws on an unknown id. */
+export function resolveVariant(m: ThemeManifest, variantId: string, options: Record<string, string> = {}): PackLook {
+  const v = m.variants.find((x) => x.id === variantId);
+  if (!v) throw new Error(`this theme has no variant "${variantId}"`);
+  const out: Record<string, any> = { ...m.base, ...v.theme };
+  if (m.base.kinds || v.theme.kinds) out.kinds = { ...(m.base.kinds ?? {}), ...(v.theme.kinds ?? {}) }; // a variant's fonts replace the pack's list; kinds merge per kind
+  for (const [oid, vid] of Object.entries(options)) {
+    const o = m.options.find((x) => x.id === oid);
+    if (!o) throw new Error(`this theme has no option "${oid}"`);
+    const val = o.values.find((x) => x.id === vid);
+    if (!val) throw new Error(`option "${oid}" has no value "${vid}"`);
+    Object.assign(out, val.variants && val.variants[variantId] ? val.variants[variantId] : val.theme);
+  }
+  return out as PackLook;
 }

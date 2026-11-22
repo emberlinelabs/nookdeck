@@ -106,7 +106,7 @@ export interface PluginSummary {
   fields: Array<SettingField & { isSet?: boolean }>;
   /** Current plugin-wide values, secrets left out. */
   settings: Settings;
-  widgets: Array<{ id: string; name: string; render: string; sizes: string[]; settings: SettingField[]; preview?: unknown }>;
+  widgets: Array<{ id: string; name: string; render: string; sizes: string[]; settings: SettingField[]; preview?: unknown; style?: string }>;
   actions: Array<{ id: string; name: string; settings: SettingField[] }>;
   themes: Array<{ id: string; name: string; theme: unknown }>;
   layouts: Array<{ id: string; name: string; layout: unknown }>;
@@ -260,7 +260,7 @@ export class PluginStore {
       source: s.source, sha256: s.sha256, installedAt: s.installedAt, unreviewed: !this.builtin.has(id) && !s.reviewed, ...(this.builtin.has(id) ? { builtin: true } : {}), ...(s.reviewed ? { registryVersion: s.registryVersion } : {}), enabled: s.enabled && !e.error,
       permissions: m.permissions, granted: s.granted ?? { network: [] }, needsApproval: !covers(s.granted, m.permissions),
       permissionLines: describePermissions(m.permissions), fields, settings: values,
-      widgets: m.widgets.map((w) => ({ id: w.id, name: w.name, render: w.render, sizes: w.sizes, settings: w.settings, ...(w.preview !== undefined ? { preview: this.builtin.has(id) ? materializePreview(String(w.render), w.preview) : w.preview } : {}) })),
+      widgets: m.widgets.map((w) => ({ id: w.id, name: w.name, render: w.render, sizes: w.sizes, settings: w.settings, ...(w.style ? { style: w.style } : {}), ...(w.preview !== undefined ? { preview: this.builtin.has(id) ? materializePreview(String(w.render), w.preview) : w.preview } : {}) })),
       actions: m.actions.map((a) => ({ id: a.id, name: a.name, settings: a.settings })),
       themes: m.themes, layouts: m.layouts, ...(e.error ? { error: e.error } : {}), code: m.main !== null, main: m.main, linked: s.linked === true,
     };
@@ -312,7 +312,8 @@ export class PluginStore {
     return null;
   }
 
-  private async resolveSource(source: string): Promise<{ files: Files; shown: string }> {
+  /** The package behind a folder, GitHub address or manifest URL (also used by theme packages). */
+  async resolveSource(source: string): Promise<{ files: Files; shown: string }> {
     const src = source.trim();
     if (!src) throw new PluginError("give a folder path or an https address");
     if (/^[a-z][a-z0-9+.-]*:\/\//i.test(src)) {
@@ -324,9 +325,9 @@ export class PluginStore {
         if (text === null) continue;
         // a plugin with code needs its other files: fetch the repository package (a no-code plugin stays manifest-only, as before)
         const g = githubRepo(src);
-        let main: unknown;
-        try { main = JSON.parse(text)?.main; } catch { /* reported later as invalid JSON */ }
-        if (g && typeof main === "string" && main) {
+        let main: unknown, isTheme = false;
+        try { const j = JSON.parse(text); main = j?.main; isTheme = j?.type === "theme"; } catch { /* reported later as invalid JSON */ }
+        if (g && ((typeof main === "string" && main) || isTheme)) {
           const pkg = await this.fetchGithubPackage(g);
           if (!pkg || !pkg.has(MANIFEST_FILE)) throw new PluginError(`could not download the plugin files from that repository`);
           return { files: pkg, shown: src };

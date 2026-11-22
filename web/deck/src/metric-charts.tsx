@@ -1,3 +1,4 @@
+import { PAL } from './theme'
 const f = (n: number) => Math.round(n * 100) / 100
 
 /**
@@ -71,7 +72,7 @@ export function Donut(props: { size: number; used: number; color: string; center
     seg('u', 0, p, props.color, 1)
   }
   return (
-    <div class="pd-ring" style={{ width: props.size + 'px', height: props.size + 'px' }}>
+    <div class="pd-ring" data-part="gauge" style={{ width: props.size + 'px', height: props.size + 'px' }}>
       <svg width={props.size} height={props.size} viewBox={'0 0 ' + props.size + ' ' + props.size} aria-hidden="true">
         {arcs}
       </svg>
@@ -89,8 +90,8 @@ export function MeterBar(props: { value: number; limit: number; color: string; t
   const v = Math.min(100, Math.max(0, props.value))
   const over = v >= props.limit
   return (
-    <div class="pd-mt" style={{ height: props.thick + 'px', borderRadius: props.thick + 'px' }} aria-hidden="true">
-      <div class="pd-mt__fill" style={{ width: v + '%', background: over ? '#f87171' : props.color, borderRadius: props.thick + 'px' }} />
+    <div class="pd-mt" data-part="gauge" style={{ height: props.thick + 'px', borderRadius: props.thick + 'px' }} aria-hidden="true">
+      <div class="pd-mt__fill" style={{ width: v + '%', background: over ? PAL.error : props.color, borderRadius: props.thick + 'px' }} />
       <i class="pd-mt__tick" style={{ left: props.limit + '%', top: '-2px', bottom: '-2px' }} />
     </div>
   )

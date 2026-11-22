@@ -18,7 +18,7 @@ const fake = (overrides: Partial<import("../src/service").ServiceDeps> = {}) => 
   const lines: string[] = [];
   const deps: import("../src/service").ServiceDeps = {
     launchctl: async (a) => { calls.push(a); return { code: 0, out: "" }; },
-    uid: 501, platform: "darwin", program: ["/h/.nookdeck/bin/nookdeck"], log: (l) => lines.push(l), ...overrides,
+    uid: 501, platform: "darwin", program: ["/h/.nookdeck/bin/nookdeck"], log: (l) => lines.push(l), timing: { unloadMs: 0, backoffMs: [] }, ...overrides,
   };
   return { deps, calls, lines };
 };
@@ -56,8 +56,71 @@ describe("service commands (launchctl faked)", () => {
   });
 
   test("a failing bootstrap is an error with launchctl's message", async () => {
-    const { deps } = fake({ launchctl: async (a) => (a[0] === "bootstrap" ? { code: 5, out: "Bootstrap failed: 5: Input/output error" } : { code: 0, out: "" }) });
+    const { deps } = fake({ launchctl: async (a) => (a[0] === "bootstrap" ? { code: 5, out: "Bootstrap failed: 5: Input/output error" } : a[0] === "print" || a[0] === "kickstart" ? { code: 113, out: "not found" } : { code: 0, out: "" }) });
     await expect(S.serviceInstall(deps)).rejects.toThrow("Input/output error");
+  });
+
+  /** A launchd that behaves like the real one: bootout answers at once but the job stays loaded for `lingerMs`; bootstrap of a job that is still loading answers 5. */
+  const launchd = (o: { lingerMs?: number; eioFirst?: number; neverBootstrap?: boolean } = {}) => {
+    const calls: string[][] = [];
+    let loaded = true, unloadAt = 0, eio = o.eioFirst ?? 0, boots = 0;
+    const launchctl = async (a: string[]) => {
+      calls.push(a);
+      if (a[0] === "bootout") { if (!loaded) return { code: 113, out: "Could not find service" }; unloadAt = Date.now() + (o.lingerMs ?? 0); loaded = false; return { code: 0, out: "" }; }
+      if (a[0] === "print") return { code: loaded || Date.now() < unloadAt ? 0 : 113, out: "" };
+      if (a[0] === "bootstrap") {
+        boots++;
+        if (o.neverBootstrap) return { code: 5, out: "Bootstrap failed: 5: Input/output error" };
+        if (Date.now() < unloadAt || eio-- > 0) return { code: 5, out: "Bootstrap failed: 5: Input/output error" };
+        loaded = true; return { code: 0, out: "" };
+      }
+      if (a[0] === "kickstart") return { code: loaded ? 0 : 113, out: "" };
+      return { code: 0, out: "" };
+    };
+    return { calls, launchctl, boots: () => boots, isLoaded: () => loaded };
+  };
+
+  test("install waits until the booted-out job is really gone (it lingers 300 ms), then bootstraps once", async () => {
+    const l = launchd({ lingerMs: 300 });
+    const { deps } = fake({ launchctl: l.launchctl, timing: { unloadMs: 5000, pollMs: 20, backoffMs: [] } });
+    await S.serviceInstall(deps);
+    expect(l.isLoaded()).toBe(true);
+    expect(l.boots()).toBe(1); // no failed attempt: the wait came first
+    const names = l.calls.map((c) => c[0]);
+    expect(names.indexOf("print")).toBeGreaterThan(names.indexOf("bootout"));
+    expect(names.lastIndexOf("print")).toBeLessThan(names.indexOf("bootstrap"));
+  });
+
+  test("a bootstrap that answers 5 is retried with back-off and then succeeds; the old plist is never needed", async () => {
+    const l = launchd({ eioFirst: 2 });
+    const { deps } = fake({ launchctl: l.launchctl, timing: { unloadMs: 500, pollMs: 5, backoffMs: [5, 5, 5] } });
+    await S.serviceInstall(deps);
+    expect(l.boots()).toBe(3);
+    expect(l.isLoaded()).toBe(true);
+  });
+
+  test("when bootstrap keeps failing the OLD plist is put back and loaded, and the error says so", async () => {
+    const a = fake();
+    await S.serviceInstall(a.deps); // an old plist exists now
+    const before = (await import("node:fs")).readFileSync(S.plistPath(), "utf8");
+    const l = launchd({ neverBootstrap: true });
+    const { deps } = fake({ launchctl: l.launchctl, program: ["/new/nookdeck"], timing: { unloadMs: 200, pollMs: 5, backoffMs: [1, 1, 1] } });
+    await expect(S.serviceInstall(deps)).rejects.toThrow(/bootstrap failed \(5\)/);
+    expect((await import("node:fs")).readFileSync(S.plistPath(), "utf8")).toBe(before); // the old file is back
+    expect(l.boots()).toBe(8); // 4 for the new plist, 4 to reload the old one
+  });
+
+  test("restart and start: a job that is still loaded is kicked instead of failing; stop waits for the unload", async () => {
+    const l = launchd({ lingerMs: 150 });
+    const { deps } = fake({ launchctl: l.launchctl, timing: { unloadMs: 3000, pollMs: 10, backoffMs: [5] } });
+    await S.serviceInstall(deps);
+    await S.serviceStop(deps);
+    const t = Date.now();
+    await S.serviceStart(deps);
+    expect(l.isLoaded()).toBe(true);
+    expect(Date.now() - t).toBeLessThan(2000);
+    await S.serviceRestart(deps);
+    expect(l.isLoaded()).toBe(true);
   });
 
   test("restart kickstarts; falls back to bootstrap when not loaded; refuses when not installed", async () => {

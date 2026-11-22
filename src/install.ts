@@ -117,7 +117,17 @@ export async function runInstall(d: InstallDeps, o: InstallOptions = {}): Promis
     for (const l of r.out.split("\n").map((x) => x.trim()).filter(Boolean)) d.log(`  ${l}`);
   };
   await step("migrate", ["migrate", "--no-service", ...portArgs]); // 0.1.x data, hooks and the old service; safe to repeat
-  await step("service install", ["service", "install", ...portArgs]); // (re)starts the agent from the stable copy
+  // the program did not change and the service already runs the stable copy: a restart is enough (and gentler than a reload)
+  let restarted = false;
+  if (status === "unchanged" && !portArgs.length) {
+    const st = await d.run([stable, "service", "status"]);
+    if (st.code === 0 && /installed/.test(st.out) && !/not installed/.test(st.out) && st.out.includes(`Program: ${stable}`)) {
+      const r = await d.run([stable, "service", "restart"]);
+      restarted = r.code === 0;
+      if (restarted) d.log("  Service restarted.");
+    }
+  }
+  if (!restarted) await step("service install", ["service", "install", ...portArgs]); // (re)starts the agent from the stable copy
 
   const port = o.port ?? 7420;
   let seen: string | null = null;

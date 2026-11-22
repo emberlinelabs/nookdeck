@@ -1,6 +1,7 @@
 // Generates schema/nookdeck.schema.json from the validator's own constants (src/plugins/types.ts), so the two cannot drift
 // on renderers or setting types. Run: bun packages/plugin/scripts/gen-schema.ts [--check]
 import { RENDERERS, SETTING_TYPES } from "../../../src/plugins/types";
+import { PLUGIN_STYLES } from "../../../web/shared/plugin-styles";
 
 const idPart = "^[a-z0-9][a-z0-9_-]{0,47}$";
 const settingField = {
@@ -63,6 +64,8 @@ const schema = {
         name: { type: "string", maxLength: 60 },
         render: { enum: [...RENDERERS] },
         sizes: { type: "array", minItems: 1, maxItems: 12, items: { type: "string", pattern: "^[1-9]\\d?x[1-9]\\d?$" }, description: 'For example "2x1".' },
+        preview: { description: "Sample data for the renderer, shown in the Store and the tile picker before the plugin runs." },
+        style: { enum: [...new Set(Object.values(PLUGIN_STYLES).flat())], description: "Suggested display style (one of the renderer's styles); a tile's own choice overrides it." },
         settings,
         source: {
           description: "Where the data comes from. Required for a no-code plugin; a code plugin provides the widget from activate().",

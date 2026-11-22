@@ -28,6 +28,8 @@ export interface RegistryEntry {
   icon?: string;
   screenshot?: string;
   tier?: string;
+  /** "theme" for a theme package; missing means plugin. */
+  type?: "plugin" | "theme";
   permissions?: unknown;
 }
 /** What the UI shows about a registry plugin before it is installed (parsed from its nookdeck.json in the repo). */
@@ -62,7 +64,7 @@ export function parseRegistry(raw: unknown): RegistryEntry[] {
     if (!id || !PLUGIN_ID_RE.test(id) || id.startsWith("core.") || seen.has(id) || !name || !version || !/^\d+\.\d+\.\d+/.test(version)) continue;
     if (!repo || !/^https:\/\//i.test(repo) || !sha || !/^[0-9a-f]{64}$/i.test(sha)) continue;
     seen.add(id);
-    const o: RegistryEntry = { id, name, version, repo, sha256: sha.toLowerCase() };
+    const o: RegistryEntry = { id, name, version, repo, sha256: sha.toLowerCase(), ...(e.type === "theme" ? { type: "theme" as const } : {}) };
     for (const k of ["description", "author", "tier"] as const) { const v = str(e[k], 300); if (v) o[k] = v; }
     for (const k of ["icon", "screenshot"] as const) { const v = str(e[k], 400); if (v && /^https:\/\//i.test(v)) o[k] = v; }
     if (e.permissions && typeof e.permissions === "object") o.permissions = e.permissions;

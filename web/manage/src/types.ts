@@ -103,7 +103,7 @@ export interface MetricOptions {
 export type WidgetKind = "clock" | "cpu" | "gpu" | "memory" | "uptime" | "load" | "network" | "nowplaying" | "quota" | "sessions" | "entity" | "weather" | "value" | "notifications" | "plugin";
 export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "gpu", "memory", "uptime", "load", "network", "nowplaying", "quota", "sessions", "entity", "weather", "value", "notifications"];
 /** A plugin tile or button points at the plugin by id (see GET /api/plugins). */
-export interface PluginRef { id: string; widget: string; settings?: Record<string, unknown> }
+export interface PluginRef { id: string; widget: string; settings?: Record<string, unknown>; /** How the tile is drawn; omit for the manifest suggestion or the renderer default. */ view?: { style?: string } }
 
 export interface WeatherOptions {
   source?: "auto" | "hass" | "open-meteo";
@@ -274,8 +274,38 @@ export interface Theme {
   iconStroke?: number;
   showLabels?: boolean;
   text?: string;
+  /** Secondary text colour. */
+  muted?: string;
   orientation?: ThemeOrientation;
+  // Look fields added with theme packages (specs/plugin-system D14). All optional; system font stacks only.
+  font?: ThemeFont;
+  numberFont?: ThemeFont;
+  /** An uploaded image id (GET /api/icons) or a theme package file. */
+  backgroundImage?: string;
+  backgroundFit?: "cover" | "contain" | "tile";
+  /** 0 to 0.9 */
+  backgroundDim?: number;
+  /** px, 0 to 30 */
+  backgroundBlur?: number;
+  gradient?: { from: string; to: string; angle: number };
+  /** 0.05 to 1 */
+  tileOpacity?: number;
+  /** px, 0 to 30 */
+  tileBlur?: number;
+  border?: { width: number; color?: string };
+  shadow?: "none" | "soft" | "strong";
+  labelPosition?: "bottom" | "top" | "hidden";
+  labelWeight?: "regular" | "medium" | "bold";
+  iconStyle?: "line" | "filled";
+  palette?: { ok?: string; warn?: string; error?: string; info?: string };
+  /** Up to 6 series colours */
+  chartColors?: string[];
+  /** Which theme pack, variant and options are applied, when one is. */
+  source?: ThemeSource;
 }
+export type ThemeFont = "system" | "rounded" | "mono" | "serif" | "condensed";
+/** The look fields (no behaviour): what a theme package carries and what one screen can override with page.theme. */
+export type ThemeLook = Pick<Theme, "mode" | "accent" | "background" | "tile" | "text" | "muted" | "radius" | "gap" | "fontScale" | "tileStyle" | "iconScale" | "iconStroke" | "showLabels" | "font" | "numberFont" | "backgroundImage" | "backgroundFit" | "backgroundDim" | "backgroundBlur" | "gradient" | "tileOpacity" | "tileBlur" | "border" | "shadow" | "labelPosition" | "labelWeight" | "iconStyle" | "palette" | "chartColors">;
 
 export interface Page {
   id: string;
@@ -283,6 +313,8 @@ export interface Page {
   columns: number;
   rows: number;
   items: Item[];
+  /** A partial look for this screen only (same fields as the theme's look). */
+  theme?: Partial<ThemeLook>;
 }
 
 export interface Layout {
@@ -511,7 +543,7 @@ export interface PluginInfo {
   error?: string;
   permissions: PluginPermissions;
   granted: PluginPermissions;
-  widgets: { id: string; name: string; render: string; sizes: string[]; settings: PluginField[]; preview?: unknown }[];
+  widgets: { id: string; name: string; render: string; sizes: string[]; settings: PluginField[]; preview?: unknown; style?: string }[];
   actions: { id: string; name: string; settings: PluginField[] }[];
   themes: { id: string; name: string; theme: Theme }[];
   layouts: { id: string; name: string; layout: Layout }[];
@@ -519,3 +551,18 @@ export interface PluginInfo {
   fields: PluginField[];
   settings: Record<string, unknown>;
 }
+
+// Theme packs (GET /api/themes). A pack holds 1 to 12 variants and optional choices (options); see specs/plugin-system D14 to D16.
+export interface ThemeVariantInfo { id: string; name: string; mode: "light" | "dark"; look: Partial<ThemeLook>; preview?: string }
+export interface ThemeOptionValue { id: string; name: string; theme?: Partial<ThemeLook>; variants?: Record<string, Partial<ThemeLook>> }
+export interface ThemeOptionInfo { id: string; name: string; values: ThemeOptionValue[] }
+export interface ThemeSource { pack: string; variant?: string; auto?: { light: string; dark: string }; options?: Record<string, string> }
+export interface ThemePack {
+  id: string; name: string; version: string; author?: string; description?: string; preview?: string; repo?: string;
+  variants: ThemeVariantInfo[]; options: ThemeOptionInfo[]; auto?: { light: string; dark: string };
+  hasCss: boolean; fonts: string[]; icons: string[];
+  builtin: boolean; installed: boolean; installedVersion?: string; updateAvailable: boolean;
+  /** This pack is the one applied now; appliedOlder: an older version of it is applied (offer Re-apply). */
+  applied: boolean; appliedOlder: boolean; reviewed: boolean;
+}
+export interface ThemesResult { packs: ThemePack[]; applied: ThemeSource | null }

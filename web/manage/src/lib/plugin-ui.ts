@@ -38,8 +38,8 @@ export function rendererLabel(r: string, short = false): string {
  * What the phone preview shows for every plugin tile of a layout, by tile id: the installed plugin's own sample data for the tile's
  * widget, or a plain state ("plugin missing", "plugin disabled", "no preview|Name · Kind"). Nothing is invented.
  */
-export function previewPluginData(layout: Layout, plugins: PluginInfo[]): Record<string, { render: string; data: unknown } | { error: string }> {
-  const out: Record<string, { render: string; data: unknown } | { error: string }> = {};
+export function previewPluginData(layout: Layout, plugins: PluginInfo[]): Record<string, { render: string; data: unknown; style?: string } | { error: string }> {
+  const out: Record<string, { render: string; data: unknown; style?: string } | { error: string }> = {};
   for (const pg of layout.pages) for (const it of pg.items) {
     if (it.kind !== "widget" || it.widget !== "plugin" || !it.plugin) continue;
     const p = plugins.find((x) => x.id === it.plugin!.id);
@@ -48,7 +48,7 @@ export function previewPluginData(layout: Layout, plugins: PluginInfo[]): Record
     if (p.needsApproval) { out[it.id] = { error: "plugin not granted" }; continue; }
     const w = p.widgets.find((x) => x.id === it.plugin!.widget);
     if (!w) { out[it.id] = { error: "plugin widget missing" }; continue; }
-    out[it.id] = w.preview !== undefined && w.preview !== null ? { render: w.render, data: w.preview } : { error: `no preview|${p.name} · ${rendererLabel(w.render)}` };
+    out[it.id] = w.preview !== undefined && w.preview !== null ? { render: w.render, data: w.preview, ...(w.style ? { style: w.style } : {}) } : { error: `no preview|${p.name} · ${rendererLabel(w.render)}` };
   }
   return out;
 }

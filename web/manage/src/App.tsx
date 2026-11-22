@@ -26,7 +26,9 @@ import { mergeLayouts } from "@/lib/layout-merge";
 import { PluginsPanel } from "@/components/plugins-panel";
 import { placePluginTile } from "@/lib/palette";
 import { PluginsOverview } from "@/components/plugins-overview";
-import { parsePluginLink, type PluginLink } from "@/lib/plugin-link";
+import { parsePluginLink, parseThemeLink, type PluginLink } from "@/lib/plugin-link";
+import { SegmentedControl } from "@/components/ui/knowns/segmented-control";
+import { ThemesStore } from "@/components/themes-store";
 import { WeatherPage } from "@/components/weather-page";
 import { HassCard } from "@/components/hass-card";
 import { WebhookCard } from "@/components/webhook-card";
@@ -81,6 +83,23 @@ export default function App() {
       setTabState("plugins");
       if ("link" in r) setPluginLink(r.link);
       else setStatus({ kind: "error", text: t("That plugin link is not valid, so it was ignored.") });
+    };
+    read();
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, []);
+  // Theme deeplink (#themes?add=<id>): open the Themes page on that pack.
+  const [themeLink, setThemeLink] = useState<string | null>(null);
+  const [themeTab, setThemeTab] = useState<"customize" | "packs">("customize");
+  useEffect(() => {
+    const read = () => {
+      const r = parseThemeLink(window.location.hash);
+      if (!r) return;
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#theme`);
+      setTabState("theme");
+      setThemeTab("packs");
+      if ("open" in r && r.id) setThemeLink(r.id);
+      else if ("rejected" in r) setStatus({ kind: "error", text: t("That theme link is not valid, so it was ignored.") });
     };
     read();
     window.addEventListener("hashchange", read);
@@ -257,18 +276,20 @@ export default function App() {
     }
   }, [saved, update]);
 
-  const save = useCallback(async () => {
-    if (!layout) return;
+  const save = useCallback(async (): Promise<boolean> => {
+    if (!layout) return true;
     if (jsonError) {
       setStatus({ kind: "error", text: t("Invalid JSON: {error}", { error: jsonError }) });
-      return;
+      return false;
     }
     setSaving(true);
     try {
       await saveMerged(layout);
       setStatus({ kind: "ok", text: t("Saved. The phone gets the new layout right away.") });
+      return true;
     } catch (e) {
       setStatus({ kind: "error", text: t("The agent rejected the layout: {error}", { error: e instanceof Error ? e.message : String(e) }) });
+      return false;
     } finally {
       setSaving(false);
     }
@@ -277,8 +298,10 @@ export default function App() {
   // Ctrl/Cmd+S and leave-page guard always see the latest state.
   const saveRef = useRef(save);
   saveRef.current = save;
+  // Applying a theme writes on the agent at once: keep other unsaved edits by saving them first, so the reload that follows never drops them.
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
+  const flushDraft = useCallback(async () => { if (dirtyRef.current && !(await saveRef.current())) throw new Error(t("Your other changes could not be saved, so the theme was not applied.")); }, []);
   const undoRef = useRef({ undo, redo });
   undoRef.current = { undo, redo };
   useEffect(() => {
@@ -356,13 +379,21 @@ export default function App() {
 
       {layout && (
         <main key={lang} id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
-          {(tab === "screens" || tab === "theme") && <div className="mb-3"><CustomizeHint /></div>}
+          {(tab === "screens" || (tab === "theme" && themeTab === "customize")) && <div className="mb-3"><CustomizeHint /></div>}
           {tab === "screens" && (
             <ScreensPanel layout={layout} pageIdx={safePageIdx} itemId={itemId} setPageIdx={setPageIdx} setItemId={setItemId} update={update}
               orientation={orientation} onOrientation={setOrientation} onUndo={undo} />
           )}
           {tab === "theme" && (
-            <ThemePanel layout={layout} pageId={layout.pages[safePageIdx]!.id} orientation={orientation} onOrientation={setOrientation}
+            <div className="mb-3">
+              <SegmentedControl size="sm" aria-label={t("Theme")} value={themeTab} onValueChange={(v) => setThemeTab(v as "customize" | "packs")}
+                options={[{ value: "customize", label: t("Customize") }, { value: "packs", label: t("Packs") }]} />
+            </div>
+          )}
+          {tab === "theme" && themeTab === "packs" && <ThemesStore layout={layout} beforeApply={flushDraft} deeplinkId={themeLink} onDeeplinkDone={() => setThemeLink(null)} onLayoutChanged={() => void load()} />}
+          {tab === "theme" && themeTab === "customize" && (
+            <ThemePanel beforeApply={flushDraft} onOpenPacks={() => setThemeTab("packs")} layout={layout} pageId={layout.pages[safePageIdx]!.id} orientation={orientation} onOrientation={setOrientation}
+              onLayoutChanged={() => void load()} onPageTheme={(pid, look) => update((l) => ({ ...l, pages: l.pages.map((p) => { if (p.id !== pid) return p; const { theme: _t, ...rest } = p; return look ? { ...rest, theme: look } : rest; }) }))}
               onChange={(theme) => update((l) => {
                 const rest = { ...l };
                 delete rest.theme;

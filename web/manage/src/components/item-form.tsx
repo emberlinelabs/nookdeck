@@ -14,6 +14,7 @@ import { ClockOptionsForm } from "@/components/clock-options";
 import { AppPickerButton } from "@/components/app-picker";
 import { QuotaOptionsForm } from "@/components/quota-options";
 import { MetricOptionsForm } from "@/components/metric-options";
+import { PluginStylePicker } from "@/components/plugin-style";
 import { HotkeyField } from "@/components/hotkey-field";
 import { MacroEditor } from "@/components/macro-editor";
 import { IconPicker } from "@/components/icon-picker";
@@ -656,6 +657,8 @@ function PluginWidgetForm({ item, plugins, onChange }: { item: Extract<Item, { k
   return (
     <>
       <p className="text-xs text-muted-foreground">{found.plugin.name} · {found.widget.name}</p>
+      <PluginStylePicker render={found.widget.render} value={ref.view?.style} suggested={found.widget.style}
+        onChange={(style) => { const { view: _v, ...rest } = ref; onChange(style ? { ...rest, view: { style } } : rest); }} />
       <PluginSettings idBase="f-pl" fields={found.widget.settings} value={ref.settings ?? {}} onChange={(settings) => onChange({ ...ref, settings })} />
     </>
   );

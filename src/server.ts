@@ -1,5 +1,5 @@
 import type { Server, ServerWebSocket } from "bun";
-import { HOME, loadDevices, loadLayout, saveDevices, saveLayout, validateLayout, type Action, type Layout } from "./config";
+import { HOME, PLUGIN_ID_RE, loadDevices, loadLayout, saveDevices, saveLayout, validateLayout, type Action, type Layout } from "./config";
 import { resolveAsset } from "./assets";
 
 /** Embedded text assets served gzipped when the client accepts it; compressed once and kept (they never change). */
@@ -56,12 +56,16 @@ async function touchLocalNetwork(): Promise<void> {
 import { currentInstance } from "./service";
 import { platform } from "./platform";
 import pkg from "../package.json" with { type: "json" };
-import { aboutInfo } from "./about";
+import { aboutInfo, compatVersion } from "./about";
 import { PluginStore, PluginError } from "./plugins/store";
 import { PluginRuntime, realShell } from "./plugins/runtime";
 import { PluginHosts, type HostsDeps } from "./plugins/hosts";
 import { CoreHost, legacyRef } from "./plugins/core";
 import { Registry, compareVersions, type RegistryEntry } from "./plugins/registry";
+import { ThemeRegistry } from "./plugins/theme-registry";
+import { BUILTIN_THEMES } from "./plugins/builtin-themes";
+import { ThemeStore, THEME_MIME, isLicenseFile, applyLook, buildThemePackage, extractLook } from "./plugins/themes";
+import { zipFiles } from "./plugins/cli";
 import { ERR_DISABLED, ERR_MISSING, ERR_NOT_GRANTED } from "./plugins/types";
 import type { SourceDeps } from "./plugins/sources";
 import { forbiddenPage, pickLanguage, wantsPage } from "./forbidden-page";
@@ -148,6 +152,8 @@ export interface StartOptions {
   plugins?: PluginStore;
   /** The community registry (tests: a fake address or fetch). */
   registry?: Registry;
+  /** Installed theme packages (tests: a temp folder). */
+  themes?: ThemeStore;
   pluginDeps?: Partial<SourceDeps>;
   /** Code plugins (tests: fake spawn, temp log/data folders, short timers). */
   pluginHostDeps?: Partial<HostsDeps>;
@@ -224,7 +230,15 @@ export async function startServer(opts: StartOptions = {}) {
   setLanguage(layout.theme?.language);
   const icons = opts.icons ?? new Icons({ catalog: async () => (CATALOG ? Bun.file(CATALOG.path).text() : null) });
   /** Icons the phone cannot draw by itself (catalog SVGs, app icons, uploads), recomputed on every layout change. */
-  let layoutAssets = await icons.layoutAssets(layout).catch(() => ({}));
+  /** The layout's icon assets plus the icon pack of the applied theme (keys `pack:<name>`, which the deck prefers over its built-in icons). */
+  const cssReferences = (css: string, file: string): boolean => css.includes(file);
+  const layoutAssetsAll = async (l: Layout): Promise<Record<string, any>> => {
+    const base: Record<string, any> = await icons.layoutAssets(l).catch(() => ({}));
+    const pack = l.theme?.source?.pack.split("@")[0];
+    if (pack) Object.assign(base, await themeStore.packIcons(pack).catch(() => ({})));
+    return base;
+  };
+  let layoutAssets: Record<string, any> = await icons.layoutAssets(layout).catch(() => ({}));
   const layoutMsg = () => ({ type: "layout", layout, assets: layoutAssets });
   let catalogGz: Uint8Array | undefined;
   const sounds = opts.sounds ?? new SoundLibrary();
@@ -272,7 +286,7 @@ export async function startServer(opts: StartOptions = {}) {
     return notification;
   };
   // ----- plugins (no-code, P1): installed plugins, their tiles' data, their buttons -----
-  const pluginStore = opts.plugins ?? new PluginStore({ agentVersion: aboutInfo().version });
+  const pluginStore = opts.plugins ?? new PluginStore({ agentVersion: compatVersion() });
   await pluginStore.load().catch((e) => console.error("plugins", e));
   // core plugins (core.weather, core.quota) run in this process through the same PluginContext as community code; the services
   // are read lazily because the weather service and the AI hub are built a little later than the runtime
@@ -294,6 +308,10 @@ export async function startServer(opts: StartOptions = {}) {
   // a plugin that keeps crashing is switched off (the owner can turn it on again on the Plugins tab)
   pluginHosts.onFailed((id) => { void pluginStore.setEnabled(id, false).catch(() => {}); });
   const registry = opts.registry ?? new Registry();
+  const themeRegistry = new ThemeRegistry(registry.url);
+  const themeStore = opts.themes ?? new ThemeStore({ agentVersion: compatVersion(), resolve: (s) => pluginStore.resolveSource(s), builtin: BUILTIN_THEMES });
+  await themeStore.load();
+  layoutAssets = await layoutAssetsAll(layout); // now that the theme store can supply the icon pack
   /** A registry entry with what this computer has of it. */
   const annotate = (e: RegistryEntry) => {
     const have = pluginStore.has(e.id) && !pluginStore.isBuiltin(e.id) ? pluginStore.entry(e.id) : undefined;
@@ -645,7 +663,7 @@ export async function startServer(opts: StartOptions = {}) {
         const body = await readBody(req);
         let l: Layout;
         try { l = validateLayout(body?.layout); } catch (err: any) { return json({ error: err?.message ?? String(err) }, 400); }
-        return json(await icons.layoutAssets(l).catch(() => ({})));
+        return json(await layoutAssetsAll(l));
       }
       if (path === "/api/apps/icon" && req.method === "GET") {
         const denied = guardLocal(server, req);
@@ -691,7 +709,7 @@ export async function startServer(opts: StartOptions = {}) {
         }
         if (req.method === "DELETE") {
           if (!(await icons.deleteUpload(id))) return json({ error: "not found" }, 404);
-          layoutAssets = await icons.layoutAssets(layout).catch(() => ({}));
+          layoutAssets = await layoutAssetsAll(layout);
           broadcast(layoutMsg()); // a layout still using it falls back to its text
           return json({ ok: true });
         }
@@ -775,7 +793,7 @@ export async function startServer(opts: StartOptions = {}) {
         setLanguage(layout.theme?.language);
         syncHass();
         pluginRuntime.setLayout(layout);
-        layoutAssets = await icons.layoutAssets(layout).catch(() => ({}));
+        layoutAssets = await layoutAssetsAll(layout);
         broadcast(layoutMsg());
         return json({ ok: true, layout });
       }
@@ -794,7 +812,7 @@ export async function startServer(opts: StartOptions = {}) {
           syncHass();
           pluginRuntime.setLayout(layout);
           await history.push(next).catch((e) => console.error("layout history", e));
-          layoutAssets = await icons.layoutAssets(layout).catch(() => ({}));
+          layoutAssets = await layoutAssetsAll(layout);
           broadcast(layoutMsg());
           void pushWeather();
           rules.tick();
@@ -904,7 +922,7 @@ export async function startServer(opts: StartOptions = {}) {
         try {
           if (regRoute[1] === "registry" && !regRoute[2] && req.method === "GET") {
             const r = await registry.get(url.searchParams.get("refresh") === "1");
-            return json({ plugins: r.plugins.map(annotate), fetchedAt: r.fetchedAt, ...(r.stale ? { stale: true } : {}) });
+            return json({ plugins: r.plugins.filter((p) => p.type !== "theme").map(annotate), fetchedAt: r.fetchedAt, ...(r.stale ? { stale: true } : {}) });
           }
           if (regRoute[1] === "registry" && regRoute[2] && regRoute[3] === "manifest" && req.method === "GET") {
             const entry = await registry.entry(regRoute[2]);
@@ -927,6 +945,120 @@ export async function startServer(opts: StartOptions = {}) {
             return json(r.plugin, r.updated || r.unchanged ? 200 : 201);
           }
         } catch (err) { return fail(err); }
+        return json({ error: "method not allowed" }, 405);
+      }
+
+      // ----- themes (spec D14) -----
+      const themeFile = /^\/api\/themes\/([^/]+)\/files\/(.+)$/.exec(path);
+      if (themeFile && (req.method === "GET" || req.method === "HEAD")) {
+        // phones load a theme's images and fonts, so this is open to the phone hosts too; the path cannot leave the theme folder
+        if (!isLocalPeer(server, req)) { const d = await guardPhone(server, req); if (d) return d; }
+        let rel = "";
+        try { rel = decodeURIComponent(themeFile[2]!); } catch { return json({ error: "not found" }, 404); }
+        const f = await themeStore.file(decodeURIComponent(themeFile[1]!), rel);
+        if (!f) return json({ error: "not found" }, 404);
+        const ext = rel.slice(rel.lastIndexOf(".") + 1).toLowerCase();
+        return new Response(req.method === "HEAD" ? null : (f.bytes as unknown as BodyInit), { headers: { "content-type": isLicenseFile(rel) ? "text/plain; charset=utf-8" : THEME_MIME[ext] ?? "application/octet-stream", "x-content-type-options": "nosniff", "content-security-policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'", "cache-control": "private, max-age=300" } });
+      }
+      const themeRoute = /^\/api\/themes(?:\/(install|export)|\/([^/]+)(?:\/(apply|css|fork))?)?$/.exec(path);
+      if (themeRoute) {
+        const phoneCss = themeRoute[3] === "css" && req.method === "GET"; // the stylesheet is read by phones too
+        const denied = phoneCss ? null : guardLocal(server, req);
+        if (denied) return denied;
+        const failT = (err: unknown) => json({ error: err instanceof Error ? err.message : String(err) }, err instanceof PluginError ? err.status : 400);
+        try {
+          const [, verb, tid, sub] = themeRoute;
+          if (!verb && !tid) {
+            if (req.method !== "GET") return json({ error: "method not allowed" }, 405);
+            const r = await themeRegistry.get(false);
+            const installed = themeStore.list();
+            const applied = layout.theme?.source ?? null;
+            return json({
+              themes: installed.map((t) => {
+                const mine = !!applied && applied.pack.split("@")[0] === t.id;
+                return { ...t, applied: mine && applied!.pack === `${t.id}@${t.version}`, appliedOlder: mine && applied!.pack !== `${t.id}@${t.version}`, ...(mine ? { appliedSource: applied } : {}) };
+              }),
+              registry: r.themes.map((e) => { const have = installed.find((t) => t.id === e.id); return { ...e, installed: !!have, ...(have ? { installedVersion: have.version } : {}), updateAvailable: !!have && compareVersions(e.version, have.version) > 0 }; }),
+              applied,
+            });
+          }
+          if (verb === "install" && req.method === "POST") {
+            const body = await readBody(req);
+            if (typeof body?.id === "string") {
+              const entry = (await themeRegistry.get(false)).themes.find((p) => p.id === body.id);
+              if (!entry) return json({ error: "that theme is not in the registry" }, 404);
+              const r = await themeStore.install(entry.repo, { sha256: entry.sha256, version: entry.version });
+              return json(r.theme, r.updated || r.unchanged ? 200 : 201);
+            }
+            if (typeof body?.source !== "string") return json({ error: "source must be a folder path, an https address, or give a registry id" }, 400);
+            const r = await themeStore.install(body.source);
+            return json(r.theme, r.updated || r.unchanged ? 200 : 201);
+          }
+          if (verb === "export" && req.method === "POST") {
+            const body = (await readBody(req)) ?? {};
+            const id = typeof body.id === "string" && body.id ? body.id : "";
+            if (!PLUGIN_ID_RE.test(id)) return json({ error: 'id must look like "dev.author.name"' }, 400);
+            const name = typeof body.name === "string" && body.name.trim() ? body.name.trim().slice(0, 60) : id;
+            const files = new Map<string, Uint8Array>();
+            const bg = layout.theme?.backgroundImage;
+            const m = typeof bg === "string" ? /^theme:([^/]+)\/(.+)$/.exec(bg) : null;
+            if (m) { const f = await themeStore.file(m[1]!, m[2]!); if (f) files.set(m[2]!, f.bytes); }
+            let preview: Uint8Array | undefined;
+            if (typeof body.preview === "string") { const pm = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(body.preview); if (pm) preview = new Uint8Array(Buffer.from(pm[1]!, "base64")); }
+            const pkg = buildThemePackage(layout.theme, { id, name, version: typeof body.version === "string" ? body.version : undefined, author: typeof body.author === "string" ? body.author.slice(0, 80) : undefined, description: typeof body.description === "string" ? body.description.slice(0, 300) : undefined }, { files, preview });
+            return new Response(zipFiles(pkg) as unknown as BodyInit, { headers: { "content-type": "application/zip", "content-disposition": `attachment; filename="${id}.zip"` } });
+          }
+          if (tid && !sub) {
+            if (req.method === "DELETE") { await themeStore.remove(decodeURIComponent(tid)); return json({ ok: true }); }
+            if (req.method === "GET") { const s = themeStore.summary(decodeURIComponent(tid)); return s ? json(s) : json({ error: "that theme is not installed" }, 404); }
+          }
+          if (tid && sub === "apply" && req.method === "POST") {
+            const id = decodeURIComponent(tid);
+            const body = (await readBody(req).catch(() => null)) ?? {};
+            const r = themeStore.resolveApply(id, body, layout.theme?.source); // an empty body re-applies the same variant / auto pair / options
+            const previous = layout.theme ?? null; // the whole previous theme object: PUT it back as layout.theme to undo
+            const next: Layout = validateLayout({ ...layout, theme: applyLook(layout.theme, r.look, r.source, r.auto) });
+            await saveLayout(next);
+            layout = next;
+            setLanguage(layout.theme?.language);
+            await history.push(next).catch((e) => console.error("layout history", e));
+            layoutAssets = await layoutAssetsAll(layout);
+            broadcast(layoutMsg());
+            return json({ ok: true, theme: layout.theme, previous, source: r.source });
+          }
+          if (tid && sub === "fork" && req.method === "POST") {
+            // "Edit as a copy": the look in force from this pack (variant and options as applied, or the body's) becomes a local one-variant pack
+            const id = decodeURIComponent(tid);
+            const body = (await readBody(req).catch(() => null)) ?? {};
+            const r = themeStore.resolveApply(id, body, layout.theme?.source);
+            const name = typeof body.name === "string" && body.name.trim() ? body.name.trim().slice(0, 60) : `${themeStore.summary(id)?.name ?? "Theme"} copy`;
+            const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30) || "copy";
+            const newId = `local.fork.${slug}-${Math.random().toString(36).slice(2, 6)}`;
+            const all = await themeStore.packFiles(id);
+            const keep = new Map([...all].filter(([n]) => /^(fonts|icons)\//.test(n) || (typeof (r.look as any).backgroundImage === "string" && (r.look as any).backgroundImage.endsWith(`/${n}`))));
+            const pkg = buildThemePackage(r.look as any, { id: newId, name, description: `A copy of ${id}` }, { files: keep });
+            // the pack's css (base, then the chosen variant's) travels as one theme.css; files it references are copied too
+            const m = themeStore.manifest(id);
+            const vid = r.source.variant ?? m?.auto?.dark ?? m?.variants[0]?.id;
+            const cssFiles = [m?.css, m?.variants.find((v) => v.id === vid)?.css].filter((f): f is string => !!f && all.has(f));
+            if (cssFiles.length) {
+              const dec = new TextDecoder();
+              pkg.set("theme.css", new TextEncoder().encode(cssFiles.map((f) => dec.decode(all.get(f)!)).join("\n")));
+              for (const [n, bytes] of all) if (!pkg.has(n) && /^(fonts|icons)\//.test(n) === false && !/\.(json|css)$/i.test(n) && cssReferences(cssFiles.map((f) => dec.decode(all.get(f)!)).join("\n"), n)) pkg.set(n, bytes);
+              const man = JSON.parse(dec.decode(pkg.get("nookdeck.json")!));
+              man.css = "theme.css";
+              pkg.set("nookdeck.json", new TextEncoder().encode(JSON.stringify(man, null, 2) + "\n"));
+            }
+            const made = await themeStore.installFiles(pkg, "a copy", undefined);
+            return json(made.theme, 201);
+          }
+          if (tid && sub === "css" && req.method === "GET") {
+            // phones load this stylesheet; it is checked and scoped when served
+            if (!isLocalPeer(server, req)) { const d = await guardPhone(server, req); if (d) return d; }
+            const css = await themeStore.css(decodeURIComponent(tid), url.searchParams.get("variant") ?? undefined);
+            return new Response(css, { headers: { "content-type": "text/css; charset=utf-8", "x-content-type-options": "nosniff", "cache-control": "no-cache" } });
+          }
+        } catch (err) { return failT(err); }
         return json({ error: "method not allowed" }, 405);
       }
 
@@ -997,6 +1129,18 @@ export async function startServer(opts: StartOptions = {}) {
         const denied = guardLocal(server, req);
         if (denied) return denied;
         return json(await doctorReport());
+      }
+      if (path === "/api/doctor/open" && req.method === "POST") {
+        // opens the System Settings pane of one check (the "Open Settings" button); only panes the report itself names
+        const denied = guardLocal(server, req);
+        if (denied) return denied;
+        const body = await readBody(req);
+        const id = String(body?.id ?? "");
+        const item = (await doctorReport()).items.find((i) => i.id === id);
+        const url = item?.fix?.settingsUrl;
+        if (!url) return json({ error: "this check has no settings page to open" }, 400);
+        if (!opts.doctorProbes) await platform.openExternal(url);
+        return json({ ok: true, url });
       }
       if (path === "/api/doctor/request" && req.method === "POST") {
         const denied = guardLocal(server, req);

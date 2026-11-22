@@ -36,7 +36,7 @@ function fakeInstall() {
   const foreign = join(home, "other-instance.json");
   writeFileSync(foreign, JSON.stringify({ hooks: { PermissionRequest: [{ hooks: [{ type: "command", command: OLD_HOOK(" --port 9999"), timeout: 60 }] }] } }));
   const calls: string[][] = [];
-  const svc: any = { launchctl: async (a: string[]) => { calls.push(a); return { code: 0, out: "" }; }, uid: 501, platform: "darwin", program: ["/tmp/dl/nookdeck"], log: () => {} };
+  const svc: any = { launchctl: async (a: string[]) => { calls.push(a); return { code: 0, out: "" }; }, uid: 501, platform: "darwin", program: ["/tmp/dl/nookdeck"], log: () => {}, timing: { unloadMs: 0, backoffMs: [] } };
   return { home, old, agents, claude, foreign, calls, svc };
 }
 

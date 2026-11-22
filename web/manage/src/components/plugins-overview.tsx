@@ -16,10 +16,12 @@ import { RowList, ViewToggle, usePluginView } from "@/components/plugin-view";
 import { PermissionDialog, PluginsPanel } from "@/components/plugins-panel";
 import { BUILTIN_PLUGINS } from "@/lib/builtin-plugins";
 import { t, useLanguage } from "@/lib/i18n";
-import type { Layout, PluginInfo, PluginPermissions, RegistryEntry, RegistryResult } from "@/types";
+import type { Layout, PluginInfo, PluginPermissions, RegistryEntry, RegistryManifest, RegistryResult } from "@/types";
 
 const GUIDE = "https://github.com/howznguyen/nookdeck/blob/main/docs/plugins.md";
 type Tab = "discover" | "installed" | "updates";
+type Filter = "all" | "nocode" | "code" | "net" | "shell" | "keys";
+const FILTERS: { id: Filter; label: string }[] = [{ id: "all", label: "All" }, { id: "nocode", label: "No code" }, { id: "code", label: "Runs code" }, { id: "net", label: "Uses the internet" }, { id: "shell", label: "Runs commands" }, { id: "keys", label: "Presses keys" }];
 const matches = (e: { name: string; id: string; author?: string; description?: string }, q: string): boolean => !q || `${e.name} ${e.id} ${e.author ?? ""} ${e.description ?? ""}`.toLowerCase().includes(q.toLowerCase());
 
 const fromEntry = (e: RegistryEntry): PluginDetails => ({ id: e.id, name: e.name, author: e.author, version: e.version, description: e.description, verified: e.verified, permissions: e.permissions, widgets: [], actions: [], source: e.repo, screenshot: e.screenshot, readme: true });
@@ -42,6 +44,15 @@ export function PluginsOverview({ deeplink, onDeeplinkDone, update, layout, onSa
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkSource, setLinkSource] = useState("");
   const [view, setView] = usePluginView();
+  const [filter, setFilter] = useState<Filter>("all");
+  // "No code" and "Runs code" need each plugin's manifest; they are fetched when a filter is chosen (cached by the api).
+  const [mans, setMans] = useState<Record<string, RegistryManifest | null>>({});
+  useEffect(() => {
+    if (filter === "all" || !registry) return;
+    let live = true;
+    for (const e of registry.plugins) api.getRegistryManifest(e.id).then((m) => live && setMans((x) => (e.id in x ? x : { ...x, [e.id]: m })));
+    return () => { live = false; };
+  }, [filter, registry]);
 
   const [rev, setRev] = useState(0);
   const loadInstalled = useCallback(() => { setRev((n) => n + 1); api.getPlugins().then(setInstalled, () => setInstalled([])); }, []);
@@ -128,7 +139,15 @@ export function PluginsOverview({ deeplink, onDeeplinkDone, update, layout, onSa
     }
   };
 
-  const shown = useMemo(() => entries.filter((e) => matches(e, query.trim())), [entries, query]);
+  const passes = (e: RegistryEntry): boolean => {
+    if (filter === "all") return true;
+    const m = mans[e.id];
+    const perms = m?.permissions ?? e.permissions;
+    if (filter === "nocode" || filter === "code") return m ? (filter === "nocode" ? m.main === null : m.main !== null) : false;
+    if (!perms) return false;
+    return filter === "net" ? perms.network.length > 0 : filter === "shell" ? perms.shell : perms.keyboard;
+  };
+  const shown = useMemo(() => entries.filter((e) => matches(e, query.trim()) && passes(e)), [entries, query, filter, mans]); // eslint-disable-line react-hooks/exhaustive-deps
   const shownUpdates = shown.filter((e) => e.updateAvailable || e.fromLink);
   const suggestions = [...entries].filter((e) => !e.installed).sort((a, b) => Number(b.verified) - Number(a.verified)).slice(0, 3);
   const openDetails = (e: RegistryEntry) => setDetails(fromEntry(e));
@@ -140,7 +159,7 @@ export function PluginsOverview({ deeplink, onDeeplinkDone, update, layout, onSa
       {list.map((e) => <EntryRow key={e.id} entry={e} busy={busy === e.id} onAdd={() => void askFor(e)} onOpen={() => openDetails(e)} />)}
     </RowList>
   ) : (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {list.map((e) => <EntryCard key={e.id} entry={e} theme={theme} busy={busy === e.id} onAdd={() => void askFor(e)} onOpen={() => openDetails(e)} />)}
     </div>
   );
@@ -223,6 +242,14 @@ export function PluginsOverview({ deeplink, onDeeplinkDone, update, layout, onSa
 
       <div id="po-panel" role="tabpanel" aria-labelledby={`po-tab-${tab}`} className="flex flex-col gap-4">
         {tab !== "installed" && storeStatus}
+        {tab === "discover" && registry && registry.plugins.length > 0 && (
+          <div role="group" aria-label={t("Filter plugins")} className="flex flex-wrap gap-1.5">
+            {FILTERS.map((f) => (
+              <button key={f.id} type="button" aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}
+                className={"rounded-full border px-3 py-1.5 text-[12.5px] transition-colors focus-visible:outline-2 focus-visible:outline-ring " + (filter === f.id ? "border-foreground bg-foreground text-background" : "text-muted-foreground hover:border-foreground/50 hover:text-foreground")}>{t(f.label)}</button>
+            ))}
+          </div>
+        )}
         {tab === "discover" && discover}
         {tab === "updates" && (shownUpdates.length > 0 ? grid(shownUpdates) : <Empty icon={<Store />} title={t("Everything is up to date")} />)}
         <PluginsPanel view={view} rev={rev} hideList={tab !== "installed"} installedView update={update} layout={layout} onSaveLayout={onSaveLayout} query={query} onChanged={() => { loadInstalled(); loadRegistry(); }}

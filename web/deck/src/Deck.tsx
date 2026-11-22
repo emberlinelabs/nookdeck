@@ -3,10 +3,10 @@ import { t, setLang } from './i18n'
 import { Icon, TileIcon, setIconStroke } from './icon'
 import { soundKey } from './sounds'
 import { ControlSheet } from './hass-controls'
-import { DEFAULT_COLOR, HIST_LEN, Widget, type Hist } from './widgets'
+import { naturalColor, HIST_LEN, Widget, type Hist } from './widgets'
 import { DeckClient, savedDeviceName, type ClientState } from './client'
 import { setTempUnit } from './temp'
-import { shade, applyTheme, readableOn, tint } from './theme'
+import { shade, applyTheme, readableOn, tint, over, backdropOf, tileKind, setPalette, kindsCss, fontFaceCss, effectiveTheme } from './theme'
 import { PROVIDER_COLOR } from './ai'
 import { PermissionSheet, ProcessSheet, QuestionSheet } from './sheets'
 import { ScreenLayer, ScreenSheet } from './screen'
@@ -327,6 +327,12 @@ interface TileTheme {
   iconScale: number
   showLabels: boolean
   radius: number
+  /** tileOpacity (0.05-1) when the theme sets one: every tile surface is drawn at this alpha */
+  op?: number
+  /** the colour behind the tiles (ink is chosen against the composite of a tile over it) */
+  backdrop?: string
+  /** the theme sets its own tile colour: tiles without a colour of their own use it instead of the accent */
+  tileSet?: boolean
 }
 
 /** lite mode: a stats-only update (nothing else changed) is applied at most every 5 s, so charts and tiles redraw less */
@@ -441,6 +447,30 @@ function SoundRing(props: { w: number; h: number; r: number; color: string; at: 
   )
 }
 
+/** data-state of a tile: on / off (entities), playing (media, sound), ok / warn / error (status and load), or nothing. */
+function tileState(item: Item, props: { sound?: unknown; busy?: boolean; media: Media | null; hassEnt?: HassEntity; hassForceOn?: boolean; plug?: PluginSlot; stats?: Stats | null }): string | undefined {
+  if (item.kind !== 'widget') return props.sound || props.busy ? 'playing' : undefined
+  const w = item.widget || ''
+  if (w === 'nowplaying') return props.media && props.media.playing ? 'playing' : 'off'
+  if (props.hassEnt || item.entity) {
+    if (!props.hassEnt) return 'off'
+    return props.hassForceOn || props.hassEnt.state === 'on' || props.hassEnt.state === 'playing' || props.hassEnt.state === 'open' ? 'on' : 'off'
+  }
+  if (w === 'plugin') {
+    const pl = props.plug as { error?: unknown; data?: { state?: string } } | null | undefined
+    if (!pl) return undefined
+    if (pl.error !== undefined) return 'error'
+    const st = pl.data && pl.data.state
+    return st === 'ok' || st === 'warn' || st === 'error' ? st : st === 'off' ? 'off' : undefined
+  }
+  const stt = props.stats
+  if (stt && (w === 'cpu' || w === 'memory')) {
+    const pct = w === 'cpu' ? stt.cpu : stt.memTotal ? (stt.memUsed / stt.memTotal) * 100 : 0
+    return pct >= 90 ? 'error' : pct >= 75 ? 'warn' : 'ok'
+  }
+  return undefined
+}
+
 function Tile(props: {
   page: Page
   item: Placed
@@ -480,6 +510,7 @@ function Tile(props: {
   onDown: (e: PointerEvent, p: Page, i: Placed, kind: 'move' | 'resize') => void
 }) {
   const { page, item, stats, fx } = props
+  const dstate = tileState(item, props)
   const style: { [k: string]: string } = {
     gridColumn: item.px + 1 + ' / span ' + item.pw,
     gridRow: item.py + 1 + ' / span ' + item.ph,
@@ -492,12 +523,15 @@ function Tile(props: {
   let textColor = item.textColor || ''
   const sty: TileStyle = item.style || props.tt.style
   // a button without its own colour takes the theme accent, so tint / solid / outline never fall back to the same grey
-  const baseCol = item.color || props.tt.accent
+  const op = props.tt.op
+  const bd = props.tt.backdrop || '#0b0b0d'
+  const baseCol = item.color || (props.tt.tileSet ? '' : props.tt.accent)
+  if (!baseCol && item.kind !== 'widget' && sty !== 'ios') iconColor = props.tt.accent // no colour of its own: the themed tile surface, accent glyph
   if (baseCol && item.kind !== 'widget' && sty !== 'ios') {
     if (sty === 'solid') {
-      style.background = baseCol
-      style.borderColor = baseCol
-      const fg = readableOn(baseCol) || '#ffffff'
+      style.background = op ? tint(baseCol, op) || baseCol : baseCol
+      style.borderColor = op ? tint(baseCol, Math.min(1, op + 0.2)) || baseCol : baseCol
+      const fg = readableOn((op && over(baseCol, op, bd)) || baseCol) || '#ffffff'
       iconColor = fg
       if (!textColor) textColor = fg
     } else if (sty === 'outline') {
@@ -505,8 +539,8 @@ function Tile(props: {
       style.borderColor = baseCol
       iconColor = baseCol
     } else {
-      const bg = tint(baseCol, 0.16)
-      style.borderColor = tint(baseCol, 0.45) || baseCol
+      const bg = tint(baseCol, op ? 0.16 * op : 0.16)
+      style.borderColor = tint(baseCol, op ? 0.45 * Math.max(op, 0.4) : 0.45) || baseCol
       if (bg) style.background = bg
       iconColor = baseCol
     }
@@ -516,13 +550,17 @@ function Tile(props: {
   let wInk = ''
   let wColor = item.color
   if (item.kind === 'widget' && sty !== 'ios') {
-    const natural = item.widget === 'quota' ? (PROVIDER_COLOR[item.provider || 'claude'] || '#d97757') : DEFAULT_COLOR[item.widget || '']
+    const natural = item.widget === 'quota' ? (PROVIDER_COLOR[item.provider || 'claude'] || '#d97757') : naturalColor(item.widget || '')
     const wc = item.color || natural || props.tt.accent
-    if (sty === 'solid') {
-      style.background = wc
-      style.borderColor = wc
-      // dark ink wins on mid tones too (white on orange or cyan is under 3:1)
-      wInk = readableOn(shade(wc, 0.25)) === '#ffffff' ? 'light' : 'dark'
+    if (!item.color && props.tt.tileSet) {
+      // the theme sets its own tile colour: a widget without a colour of its own sits on it (like the default card)
+      wColor = natural || undefined
+      cls += ' pd-tile--wplain'
+    } else if (sty === 'solid') {
+      style.background = op ? tint(wc, op) || wc : wc
+      style.borderColor = op ? tint(wc, Math.min(1, op + 0.2)) || wc : wc
+      // dark ink wins on mid tones too (white on orange or cyan is under 3:1); against what the translucent tile really shows
+      wInk = readableOn(shade((op && over(wc, op, bd)) || wc, 0.25)) === '#ffffff' ? 'light' : 'dark'
       wColor = wInk === 'light' ? '#ffffff' : '#0b0d10'
       cls += ' pd-tile--wsolid pd-ink-' + wInk
     } else if (sty === 'outline') {
@@ -532,8 +570,8 @@ function Tile(props: {
       wColor = item.color || natural
       cls += ' pd-tile--wout'
     } else {
-      const bg = tint(wc, 0.14)
-      style.borderColor = tint(wc, 0.4) || wc
+      const bg = tint(wc, op ? 0.14 * op : 0.14)
+      style.borderColor = tint(wc, op ? 0.4 * Math.max(op, 0.4) : 0.4) || wc
       if (bg) style.background = bg
       wColor = item.color || natural
       cls += ' pd-tile--wtint'
@@ -576,6 +614,10 @@ function Tile(props: {
         class={cls + ' pd-tile--widget' + (entTap ? ' pd-tile--tap' : '') + (sty === 'ios' ? ' pd-tile--iosw' : '') + (item.widget === 'nowplaying' ? ' pd-tile--np' : '') + (tappable ? ' pd-tile--tap' : '')}
         style={style}
         data-id={item.id}
+        data-part="tile"
+        data-state={dstate}
+        data-kind={tileKind(item)}
+        data-size={item.pw + 'x' + item.ph}
         onPointerDown={down}
         onClick={tappable ? () => props.onWidget(item.widget as string) : entTap ? () => entClick() : undefined}
         onTouchStart={holdable ? () => entHoldStart() : undefined}
@@ -614,6 +656,7 @@ function Tile(props: {
           wxData={core && core.wx ? core.wx : props.wxData}
           pushed={props.pushed}
           plug={core ? undefined : props.plug}
+          plugStyle={item.plugin && item.plugin.view ? item.plugin.view.style : undefined}
           label={item.label}
           notes={props.notes}
           hassEnt={props.hassEnt}
@@ -660,6 +703,10 @@ function Tile(props: {
         class={cls + ' pd-tile--btn pd-tile--ios' + (fx ? ' pd-fx-' + fx : '')}
         style={style}
         data-id={item.id}
+        data-part="tile"
+        data-state={dstate}
+        data-kind="button"
+        data-size={item.pw + 'x' + item.ph}
         aria-label={item.label || undefined}
         onClick={props.preview ? undefined : () => props.onPress(page, item)}
         onPointerDown={down}
@@ -669,7 +716,7 @@ function Tile(props: {
           {props.sound || props.busy ? <SoundRing w={sq} h={sq} r={Math.round(sq * 0.225)} color="#fff" at={props.sound ? props.sound.at : Date.now()} durMs={props.sound ? props.sound.durMs : undefined} /> : null}
         </span>
         {hasLabel ? (
-          <span class="pd-ios__lb" style={lst}>
+          <span class="pd-ios__lb" data-part="tile-label" style={lst}>
             {item.label}
           </span>
         ) : null}
@@ -690,17 +737,21 @@ function Tile(props: {
       class={cls + ' pd-tile--btn' + (fx ? ' pd-fx-' + fx : '')}
       style={style}
       data-id={item.id}
+      data-part="tile"
+        data-state={dstate}
+      data-kind="button"
+      data-size={item.pw + 'x' + item.ph}
       onClick={props.preview ? undefined : () => props.onPress(page, item)}
       onPointerDown={down}
     >
       {icon ? (
-        <span class="pd-tile__ic" style={{ color: iconColor || undefined, marginBottom: noLabel ? '0' : undefined }}>
+        <span class="pd-tile__ic" data-part="tile-icon" style={{ color: iconColor || undefined, marginBottom: noLabel ? '0' : undefined }}>
           <TileIcon value={icon} size={icon.indexOf('app:') === 0 || icon.indexOf('img:') === 0 || icon.indexOf('lobe:') === 0 ? Math.round(isz * 1.2) : isz} assets={props.assets} weight={props.sound ? 'Filled' : undefined} />
         </span>
       ) : null}
       {props.sound || props.busy ? <SoundRing w={props.tw} h={props.th} r={props.tt.radius} color={iconColor || item.color || props.tt.accent} at={props.sound ? props.sound.at : Date.now()} durMs={props.sound ? props.sound.durMs : undefined} /> : null}
       {!noLabel ? (
-        <span class="pd-tile__lb" style={lstyle}>
+        <span class="pd-tile__lb" data-part="tile-label" style={lstyle}>
           {item.label}
         </span>
       ) : null}
@@ -1046,12 +1097,6 @@ export function Deck(props: DeckProps) {
     return () => window.removeEventListener('message', on)
   }, [preview])
 
-  // theme (a rule can override the mode while it is active; the layout is not changed)
-  useEffect(() => {
-    if (!rootRef.current) return
-    applyTheme(rootRef.current, st.layout ? st.layout.theme : undefined)
-    if (st.modeOverride) rootRef.current.setAttribute('data-pd-theme', st.modeOverride)
-  }, [st.layout, active, st.modeOverride])
 
   // preview np=ha-sheet:<entity domain>: open that control sheet for the first matching entity
   useEffect(() => {
@@ -1770,11 +1815,70 @@ export function Deck(props: DeckProps) {
   const lite = liteOn(theme.screen)
   const [menu, setMenu] = useState(false)
   liteRef.current = lite && !preview
+  // theme: look fields -> variables and data attributes; font-face, per-kind tokens and the pack's own css are injected as <style> / <link>.
+  // `?theme=off` is safe mode (the look is ignored); a failure here never takes the deck down. A rule can override the mode while it is active.
+  const themeOff = useRef(/[?&]theme=off(&|$)/.test(location.search)).current
+  const pageTheme = cur && cur.theme
+  const themeKey = st.layout ? st.layout.theme : undefined
+  const [scheme, bumpScheme] = useState(0)
+  useEffect(() => {
+    const root = rootRef.current
+    if (!root) return
+    try {
+      applyTheme(root, themeKey, { lite, off: themeOff, page: { theme: pageTheme }, assets: st.layout ? st.layout.assets : undefined })
+      if (st.modeOverride) root.setAttribute('data-pd-theme', st.modeOverride)
+      const eff = themeOff ? undefined : effectiveTheme(themeKey, { theme: pageTheme })
+      if (eff && themeKey) { eff.source = themeKey.source; eff.fonts = themeKey.fonts }
+      let el = document.getElementById('pd-theme-style') as HTMLStyleElement | null
+      const css = eff ? fontFaceCss(eff) + kindsCss(eff, lite) : ''
+      if (css) {
+        if (!el) { el = document.createElement('style'); el.id = 'pd-theme-style'; document.head.appendChild(el) }
+        el.textContent = css
+      } else if (el) el.textContent = ''
+      let link = document.getElementById('pd-theme-css') as HTMLLinkElement | null
+      const src = eff && themeKey && themeKey.source
+      const variant = src ? (src.auto ? (root.getAttribute('data-pd-theme') === 'light' ? src.auto.light : src.auto.dark) : src.variant) : undefined
+      const pk = src ? src.pack.split('@')[0] : ''
+      const href = src && /^[a-z0-9][a-z0-9._-]*$/.test(pk) ? '/api/themes/' + pk + '/css' + (variant && /^[a-z0-9][a-z0-9_-]*$/.test(variant) ? '?variant=' + variant : '') + (src.pack.indexOf('@') > 0 ? (variant ? '&' : '?') + 'v=' + encodeURIComponent(src.pack.split('@')[1]) : '') : ''
+      if (href) {
+        if (!link) { link = document.createElement('link'); link.id = 'pd-theme-css'; link.rel = 'stylesheet'; document.head.appendChild(link) }
+        if (link.getAttribute('href') !== href) link.setAttribute('href', href)
+      } else if (link && link.parentNode) link.parentNode.removeChild(link)
+    } catch (e) {
+      try { console.error('theme', e) } catch { /* ignore */ }
+      root.removeAttribute('style')
+    }
+  }, [themeKey, pageTheme, lite, themeOff, scheme, st.modeOverride, st.layout ? st.layout.assets : undefined])
+  // mode "auto": follow the dim schedule (checked each minute) or the phone's colour scheme
+  const dimAuto = !!(themeKey && themeKey.mode === 'auto' && themeKey.screen && themeKey.screen.dim && themeKey.screen.dim.from && themeKey.screen.dim.to)
+  useEffect(() => {
+    if (!dimAuto) return
+    const id = window.setInterval(() => bumpScheme((n) => n + 1), 60000)
+    return () => window.clearInterval(id)
+  }, [dimAuto])
+  useEffect(() => {
+    if (!themeKey || themeKey.mode !== 'auto') return
+    let mq: MediaQueryList | null = null
+    try { mq = window.matchMedia('(prefers-color-scheme: light)') } catch { return }
+    const on = () => bumpScheme((n) => n + 1)
+    if (mq.addEventListener) mq.addEventListener('change', on)
+    else if (mq.addListener) mq.addListener(on)
+    return () => {
+      if (!mq) return
+      if (mq.removeEventListener) mq.removeEventListener('change', on)
+      else if (mq.removeListener) mq.removeListener(on)
+    }
+  }, [themeKey])
   const scale = Math.min(2, Math.max(0.5, theme.fontScale || 1))
   setIconStroke(theme.iconStroke)
+  setPalette(themeOff ? undefined : effectiveTheme(st.layout ? st.layout.theme : undefined, { theme: pageTheme }))
   setLang(theme.language)
   setTempUnit(preview && pvFahrenheit ? 'f' : theme.temperatureUnit)
+  const effT = themeOff ? undefined : effectiveTheme(st.layout ? st.layout.theme : undefined, { theme: pageTheme })
   const tt: TileTheme = {
+    op: effT && typeof effT.tileOpacity === 'number' && effT.tileOpacity < 1 ? Math.min(1, Math.max(0.05, effT.tileOpacity)) : undefined,
+    backdrop: backdropOf(effT, effT && effT.mode === 'light' ? 'light' : 'dark'),
+    tileSet: !!(effT && effT.tile),
     style: theme.tileStyle === 'solid' || theme.tileStyle === 'outline' || theme.tileStyle === 'ios' ? theme.tileStyle : 'tint',
     accent: theme.accent || '#22d3ee',
     radius: typeof theme.radius === 'number' ? theme.radius : 16,
@@ -1784,8 +1888,9 @@ export function Deck(props: DeckProps) {
 
   return (
     <div class={'pd-root' + (preview ? ' pd-root--preview' : '') + (rotated ? ' pd-root--rot' : '') + (Math.min(vp.w, vp.h) <= 340 ? ' pd-root--sm' : '') + (lite ? ' pd-lite' : '') + (hmode !== 'full' ? ' pd-hdr--' + hmode : '')} ref={rootRef} data-pd-theme="dark" style={rootStyle}>
+      <div class="pd-bgimg" aria-hidden="true" />
       {st.reloading ? <div class="pd-veil">{t('Reloading…')}</div> : null}
-      <div class={'pd-sheet' + (closing ? ' pd-sheet--closing' : '')}>
+      <div class={'pd-sheet' + (closing ? ' pd-sheet--closing' : '')} data-part="sheet">
         <div class="pd-panel" role="dialog" aria-label="Nookdeck">
           {hmode === 'hidden' ? (
             <div class="pd-fabwrap">
@@ -1802,7 +1907,7 @@ export function Deck(props: DeckProps) {
               ) : null}
             </div>
           ) : (
-          <div class="pd-head">
+          <div class="pd-head" data-part="header">
             <span class="pd-conn" title={statusText}>
               <span class="pd-dotbtn" onTouchStart={holdStart} onTouchEnd={holdEnd} onTouchCancel={holdEnd} onTouchMove={holdEnd} onMouseDown={holdStart} onMouseUp={holdEnd} onMouseLeave={holdEnd} onContextMenu={(e) => e.preventDefault()}>
                 <i class={dotCls} />
@@ -1819,17 +1924,17 @@ export function Deck(props: DeckProps) {
             <span class="pd-spacer" />
             {st.status !== 'pair' && cur ? <span class="pd-pagename">{cur.name || cur.id}</span> : null}
             {!preview && st.status !== 'pair' ? (
-              <button type="button" class="pd-iconbtn" aria-label={t('Screen & alarms')} title={t('Screen & alarms')} onClick={() => setScrOpen(true)}>
+              <button type="button" class="pd-iconbtn" data-part="button" aria-label={t('Screen & alarms')} title={t('Screen & alarms')} onClick={() => setScrOpen(true)}>
                 <Icon name="moon" size={18} />
               </button>
             ) : null}
             {showFs ? (
-              <button type="button" class="pd-iconbtn" aria-label={t('Fullscreen')} title={t('Fullscreen')} onClick={toggleFull}>
+              <button type="button" class="pd-iconbtn" data-part="button" aria-label={t('Fullscreen')} title={t('Fullscreen')} onClick={toggleFull}>
                 <Icon name={full ? 'minimize' : 'maximize'} size={18} />
               </button>
             ) : null}
             {canClose ? (
-              <button type="button" class="pd-iconbtn" aria-label={t('Close')} title={t('Close')} onClick={close}>
+              <button type="button" class="pd-iconbtn" data-part="button" aria-label={t('Close')} title={t('Close')} onClick={close}>
                 <Icon name="x" size={18} />
               </button>
             ) : null}
@@ -1962,7 +2067,7 @@ export function Deck(props: DeckProps) {
                 })}
               </div>
               {pages.length > 1 ? (
-                <div class="pd-dots" role="tablist">
+                <div class="pd-dots" role="tablist" data-part="page-dots">
                   {pages.map((p, i) => (
                     <button key={p.id} type="button" role="tab" aria-label={p.name || p.id} class="pd-dots__b" onClick={() => goTo(i)}>
                       <span class={'pd-dots__d' + (i === pageIdx ? ' pd-dots__d--on' : '')} />

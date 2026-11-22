@@ -132,6 +132,7 @@ export const ZH_APP: Record<string, string> = {
   "Open Settings": "打开设置",
   "Nothing to check.": "没有需要检查的项目。",
   "Windows Firewall (phone connections)": "Windows 防火墙（手机连接）",
+  "Firewall (phone connections)": "防火墙（手机连接）",
   "SmartScreen (downloaded app warning)": "SmartScreen（下载应用警告）",
   "Media and sound helper": "媒体与声音辅助程序",
   "Nookdeck checks that Windows lets phone connections and the helper through. Fix anything marked below, then check again.": "Nookdeck 会检查 Windows 是否放行手机连接和辅助程序。请先处理下方标记的问题，然后重新检查。",

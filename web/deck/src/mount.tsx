@@ -1,4 +1,5 @@
-import { render } from 'preact'
+import { Component, render } from 'preact'
+import type { ComponentChildren } from 'preact'
 import { Deck } from './Deck'
 
 export { Deck }
@@ -25,6 +26,27 @@ export interface DeckHandle {
   destroy(): void
 }
 
+/**
+ * Error boundary: if the deck crashes while a theme is on, reload once in safe mode (?theme=off, the look is ignored); if it still
+ * crashes, or this is an embedded overlay, show a short message instead of a blank screen.
+ */
+class Boundary extends Component<{ standalone?: boolean; children?: ComponentChildren }, { err: boolean }> {
+  state = { err: false }
+  componentDidCatch(e: unknown) {
+    try { console.error('deck', e) } catch { /* ignore */ }
+    try {
+      if (this.props.standalone && !/[?&]theme=off(&|$)/.test(location.search)) {
+        location.replace(location.pathname + (location.search ? location.search + '&' : '?') + 'theme=off' + location.hash)
+        return
+      }
+    } catch { /* ignore */ }
+    this.setState({ err: true })
+  }
+  render() {
+    return this.state.err ? <div style={{ padding: '24px', font: '15px -apple-system, sans-serif', color: '#999' }}>Nookdeck hit a problem. Reload the page, or open it with ?theme=off.</div> : this.props.children
+  }
+}
+
 /** Mounts the deck into `el`. Embedders call `handle.open()` from their own button. */
 export function mountDeck(el: HTMLElement, opts: MountOptions = {}): DeckHandle {
   let open = !!opts.standalone
@@ -47,6 +69,7 @@ export function mountDeck(el: HTMLElement, opts: MountOptions = {}): DeckHandle 
   }
   const draw = () =>
     render(
+      <Boundary standalone={opts.standalone}>
       <Deck
         open={open}
         standalone={opts.standalone}
@@ -58,7 +81,8 @@ export function mountDeck(el: HTMLElement, opts: MountOptions = {}): DeckHandle 
           draw()
           if (opts.onClose) opts.onClose()
         }}
-      />,
+      />
+      </Boundary>,
       el
     )
   draw()

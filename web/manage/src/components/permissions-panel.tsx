@@ -43,6 +43,8 @@ export function PermissionsPanel({ items, missing, error, reload }: { items: Doc
   const platform = usePlatform();
   const win = platform === "win32";
   const shown = items?.filter((i) => i.status !== "n/a" && !(win && MAC_ONLY.has(i.id))) ?? null;
+  // the ad-hoc warning only matters when this build really is ad hoc (a release build keeps its grants across updates)
+  const adhoc = !win && !!items?.some((i) => /signature|signing/i.test(i.id) && (i.status !== "ok" || /not signed|unsigned|ad.?hoc/i.test(i.detail ?? "")));
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ tone: "danger" | "success"; text: string } | null>(null);
 
@@ -68,7 +70,7 @@ export function PermissionsPanel({ items, missing, error, reload }: { items: Doc
         </p>
         <Button size="sm" variant="secondary" icon={<Refresh />} loading={busy === "all"} onClick={() => void act("all", reload)}>{t("Check again")}</Button>
       </div>
-      <Alert tone="info">{win ? t("Windows may show a SmartScreen warning for a downloaded app: choose More info, then Run anyway. The setup script adds a firewall rule for Nookdeck on any network profile, limited to your local subnet, so phones on your network can connect.") : t("If you update Nookdeck and the app is signed ad hoc, macOS may forget the permissions. Remove the old entry in System Settings, then grant it again.")}</Alert>
+      {(win || adhoc) && <Alert tone="info">{win ? t("Windows may show a SmartScreen warning for a downloaded app: choose More info, then Run anyway. The setup script adds a firewall rule for Nookdeck on any network profile, limited to your local subnet, so phones on your network can connect.") : adhoc ? t("If you update Nookdeck and the app is signed ad hoc, macOS may forget the permissions. Remove the old entry in System Settings, then grant it again.") : null}</Alert>}
       {missing && <Alert tone="info">{t("This agent does not report permissions yet (/api/doctor returned 404). Update the agent and reload the page.")}</Alert>}
       {error && !missing && (!items || items.length === 0) && <Alert tone="danger" action={{ label: t("Retry"), onClick: () => void reload() }}>{error}</Alert>}
       {note && <Alert tone={note.tone} onDismiss={() => setNote(null)}>{note.text}</Alert>}
@@ -78,7 +80,7 @@ export function PermissionsPanel({ items, missing, error, reload }: { items: Doc
           <CardContent className="p-0">
             <ul className="divide-y">
               {shown.map((i) => {
-                const name = NAMES[i.id] ? t(NAMES[i.id]!) : i.name ?? i.id;
+                const name = i.id === "firewall" && !win ? t("Firewall (phone connections)") : NAMES[i.id] ? t(NAMES[i.id]!) : i.name ?? i.id;
                 const bad = i.status === "missing" || i.status === "denied";
                 // "unknown" Local Network (Home Assistant unreachable) still gets its Request button
                 const actionable = bad || (i.status === "unknown" && i.id === "local-network");
@@ -94,7 +96,7 @@ export function PermissionsPanel({ items, missing, error, reload }: { items: Doc
                       <div className="flex flex-none items-center gap-2">
                         {!win && RESETTABLE.has(i.id) && <Button size="xs" variant="secondary" icon={<Reset />} loading={busy === `reset-${i.id}`} title={t("Clears the old entry (left by an earlier Nookdeck version) and asks macOS again. Turn nookdeck on when the prompt appears.")} onClick={() => void act(`reset-${i.id}`, () => api.requestDoctor(i.id, true), t("The old entry was cleared and macOS was asked again."))}>{t("Reset and ask again")}</Button>}
                         {REQUESTABLE.has(i.id) && <Button size="xs" icon={<Shield />} loading={busy === `req-${i.id}`} onClick={() => void act(`req-${i.id}`, () => api.requestDoctor(i.id), t("macOS was asked to show its permission prompt."))}>{t("Request")}</Button>}
-                        {(i.fix?.settingsUrl || !REQUESTABLE.has(i.id)) && <Button size="xs" variant="secondary" icon={<Settings />} loading={busy === `open-${i.id}`} onClick={() => void act(`open-${i.id}`, () => api.openDoctorSettings(i.id))}>{win ? t("Open Windows Settings") : t("Open Settings")}</Button>}
+                        {i.fix?.settingsUrl && <Button size="xs" variant="secondary" icon={<Settings />} loading={busy === `open-${i.id}`} onClick={() => void act(`open-${i.id}`, () => api.openDoctorSettings(i.id))}>{win ? t("Open Windows Settings") : t("Open Settings")}</Button>}
                       </div>
                     )}
                   </li>

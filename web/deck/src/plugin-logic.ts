@@ -1,4 +1,5 @@
 /** Pure validation for plugin tiles. No DOM, no deck imports: the agent sends {render, data} and the deck never trusts it. */
+import { PLUGIN_STYLES } from '../../shared/plugin-styles'
 import type { AiData, AiProviderInfo, QuotaChart, QuotaOptions, WeatherData, WeatherOptions } from './types'
 
 export type PluginRender = 'stat' | 'gauge' | 'text' | 'list' | 'chart' | 'image' | 'status'
@@ -7,23 +8,32 @@ export const MAX_LIST = 20
 export const MAX_POINTS = 120
 export type PluginState = 'ok' | 'warn' | 'error' | 'off'
 
-export interface StatData { value: string | number; unit?: string; label?: string; delta?: number; color?: string }
+export interface StatData { value: string | number; unit?: string; label?: string; delta?: number; color?: string; points?: number[] }
 export interface GaugeData { value: number; label?: string; color?: string }
 export interface TextData { title?: string; body: string }
 export interface ListRow { title: string; subtitle?: string; value?: string; icon?: string }
 export interface ListData { items: ListRow[] }
 export interface ChartData { points: number[]; label?: string; unit?: string }
 export interface ImageData { url: string; fit?: 'cover' | 'contain' }
-export interface StatusData { state: PluginState; label: string }
+export interface StatusData { state: PluginState; label: string; title?: string; value?: string; unit?: string; detail?: string; points?: number[] }
+
+/** Display styles per renderer; the first is the default. One table, shared with the agent and the manage picker (web/shared/plugin-styles.ts). */
+export { PLUGIN_STYLES }/** The style to draw: the tile's choice, else the widget's suggestion, else the renderer's default. */
+export function pickStyle(render: string, choice: string | undefined, suggested: string | undefined): string {
+  const all = PLUGIN_STYLES[render] || ['']
+  if (choice && all.indexOf(choice) >= 0) return choice
+  if (suggested && all.indexOf(suggested) >= 0) return suggested
+  return all[0]
+}
 
 export type PluginEntry =
-  | { render: 'stat'; data: StatData }
-  | { render: 'gauge'; data: GaugeData }
-  | { render: 'text'; data: TextData }
-  | { render: 'list'; data: ListData }
-  | { render: 'chart'; data: ChartData }
-  | { render: 'image'; data: ImageData }
-  | { render: 'status'; data: StatusData }
+  | { render: 'stat'; data: StatData; style?: string }
+  | { render: 'gauge'; data: GaugeData; style?: string }
+  | { render: 'text'; data: TextData; style?: string }
+  | { render: 'list'; data: ListData; style?: string }
+  | { render: 'chart'; data: ChartData; style?: string }
+  | { render: 'image'; data: ImageData; style?: string }
+  | { render: 'status'; data: StatusData; style?: string }
 
 const isObj = (x: unknown): x is { [k: string]: unknown } => !!x && typeof x === 'object' && !Array.isArray(x)
 const isNum = (x: unknown): x is number => typeof x === 'number' && isFinite(x)
@@ -52,7 +62,9 @@ export function validatePlugin(render: unknown, data: unknown): PluginEntry | nu
     if (unit === null || label === null) return null
     if (d.delta !== undefined && d.delta !== null && !isNum(d.delta)) return null
     if (d.color !== undefined && d.color !== null && !(typeof d.color === 'string' && COLOR.test(d.color))) return null
-    return { render, data: { value: v, unit, label, delta: isNum(d.delta) ? d.delta : undefined, color: typeof d.color === 'string' ? d.color : undefined } }
+    const sp: number[] = []
+    if (Array.isArray(d.points)) for (let i = 0; i < d.points.length; i++) if (isNum(d.points[i])) sp.push(d.points[i] as number)
+    return { render, data: { value: v, unit, label, delta: isNum(d.delta) ? d.delta : undefined, color: typeof d.color === 'string' ? d.color : undefined, points: sp.length ? sp.slice(-60) : undefined } }
   }
   if (render === 'gauge') {
     if (!isNum(d.value) || d.value < 0 || d.value > 100) return null
@@ -104,7 +116,10 @@ export function validatePlugin(render: unknown, data: unknown): PluginEntry | nu
     const s = d.state
     if (s !== 'ok' && s !== 'warn' && s !== 'error' && s !== 'off') return null
     if (typeof d.label !== 'string') return null
-    return { render, data: { state: s, label: d.label } }
+    const str = (v: unknown, n: number): string | undefined => (typeof v === 'string' && v ? v.slice(0, n) : typeof v === 'number' && isFinite(v) ? String(v).slice(0, n) : undefined)
+    const pts: number[] = []
+    if (Array.isArray(d.points)) for (let i = 0; i < d.points.length; i++) { const n = d.points[i]; if (typeof n === 'number' && isFinite(n)) pts.push(n) }
+    return { render, data: { state: s, label: d.label, title: str(d.title, 40), value: str(d.value, 12), unit: str(d.unit, 8), detail: str(d.detail, 60), points: pts.length ? pts.slice(-60) : undefined } }
   }
   return null
 }
@@ -120,6 +135,7 @@ export function parsePluginItem(x: unknown): PluginSlot {
   if (isObj(x) && x.error !== undefined) return { error: typeof x.error === 'string' ? x.error.slice(0, 200) : '' }
   if (isObj(x) && typeof x.render === 'string' && x.render.slice(0, 7) === 'custom:') return isObj(x.data) ? { custom: x.render.slice(7, 40), data: x.data } : { custom: x.render.slice(7, 40) }
   const v = isObj(x) ? validatePlugin(x.render, x.data) : null
+  if (v && isObj(x) && typeof x.style === 'string' && x.style.length <= 20) return { ...v, style: x.style } as PluginEntry
   return v || { error: '' }
 }
 

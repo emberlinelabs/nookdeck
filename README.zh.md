@@ -37,6 +37,7 @@ agent，向同一 Wi-Fi 下的任意浏览器提供触控界面。手机上无�
 | **Home Assistant** | 支持颜色、色温、场景和效果的灯；空调（模式、风速、摆风）、风扇、窗帘、扫地机器人、门锁和传感器（可选） |
 | **自动化** | 推送数值和通知的 Webhook，以及根据电脑上的活动触发的规则 |
 | **个性化** | 可拖放的网格（8×4、8×3、5×3…），可按每种屏幕尺寸预览，4 种磁贴样式（Soft、Solid、Outline、iOS），每个磁贴可设任意颜色，5,000+ 图标，English、Vietnamese 和 Chinese |
+| **插件** | 从[插件商店](https://nookdeck.app/plugins)（[nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)）添加磁贴和按钮，或用 TypeScript 自己开发：参阅[插件指南](docs/plugins.md) |
 
 布局是由方形磁贴组成的固定网格，在 `http://localhost:7420/manage/` 的拖放式管理页面中编排。MCP 服务器可以让 AI 助手帮你排布局。
 支持 macOS，以及 Windows 10/11（实验性）。
@@ -69,6 +70,18 @@ agent，向同一 Wi-Fi 下的任意浏览器提供触控界面。手机上无�
 你需要一台 **Mac**（macOS 13 或更高版本）或 **Windows 10/11 电脑**，以及一台连接**同一 Wi-Fi 的手机或平板**。手机上不需要安装任何东西。大约需要 2 分钟。
 
 ### 1. 在电脑上安装
+
+**应用（无需终端）**
+
+1. 下载 **[Nookdeck.dmg](https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck.dmg)**（Mac）或 **[Nookdeck-Setup.exe](https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck-Setup.exe)**（Windows）。
+2. **Mac：** 打开 dmg，把 **Nookdeck** 拖到 **应用程序** 文件夹，然后打开它。**Windows：** 运行安装程序（无需管理员权限）。
+3. Nookdeck 会出现在菜单栏（Mac）或系统托盘（Windows）。点击它并选择 **配对新手机…**，即可看到二维码和 PIN 码。
+
+第一次打开 Mac 应用时，macOS 可能提示无法检查其中是否含有恶意软件，因为 Nookdeck 暂时还没有 Apple Developer ID 签名。这只需操作一次：打开 **系统设置 → 隐私与安全性**，向下找到关于 Nookdeck 的提示，点击 **仍要打开**（Open Anyway）并确认。在 Windows 上，SmartScreen 可能显示“Windows 已保护你的电脑”：点击 **更多信息 → 仍要运行**。
+
+应用只负责控制 Nookdeck。退出应用不会让手机面板停止工作。完整步骤和帮助：[docs/install.md](docs/install.md)。
+
+**或者在终端中运行一行命令**，效果相同，不需要应用：
 
 **在 Mac 上**
 
@@ -154,6 +167,18 @@ irm https://nookdeck.app/scripts/install.ps1 | iex
 - Windows 已知问题：输入文字的按键可能产生错误字符。打开 app、快捷键、媒体和音量功能正常。
 
 </details>
+
+## 插件
+
+- **商店:** 在管理页面打开 **Plugins** → **Discover**,或访问 [nookdeck.app/plugins](https://nookdeck.app/plugins) 并点击 **Open in Nookdeck**。列表中的插件都经过审核,并按文件固定版本([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins))。
+- **从 GitHub 安装:** 在 **Plugins** → **Install from a link** 粘贴仓库或文件夹链接。未收录的插件标记为 Unreviewed。
+- **自己开发:** 简单的磁贴和按钮只需一个 `nookdeck.json`,也可以用 `@nookdeck/plugin` SDK 写 TypeScript。用 `nookdeck plugin new` 开始,参阅[插件指南](docs/plugins.md),然后向 [nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins) 提交 pull request 即可收录。
+
+## 主题
+
+- **选择外观：** 在管理页面打开 **主题** → **主题包**。Catppuccin、Tokyo Night、Night Owl、One Dark Pro、JellyFish、SynthWave '84 和 Cyberpunk 都在商店里，还有内置的 Nookdeck 外观。每个主题包都有多个变体（如 Latte 和 Mocha），以及随浅色/深色自动切换的 **自动** 模式。选一个，点击 **应用**，不喜欢可以撤销。
+- **自己做：** 在 **主题** → **自定义** 里调好外观，点击 **导出此外观**，编辑文件后再安装。主题只是数据和 CSS，不能运行代码。详见[主题指南](docs/themes.md)。
+- **分享：** 向 [nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins) 的 `themes/` 目录提交 pull request，即可被收录。
 
 ## 从源码安装
 

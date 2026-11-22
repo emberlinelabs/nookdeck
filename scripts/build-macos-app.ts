@@ -10,7 +10,7 @@
 // first run. Both the agent programs and the app are signed with the release identity (scripts/sign-macos.ts: ci, local or ad hoc);
 // the agent keeps the identifier dev.nookdeck.agent so Accessibility grants survive updates, the app is dev.nookdeck.app.
 // Prerequisites (CI runs them before this): bun scripts/ensure-icons.ts, bun run build:web, bun scripts/build-mediaremote.ts, bun run gen-assets.
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { arch as hostArch } from "node:os";
@@ -86,9 +86,14 @@ function buildAgent(t: (typeof AGENT_TARGETS)[number], work: string, o: Options)
 
 export function build(o: Options): { app: string; dmg?: string } {
   const version = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version as string;
+  // build in a staging folder and swap it in only when everything worked, so a failed build never removes the last good app
+  const finalOut = o.out;
+  o = { ...o, out: `${finalOut}.building` };
   const work = join(o.out, "work");
   rmSync(o.out, { recursive: true, force: true });
   mkdirSync(work, { recursive: true });
+  const finish = <T,>(r: T): T => { rmSync(finalOut, { recursive: true, force: true }); renameSync(o.out, finalOut); return r; };
+  const at = (p: string) => p.replace(o.out, finalOut);
 
   const agents = AGENT_TARGETS.map((t) => ({ t, file: buildAgent(t, work, o) })).filter((a) => a.file);
   if (!agents.length) throw new Error("no agent program to bundle");
@@ -114,14 +119,13 @@ export function build(o: Options): { app: string; dmg?: string } {
   const shared = join(root, "apps/shared");
   copyFileSync(join(shared, "strings.json"), join(res, "strings.json"));
   copyFileSync(join(shared, "icons/macos/AppIcon.icns"), join(res, "AppIcon.icns"));
-  for (const n of ["nookdeck", "nookdeck-running", "nookdeck-stopped", "nookdeck-attention"]) copyFileSync(join(shared, `icons/macos/${n}Template.pdf`), join(res, "icons", `${n}Template.pdf`));
+  for (const n of ["nookdeck", "nookdeck-running", "nookdeck-stopped", "nookdeck-attention"]) for (const f of [`${n}Template.png`, `${n}Template@2x.png`]) copyFileSync(join(shared, "icons/macos", f), join(res, "icons", f));
 
   // the programs inside are already signed (identifier dev.nookdeck.agent); now the bundle, with the app's own identifier
   signMacos(app, process.env, APP_ID);
   run(["codesign", "--verify", "--strict", "--deep", app]);
-  console.log(`built ${app}`);
   rmSync(work, { recursive: true, force: true });
-  if (!o.dmg) return { app };
+  if (!o.dmg) { console.log(`built ${at(app)}`); return finish({ app: at(app) }); }
 
   const stage = join(o.out, "dmg");
   mkdirSync(stage, { recursive: true });
@@ -131,8 +135,8 @@ export function build(o: Options): { app: string; dmg?: string } {
   run(["hdiutil", "create", "-volname", "Nookdeck", "-srcfolder", stage, "-ov", "-format", "UDZO", dmg]);
   rmSync(stage, { recursive: true, force: true });
   writeFileSync(`${dmg}.sha256`, `${sha256(dmg)}  Nookdeck.dmg\n`);
-  console.log(`built ${dmg} (${Math.round(statSync(dmg).size / 1e6)} MB)`);
-  return { app, dmg };
+  console.log(`built ${at(app)}\nbuilt ${at(dmg)} (${Math.round(statSync(dmg).size / 1e6)} MB)`);
+  return finish({ app: at(app), dmg: at(dmg) });
 }
 
 if (import.meta.main) {

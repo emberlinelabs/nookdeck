@@ -30,6 +30,12 @@ export const isEmoji = (s: string) => EMOJI.test(s)
 export function TileIcon(props: { value: string; size: number; assets?: IconAssets; weight?: 'Outline' | 'Filled' }) {
   const v = props.value
   const size = props.size
+  // an icon pack of the applied theme (pack:<name>) overrides the built-in icon of the same name
+  const pk = props.assets && /^[a-z0-9][a-z0-9._-]*$/i.test(v) ? props.assets['pack:' + v.toLowerCase()] : null
+  if (pk && pk.svg) {
+    const bm = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="' + (pk.vb || '0 0 24 24') + '" fill="currentColor" aria-hidden="true">' + pk.svg + '</svg>'
+    return <span class="pd-svg pd-svg--brand" style={{ width: size + 'px', height: size + 'px' }} aria-hidden="true" dangerouslySetInnerHTML={{ __html: bm }} />
+  }
   const svg = iconSvg(v, { size: size, weight: props.weight, stroke: strokeW })
   if (svg) return <span class="pd-svg" style={{ width: size + 'px', height: size + 'px' }} aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />
   const a = props.assets && Object.prototype.hasOwnProperty.call(props.assets, v) ? props.assets[v] : null

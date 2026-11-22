@@ -127,7 +127,7 @@ export type Item = {
   weather?: WeatherOptions
   push?: PushOptions
   /** widget 'plugin': which plugin widget this tile shows, with its settings (secrets stay on the agent) */
-  plugin?: { id: string; widget: string; settings?: { [k: string]: unknown } }
+  plugin?: { id: string; widget: string; settings?: { [k: string]: unknown }; view?: { style?: string } }
   label?: string
   icon?: string
   color?: string
@@ -137,7 +137,41 @@ export type Item = {
   h?: number
 }
 
-export interface Theme {
+export interface StateLook { tile?: string; text?: string; accent?: string; border?: { width: number; color?: string }; shadow?: string }
+export interface KindLook { tile?: string; text?: string; muted?: string; accent?: string; radius?: number; border?: { width: number; color?: string }; shadow?: string; tileOpacity?: number; tileBlur?: number; font?: string; numberFont?: string; labelPosition?: string; labelWeight?: string; states?: { pressed?: StateLook; active?: StateLook; alert?: StateLook } }
+/** The look fields (also on a page: page.theme overrides while that page is shown). */
+export interface Look {
+  mode?: 'dark' | 'light' | 'auto'
+  accent?: string
+  background?: string
+  tile?: string
+  text?: string
+  muted?: string
+  radius?: number
+  gap?: number
+  fontScale?: number
+  font?: string
+  numberFont?: string
+  backgroundImage?: string
+  backgroundFit?: 'cover' | 'contain' | 'tile'
+  backgroundDim?: number
+  backgroundBlur?: number
+  gradient?: { from: string; to: string; angle: number }
+  tileOpacity?: number
+  tileBlur?: number
+  border?: { width: number; color?: string }
+  shadow?: 'none' | 'soft' | 'strong'
+  labelPosition?: 'bottom' | 'top' | 'hidden'
+  labelWeight?: 'regular' | 'medium' | 'bold'
+  iconStyle?: 'line' | 'filled'
+  palette?: { ok?: string; warn?: string; error?: string; info?: string }
+  chartColors?: string[]
+}
+export interface Theme extends Look {
+  source?: { pack: string; variant?: string; auto?: { light: string; dark: string }; options?: { [k: string]: string } }
+  auto?: { light: Look; dark: Look }
+  kinds?: { [kind: string]: KindLook }
+  fonts?: { family: string; file: string; weight?: number }[]
   mode?: 'dark' | 'light' | 'auto'
   /** UI language of the overlays; missing = 'en' */
   language?: 'en' | 'vi' | 'zh'
@@ -208,6 +242,7 @@ export interface Page {
   columns: number
   rows?: number
   items: Item[]
+  theme?: Look
 }
 
 /** icon values the phone does not know: {svg: inner markup of a 24x24 icon} or {img: data URL} (app icons, uploaded images, catalog icons) */

@@ -315,7 +315,7 @@ export function ControlSheet(p: SheetProps) {
         <div class="pd-cs__head">
           <b>{p.name}</b>
           <span class="pd-spacer" />
-          <button type="button" class="pd-iconbtn" aria-label={t('Close')} onClick={p.onClose}>
+          <button type="button" class="pd-iconbtn" data-part="button" aria-label={t('Close')} onClick={p.onClose}>
             <Icon name="x" size={18} />
           </button>
         </div>

@@ -454,7 +454,7 @@ describe("settings never become code in a command line", () => {
   });
 
   test("the example plugin reads the environment", () => {
-    const m = JSON.parse(readFileSync(join(import.meta.dir, "..", "examples/plugins/clipboard-snippets/nookdeck.json"), "utf8"));
+    const m = JSON.parse(readFileSync(join(import.meta.dir, "fixtures/plugins/clipboard-snippets/nookdeck.json"), "utf8"));
     expect(() => parseManifest(m)).not.toThrow();
     expect(JSON.stringify(m)).not.toContain("{{");
   });
@@ -464,7 +464,7 @@ describe("the SDK import and load errors", () => {
   const { cpSync } = require("node:fs") as typeof import("node:fs");
   test("github-stars (import from @nookdeck/plugin, no node_modules) gives a stat tile and a chart", async () => {
     const dir = tmp("pd-stars-");
-    cpSync(join(import.meta.dir, "..", "examples/plugins/github-stars"), dir, { recursive: true });
+    cpSync(join(import.meta.dir, "fixtures/plugins/github-stars"), dir, { recursive: true });
     const seen: string[] = [];
     const { h } = await setup([{ dir, id: "dev.nookdeck.github-stars" }], {
       fetch: (async (u: any, init: any) => { seen.push(`${u} ${init?.headers?.Authorization ?? ""}`); return Response.json({ stargazers_count: 4242 }); }) as any,

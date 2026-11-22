@@ -1,3 +1,4 @@
+import { PLUGIN_STYLES } from "../web/shared/plugin-styles";
 import { userHome } from "./home";
 import "./compat";
 
@@ -30,7 +31,11 @@ export type Action =
 export const PLUGIN_ID_RE = /^[a-z0-9][a-z0-9_-]{0,31}(\.[a-z0-9][a-z0-9_-]{0,47}){1,4}$/;
 export const PLUGIN_PART_RE = /^[a-z0-9][a-z0-9_-]{0,47}$/;
 /** A plugin widget on a tile: which plugin and widget, and the tile's own settings. */
-export interface PluginRef { id: string; widget: string; settings?: Record<string, string | number | boolean> }
+/** Display styles per renderer (one table in web/shared/plugin-styles.ts, shared with the deck and the manage picker): the first is the default. A tile picks one with plugin.view.style; a manifest can suggest one with widgets[].style. */
+export const STYLES: Record<string, string[]> = PLUGIN_STYLES;
+export const ALL_STYLES: string[] = [...new Set(Object.values(STYLES).flat())];
+
+export interface PluginRef { id: string; widget: string; settings?: Record<string, string | number | boolean>; view?: { style?: string } }
 
 export const HASS_ENTITY_RE = /^[a-z_]+\.[a-z0-9_]+$/;
 export const HASS_SERVICE_RE = /^[a-z_]+\.[a-z0-9_]+$/;
@@ -142,7 +147,60 @@ export interface ClockOptions {
 }
 
 /** Overrides of the deck's design tokens (Knowns look). Unset fields use the built-in token values. */
-export interface Theme {
+export const FONTS = ["system", "rounded", "mono", "serif", "condensed"] as const;
+export type FontKind = (typeof FONTS)[number];
+export type PaletteKey = "ok" | "warn" | "error" | "info";
+/** Every look field, in the order the manage Theme page shows them: what a theme package carries and what `page.theme` may override. Behaviour fields (language, orientation, header, screen, updateCheck, temperatureUnit) are not here. */
+export const LOOK_KEYS = [
+  "mode", "accent", "background", "tile", "text", "muted", "radius", "gap", "fontScale", "tileStyle", "iconScale", "iconStroke", "showLabels",
+  "font", "numberFont", "backgroundImage", "backgroundFit", "backgroundDim", "backgroundBlur", "gradient", "tileOpacity", "tileBlur",
+  "border", "shadow", "labelPosition", "labelWeight", "iconStyle", "palette", "chartColors",
+] as const;
+export type LookKey = (typeof LOOK_KEYS)[number];
+/** The look fields added with theme packages (all optional). */
+export interface LookExtra {
+  /** a system stack, or "pkg:<Family>" for a font the theme package declares in `fonts` */
+  font?: string;
+  numberFont?: string;
+  /** "theme:<id>/<file>" (a file of an installed theme package) or "img:<id>" (an uploaded image). */
+  backgroundImage?: string;
+  backgroundFit?: "cover" | "contain" | "tile";
+  backgroundDim?: number;   // 0-0.9
+  backgroundBlur?: number;  // px, 0-30
+  gradient?: { from: string; to: string; angle: number };
+  tileOpacity?: number;     // 0.05-1
+  tileBlur?: number;        // px, 0-30
+  border?: { width: number; color?: string };
+  shadow?: "none" | "soft" | "strong";
+  labelPosition?: "bottom" | "top" | "hidden";
+  labelWeight?: "regular" | "medium" | "bold";
+  iconStyle?: "line" | "filled";
+  palette?: Partial<Record<PaletteKey, string>>;
+  chartColors?: string[];   // up to 6
+}
+export type Look = Partial<Pick<Theme, "mode" | "accent" | "background" | "tile" | "text" | "muted" | "radius" | "gap" | "fontScale" | "tileStyle" | "iconScale" | "iconStroke" | "showLabels">> & LookExtra;
+
+export const TILE_KINDS = ["button", "clock", "metric", "media", "weather", "quota", "entity", "plugin", "folder", "header", "standby", "sheet"] as const;
+export type TileKind = (typeof TILE_KINDS)[number];
+/** State tokens of one tile kind (pressed, active = on / playing, alert). */
+export interface StateLook { tile?: string; text?: string; accent?: string; border?: { width: number; color?: string }; shadow?: "none" | "soft" | "strong" }
+/** The look tokens one tile kind may override, plus its state tokens. */
+export interface KindLook {
+  tile?: string; text?: string; muted?: string; accent?: string; radius?: number; border?: { width: number; color?: string }; shadow?: "none" | "soft" | "strong";
+  tileOpacity?: number; tileBlur?: number; font?: string; numberFont?: string; labelPosition?: "bottom" | "top" | "hidden"; labelWeight?: "regular" | "medium" | "bold"; tileStyle?: TileStyle;
+  states?: { pressed?: StateLook; active?: StateLook; alert?: StateLook };
+}
+export interface ThemeFont { family: string; file: string; weight?: number }
+/** Where a theme's look came from: the pack, the variant (or an auto pair) and the chosen option values. */
+export interface ThemeSource { pack: string; variant?: string; auto?: { light: string; dark: string }; options?: Record<string, string> }
+
+export interface Theme extends LookExtra {
+  source?: ThemeSource;
+  /** Auto mode: the resolved light and dark looks; the deck picks by the phone's colour scheme when mode is "auto". */
+  auto?: { light: Look; dark: Look };
+  kinds?: Partial<Record<TileKind, KindLook>>;
+  fonts?: ThemeFont[];
+  muted?: string;
   mode?: "dark" | "light" | "auto"; // default "dark"
   accent?: string;      // CSS color, default "#22d3ee" (brand cyan; green is only the live/connected status colour)
   background?: string;  // CSS color (--bg), default "#0b0b0d"
@@ -230,6 +288,8 @@ export type Language = (typeof LANGUAGES)[number];
 export interface Page {
   id: string;
   name: string;
+  /** A partial look override while this page is shown (same fields as a theme package). */
+  theme?: Look;
   columns: number; // 1-12
   rows: number;    // 1-8
   items: Item[];
@@ -398,25 +458,149 @@ const optColor = (v: unknown, field: string): string | undefined => {
   return c;
 };
 
+const BG_IMAGE_RE = /^(theme:[a-z0-9][a-z0-9._-]*(\.[a-z0-9][a-z0-9._-]*)+\/[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*|img:[A-Za-z0-9_-]{4,64})$/;
+const enumOf = <T extends string>(v: unknown, list: readonly T[], field: string): T => {
+  if (typeof v !== "string" || !(list as readonly string[]).includes(v)) throw new Error(`${field} must be one of ${list.join(", ")}`);
+  return v as T;
+};
+
+/** The look fields only (the part a theme package carries and `page.theme` may override). Unknown keys are ignored. `p` names the field for errors. */
+export function validateLook(t: any, p = "theme"): Look {
+  if (t === undefined || t === null) return {};
+  if (typeof t !== "object" || Array.isArray(t)) throw new Error(`${p} must be an object`);
+  const out: Look = {};
+  if (t.mode !== undefined) {
+    if (!["dark", "light", "auto"].includes(t.mode)) throw new Error(`${p}.mode must be "dark", "light" or "auto"`);
+    out.mode = t.mode;
+  }
+  const accent = optColor(t.accent, `${p}.accent`); if (accent) out.accent = accent;
+  const background = optColor(t.background, `${p}.background`); if (background) out.background = background;
+  const tile = optColor(t.tile, `${p}.tile`); if (tile) out.tile = tile;
+  const text = optColor(t.text, `${p}.text`); if (text) out.text = text;
+  const muted = optColor(t.muted, `${p}.muted`); if (muted) out.muted = muted;
+  if (t.radius !== undefined) out.radius = num(t.radius, `${p}.radius`, 0, 40);
+  if (t.gap !== undefined) out.gap = num(t.gap, `${p}.gap`, 0, 40);
+  if (t.fontScale !== undefined) out.fontScale = num(t.fontScale, `${p}.fontScale`, 0.5, 2, false);
+  if (t.tileStyle !== undefined) out.tileStyle = tileStyle(t.tileStyle, `${p}.tileStyle`);
+  if (t.iconScale !== undefined) out.iconScale = num(t.iconScale, `${p}.iconScale`, 0.5, 2, false);
+  if (t.iconStroke !== undefined) out.iconStroke = num(t.iconStroke, `${p}.iconStroke`, 1, 3, false);
+  if (t.showLabels !== undefined) out.showLabels = bool(t.showLabels, `${p}.showLabels`);
+  const fontOf = (v: unknown, f: string): string => (typeof v === "string" && /^pkg:[A-Za-z0-9 _-]{1,40}$/.test(v) ? v : enumOf(v, FONTS, f));
+  if (t.font !== undefined) out.font = fontOf(t.font, `${p}.font`);
+  if (t.numberFont !== undefined) out.numberFont = fontOf(t.numberFont, `${p}.numberFont`);
+  if (t.backgroundImage !== undefined && t.backgroundImage !== "") {
+    if (typeof t.backgroundImage !== "string" || !BG_IMAGE_RE.test(t.backgroundImage) || t.backgroundImage.includes("..")) throw new Error(`${p}.backgroundImage must be "theme:<id>/<file>" or "img:<id>"`);
+    out.backgroundImage = t.backgroundImage;
+  }
+  if (t.backgroundFit !== undefined) out.backgroundFit = enumOf(t.backgroundFit, ["cover", "contain", "tile"] as const, `${p}.backgroundFit`);
+  if (t.backgroundDim !== undefined) out.backgroundDim = num(t.backgroundDim, `${p}.backgroundDim`, 0, 0.9, false);
+  if (t.backgroundBlur !== undefined) out.backgroundBlur = num(t.backgroundBlur, `${p}.backgroundBlur`, 0, 30, false);
+  if (t.gradient !== undefined && t.gradient !== null) {
+    if (typeof t.gradient !== "object" || Array.isArray(t.gradient)) throw new Error(`${p}.gradient must be { from, to, angle }`);
+    const from = optColor(t.gradient.from, `${p}.gradient.from`), to = optColor(t.gradient.to, `${p}.gradient.to`);
+    if (!from || !to) throw new Error(`${p}.gradient needs from and to colours`);
+    out.gradient = { from, to, angle: t.gradient.angle === undefined ? 135 : num(t.gradient.angle, `${p}.gradient.angle`, 0, 360) };
+  }
+  if (t.tileOpacity !== undefined) out.tileOpacity = num(t.tileOpacity, `${p}.tileOpacity`, 0.05, 1, false);
+  if (t.tileBlur !== undefined) out.tileBlur = num(t.tileBlur, `${p}.tileBlur`, 0, 30, false);
+  if (t.border !== undefined && t.border !== null) {
+    if (typeof t.border !== "object" || Array.isArray(t.border)) throw new Error(`${p}.border must be { width, color? }`);
+    const color = optColor(t.border.color, `${p}.border.color`);
+    out.border = { width: num(t.border.width ?? 1, `${p}.border.width`, 0, 3, false), ...(color ? { color } : {}) };
+  }
+  if (t.shadow !== undefined) out.shadow = enumOf(t.shadow, ["none", "soft", "strong"] as const, `${p}.shadow`);
+  if (t.labelPosition !== undefined) out.labelPosition = enumOf(t.labelPosition, ["bottom", "top", "hidden"] as const, `${p}.labelPosition`);
+  if (t.labelWeight !== undefined) out.labelWeight = enumOf(t.labelWeight, ["regular", "medium", "bold"] as const, `${p}.labelWeight`);
+  if (t.iconStyle !== undefined) out.iconStyle = enumOf(t.iconStyle, ["line", "filled"] as const, `${p}.iconStyle`);
+  if (t.palette !== undefined && t.palette !== null) {
+    if (typeof t.palette !== "object" || Array.isArray(t.palette)) throw new Error(`${p}.palette must be { ok, warn, error, info }`);
+    const pal: Partial<Record<PaletteKey, string>> = {};
+    for (const k of ["ok", "warn", "error", "info"] as const) { const c = optColor(t.palette[k], `${p}.palette.${k}`); if (c) pal[k] = c; }
+    if (Object.keys(pal).length) out.palette = pal;
+  }
+  if (t.chartColors !== undefined && t.chartColors !== null) {
+    if (!Array.isArray(t.chartColors) || t.chartColors.length > 6) throw new Error(`${p}.chartColors must be a list of up to 6 colours`);
+    const cc = t.chartColors.map((c: unknown, i: number) => optColor(c, `${p}.chartColors[${i}]`)).filter((c: string | undefined): c is string => !!c);
+    if (cc.length) out.chartColors = cc;
+  }
+  return out;
+}
+
+const PACK_REF_RE = /^[a-z0-9][a-z0-9._-]*(\.[a-z0-9][a-z0-9._-]*)+@\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
+const PART_ID_RE = /^[a-z0-9][a-z0-9_-]{0,47}$/;
+/** A look plus the pack-only layers: per-kind tokens and declared fonts. */
+export type PackLook = Look & { kinds?: Partial<Record<TileKind, KindLook>>; fonts?: ThemeFont[] };
+export function validatePackLook(t: any, p: string): PackLook {
+  const out: PackLook = { ...validateLook(t, p) };
+  if (t && t.kinds !== undefined && t.kinds !== null) { const k = validateKinds(t.kinds, `${p}.kinds`); if (k) out.kinds = k; }
+  if (t && t.fonts !== undefined && t.fonts !== null) { const f = validateFonts(t.fonts, `${p}.fonts`); if (f) out.fonts = f; }
+  return out;
+}
+export function validateSource(v: any, p: string): ThemeSource {
+  if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error(`${p} must be { pack, variant | auto, options }`);
+  if (typeof v.pack !== "string" || !PACK_REF_RE.test(v.pack)) throw new Error(`${p}.pack must look like "dev.author.name@1.0.0"`);
+  const out: ThemeSource = { pack: v.pack };
+  if (v.variant !== undefined) { if (typeof v.variant !== "string" || !PART_ID_RE.test(v.variant)) throw new Error(`${p}.variant is not a valid id`); out.variant = v.variant; }
+  if (v.auto !== undefined) {
+    if (!v.auto || typeof v.auto.light !== "string" || typeof v.auto.dark !== "string" || !PART_ID_RE.test(v.auto.light) || !PART_ID_RE.test(v.auto.dark)) throw new Error(`${p}.auto must be { light, dark } variant ids`);
+    out.auto = { light: v.auto.light, dark: v.auto.dark };
+  }
+  if (v.options !== undefined) {
+    if (!v.options || typeof v.options !== "object" || Array.isArray(v.options)) throw new Error(`${p}.options must be an object`);
+    const o: Record<string, string> = {};
+    for (const [k, val] of Object.entries(v.options)) { if (!PART_ID_RE.test(k) || typeof val !== "string" || !PART_ID_RE.test(val)) throw new Error(`${p}.options has an invalid id`); o[k] = val; }
+    if (Object.keys(o).length > 4) throw new Error(`${p}.options has more than 4 options`);
+    if (Object.keys(o).length) out.options = o;
+  }
+  return out;
+}
+const stateLook = (v: any, p: string): StateLook => {
+  if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error(`${p} must be an object`);
+  const o: StateLook = {};
+  for (const k of ["tile", "text", "accent"] as const) { const c = optColor(v[k], `${p}.${k}`); if (c) o[k] = c; }
+  if (v.border !== undefined) { const c = optColor(v.border?.color, `${p}.border.color`); o.border = { width: num(v.border?.width ?? 1, `${p}.border.width`, 0, 3, false), ...(c ? { color: c } : {}) }; }
+  if (v.shadow !== undefined) o.shadow = enumOf(v.shadow, ["none", "soft", "strong"] as const, `${p}.shadow`);
+  return o;
+};
+export function validateKinds(v: any, p: string): Partial<Record<TileKind, KindLook>> | undefined {
+  if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error(`${p} must be an object keyed by tile kind`);
+  const out: Partial<Record<TileKind, KindLook>> = {};
+  for (const [kind, raw] of Object.entries(v) as Array<[string, any]>) {
+    if (!(TILE_KINDS as readonly string[]).includes(kind)) throw new Error(`${p}.${kind}: unknown tile kind (use ${TILE_KINDS.join(", ")})`);
+    const k: KindLook = {};
+    const look = validateLook(raw, `${p}.${kind}`) as Record<string, any>;
+    for (const f of ["tile", "text", "muted", "accent", "radius", "border", "shadow", "tileOpacity", "tileBlur", "font", "numberFont", "labelPosition", "labelWeight", "tileStyle"]) if (look[f] !== undefined) (k as any)[f] = look[f];
+    if (raw.states !== undefined) {
+      if (!raw.states || typeof raw.states !== "object") throw new Error(`${p}.${kind}.states must be an object`);
+      const st: NonNullable<KindLook["states"]> = {};
+      for (const s of ["pressed", "active", "alert"] as const) if (raw.states[s] !== undefined) st[s] = stateLook(raw.states[s], `${p}.${kind}.states.${s}`);
+      if (Object.keys(st).length) k.states = st;
+    }
+    if (Object.keys(k).length) out[kind as TileKind] = k;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+export function validateFonts(v: any, p: string): ThemeFont[] | undefined {
+  if (!Array.isArray(v) || v.length > 4) throw new Error(`${p} must be a list of up to 4 fonts`);
+  const out = v.map((f: any, i: number) => {
+    const family = typeof f?.family === "string" && /^[A-Za-z0-9 _-]{1,40}$/.test(f.family) ? f.family : (() => { throw new Error(`${p}[${i}].family must be 1-40 letters, digits, spaces, - or _`); })();
+    const file = typeof f?.file === "string" && /^fonts\/[A-Za-z0-9._-]+\.woff2?$/i.test(f.file) ? f.file : (() => { throw new Error(`${p}[${i}].file must be fonts/<name>.woff or .woff2`); })();
+    return { family, file, ...(f.weight !== undefined ? { weight: num(f.weight, `${p}[${i}].weight`, 100, 900) } : {}) };
+  });
+  return out.length ? out : undefined;
+}
+
 export function validateTheme(t: any): Theme | undefined {
   if (t === undefined || t === null) return undefined;
   if (typeof t !== "object") throw new Error("theme must be an object");
-  const out: Theme = {};
-  if (t.mode !== undefined) {
-    if (!["dark", "light", "auto"].includes(t.mode)) throw new Error('theme.mode must be "dark", "light" or "auto"');
-    out.mode = t.mode;
+  const out: Theme = { ...validateLook(t, "theme") };
+  if (t.source !== undefined && t.source !== null && t.source !== "") out.source = validateSource(t.source, "theme.source");
+  if (t.auto !== undefined && t.auto !== null) {
+    if (typeof t.auto !== "object" || !t.auto.light || !t.auto.dark) throw new Error("theme.auto must be { light, dark } looks");
+    out.auto = { light: validateLook(t.auto.light, "theme.auto.light"), dark: validateLook(t.auto.dark, "theme.auto.dark") };
   }
-  const accent = optColor(t.accent, "theme.accent"); if (accent) out.accent = accent;
-  const background = optColor(t.background, "theme.background"); if (background) out.background = background;
-  const tile = optColor(t.tile, "theme.tile"); if (tile) out.tile = tile;
-  if (t.radius !== undefined) out.radius = num(t.radius, "theme.radius", 0, 40);
-  if (t.gap !== undefined) out.gap = num(t.gap, "theme.gap", 0, 40);
-  if (t.fontScale !== undefined) out.fontScale = num(t.fontScale, "theme.fontScale", 0.5, 2, false);
-  if (t.tileStyle !== undefined) out.tileStyle = tileStyle(t.tileStyle, "theme.tileStyle");
-  if (t.iconScale !== undefined) out.iconScale = num(t.iconScale, "theme.iconScale", 0.5, 2, false);
-  if (t.iconStroke !== undefined) out.iconStroke = num(t.iconStroke, "theme.iconStroke", 1, 3, false);
-  if (t.showLabels !== undefined) out.showLabels = bool(t.showLabels, "theme.showLabels");
-  const text = optColor(t.text, "theme.text"); if (text) out.text = text;
+  if (t.kinds !== undefined && t.kinds !== null) { const k = validateKinds(t.kinds, "theme.kinds"); if (k) out.kinds = k; }
+  if (t.fonts !== undefined && t.fonts !== null) { const f = validateFonts(t.fonts, "theme.fonts"); if (f) out.fonts = f; }
   if (t.temperatureUnit !== undefined) {
     if (t.temperatureUnit !== "c" && t.temperatureUnit !== "f") throw new Error("theme.temperatureUnit must be c or f");
     out.temperatureUnit = t.temperatureUnit;
@@ -818,7 +1002,15 @@ export function validateLayout(raw: any): Layout {
           const pw = str(pr.widget, `${w}.plugin.widget`);
           if (!PLUGIN_PART_RE.test(pw)) throw new Error(`${w}.plugin.widget must be a widget id of that plugin`);
           const ps = pluginSettings(pr.settings, `${w}.plugin.settings`);
-          plugin = { id: pid, widget: pw, ...(ps ? { settings: ps } : {}) };
+          let view: PluginRef["view"];
+          if (pr.view !== undefined && pr.view !== null) {
+            if (typeof pr.view !== "object" || Array.isArray(pr.view)) throw new Error(`${w}.plugin.view must be an object`);
+            if (pr.view.style !== undefined && pr.view.style !== "") {
+              if (typeof pr.view.style !== "string" || !ALL_STYLES.includes(pr.view.style)) throw new Error(`${w}.plugin.view.style must be one of: ${ALL_STYLES.join(", ")}`);
+              view = { style: pr.view.style };
+            }
+          }
+          plugin = { id: pid, widget: pw, ...(ps ? { settings: ps } : {}), ...(view ? { view } : {}) };
         }
         return { id: itemId, kind: "widget", widget: it.widget, color, ...(plugin ? { plugin } : {}), ...(provider ? { provider } : {}), ...(clock ? { clock } : {}), ...(metric ? { metric } : {}), ...(quota ? { quota } : {}), ...(entity ? { entity } : {}), ...(weather ? { weather } : {}), ...(push ? { push } : {}), ...size, ...itemStyle(it, w) };
       }
@@ -837,7 +1029,8 @@ export function validateLayout(raw: any): Layout {
       throw new Error(`${w}.kind must be "button" or "widget"`);
     });
     const placed = placeItems(items, columns, rows, `page "${id}"`);
-    return { id, name: str(p.name ?? id, `${where}.name`), columns, rows: placed.rows, items: placed.items };
+    const pageLook = p.theme === undefined || p.theme === null ? undefined : validateLook(p.theme, `${where}.theme`);
+    return { id, name: str(p.name ?? id, `${where}.name`), columns, rows: placed.rows, items: placed.items, ...(pageLook && Object.keys(pageLook).length ? { theme: pageLook } : {}) };
   });
   // the phone gets plugin data keyed by tile id, so a plugin tile id must be unique in the whole layout
   const pluginTiles = new Set<string>();

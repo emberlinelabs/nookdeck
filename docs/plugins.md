@@ -4,7 +4,7 @@ A plugin adds tiles and buttons to Nookdeck. It is a folder (usually a GitHub re
 
 ## Quick start
 
-1. Copy [`examples/plugins/crypto-price`](../examples/plugins/crypto-price).
+1. Copy [`nookdeck-plugins/plugins/crypto-price`](https://github.com/howznguyen/nookdeck-plugins/tree/main/plugins/crypto-price).
 2. Change `id`, `name` and the widget.
 3. In the manage page open **Plugins**, paste the folder path (or a GitHub address, or an https link to the `nookdeck.json`), read the access list and press **Allow and turn on**.
 4. Add your tile to a screen.
@@ -80,15 +80,31 @@ The phone draws your data with a built-in renderer. No plugin code runs on the p
 
 | `render` | `data` |
 |---|---|
-| `stat` | `{ value, unit?, label?, delta?, color? }` |
+| `stat` | `{ value, unit?, label?, delta?, color?, points? }`, `points` up to 60 numbers (the `spark` style draws them) |
 | `gauge` | `{ value 0-100, label?, color? }` |
 | `text` | `{ title?, body }` |
 | `list` | `{ items: [{ title, subtitle?, value?, icon? }] }`, up to 20 items |
 | `chart` | `{ points: number[], label?, unit? }`, up to 120 points |
 | `image` | `{ url (https or data:), fit? }` |
-| `status` | `{ state: ok / warn / error / off, label }` |
+| `status` | `{ state: ok / warn / error / off, label, title?, value?, unit?, detail?, points? }`: `title` up to 40 characters, `value` up to 12, `unit` up to 8, `detail` up to 60, `points` up to 60 numbers |
 
 If the data does not fit the renderer, the tile shows a neutral error instead of breaking.
+
+### Styles
+
+Each renderer can be drawn in more than one way. The person who adds your tile picks one in the tile's **Style** list. The first style of each renderer is its default.
+
+| `render` | Styles |
+|---|---|
+| `stat` | `plain`, `spark` (a sparkline, only when `data.points` exist), `big` |
+| `gauge` | `arc`, `ring`, `half`, `bar` |
+| `text` | `plain`, `minimal` |
+| `list` | `rows`, `compact` |
+| `chart` | `line`, `area`, `bars`, `dots` |
+| `image` | `cover`, `contain` |
+| `status` | `card`, `pill`, `dot` |
+
+A widget can suggest a style with `"style"` in its manifest entry, for example `{ "id": "history", "render": "chart", "style": "area", ... }`. It must be one of the renderer's styles. The tile's own choice wins, then your suggestion, then the default. The manage page marks the suggestion "Suggested". The table lives in `web/shared/plugin-styles.ts`.
 
 ## Settings
 
@@ -119,7 +135,7 @@ If the plugin is off or removed, its tiles show a neutral placeholder. Nothing e
 
 ## Themes and layout packs
 
-A plugin can also ship `themes` and `layouts`. Each shows an **Apply** or **Add screens** button on its card in the Plugins tab. They change your draft, and you press **Save** to keep them.
+Looks of their own are **theme packs**, not plugins: see [Writing Nookdeck themes](themes.md). A plugin can still ship small `themes` and `layouts`. Each shows an **Apply** or **Add screens** button on its card in the Plugins tab. They change your draft, and you press **Save** to keep them.
 
 ## Plugins with code
 
@@ -161,6 +177,16 @@ Each code plugin runs in its own process, started by the agent, so a crash or a 
 
 `ctx.shell` and `ctx.keys` exist only when the user granted that permission. A call that is not allowed (a host you did not list, storage without `storage`) rejects with a `PluginPermissionError`. A widget provider or an action handler receives the plugin-wide settings overlaid with the tile's own settings. The exact types are in `src/plugins/api.ts`, re-exported by `@nookdeck/plugin` (`PluginContext`, `PluginModule`, `WidgetUpdate`).
 
+### No dependencies
+
+A plugin is one self-contained package. It has no `node_modules` and the agent never installs packages for it. It may import only `@nookdeck/plugin` (the agent's own copy, so it always matches), Node built-ins and its own files. If you use a library, bundle it into one file and point `main` at that file:
+
+```bash
+bun build src/index.ts --outfile index.js --target bun --external @nookdeck/plugin
+```
+
+An import of any other package stops the plugin with a message that says so. Theme packs follow the same rule: no code and no remote files, only what is in the folder.
+
 ### Limits
 
 | What | Limit |
@@ -189,9 +215,9 @@ Put the plugin in a GitHub repo and tell people the address; it installs directl
 
 ### Samples
 
-- [`github-stars`](../examples/plugins/github-stars): code, `net.fetch` to api.github.com, a stat and a chart.
-- [`uptime-ping`](../examples/plugins/uptime-ping): code, checks a URL, `status` renderer.
-- [`clipboard-snippets`](../examples/plugins/clipboard-snippets): no code, actions with the `shell` permission.
+- [`github-stars`](https://github.com/howznguyen/nookdeck-plugins/tree/main/plugins/github-stars): code, `net.fetch` to api.github.com, a stat and a chart.
+- [`uptime-ping`](https://github.com/howznguyen/nookdeck-plugins/tree/main/plugins/uptime-ping): code, checks a URL, `status` renderer.
+- [`clipboard-snippets`](https://github.com/howznguyen/nookdeck-plugins/tree/main/plugins/clipboard-snippets): no code, actions with the `shell` permission.
 
 ## Share it
 

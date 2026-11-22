@@ -78,8 +78,8 @@ export type Orientation = "portrait" | "landscape";
 const BEZEL = 14;
 
 // In production the deck is served by the same agent at "/". VITE_AGENT overrides the origin (dev against another host).
-const DECK_URL = `${(import.meta.env.VITE_AGENT as string | undefined) ?? ""}/?preview=1`;
-const DECK_ORIGIN = new URL(DECK_URL, location.href).origin;
+export const DECK_URL = `${(import.meta.env.VITE_AGENT as string | undefined) ?? ""}/?preview=1`;
+export const DECK_ORIGIN = new URL(DECK_URL, location.href).origin;
 
 /**
  * Frame orientation: follows theme.orientation (landscape by default) until the portrait/landscape toggle overrides it

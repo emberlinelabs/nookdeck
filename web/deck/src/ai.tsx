@@ -3,7 +3,7 @@ import { t } from './i18n'
 import { BrandIcon, brandOf } from './brand-icons'
 import { Icon } from './icon'
 import { AnimatedNumber } from './knowns'
-import { tint } from './theme'
+import { tint, PAL } from './theme'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Gauge } from './knowns'
 import { SlotSpark } from './charts'
@@ -68,7 +68,7 @@ export function agoText(at: number | string | undefined, short?: boolean): strin
 }
 
 /** Ring colour for window k: the provider colour at decreasing strength, warn/bad past 75/90%. */
-const ringColor = (color: string, k: number, p: number) => (level(p) ? (p >= 90 ? '#f87171' : '#f59e0b') : tint(color, k === 0 ? 1 : k === 1 ? 0.62 : 0.4) || color)
+const ringColor = (color: string, k: number, p: number) => (level(p) ? (p >= 90 ? PAL.error : PAL.warn) : tint(color, k === 0 ? 1 : k === 1 ? 0.62 : 0.4) || color)
 const ringsOf = (wins: AiWindow[], color: string) => wins.slice(0, 3).map((w, k) => ({ value: w.usedPercent, goal: 100, color: ringColor(color, k, w.usedPercent) }))
 
 const level = (p: number) => (p >= 90 ? 'var(--pd-bad)' : p >= 75 ? 'var(--pd-warn)' : '')
@@ -79,7 +79,7 @@ const level = (p: number) => (p >= 90 ? 'var(--pd-bad)' : p >= 75 ? 'var(--pd-wa
  */
 type UState = 'ok' | 'warn' | 'limit'
 const stateOf = (p: number): UState => (p >= 100 ? 'limit' : p >= 80 ? 'warn' : 'ok')
-const STATE_COLOR: { [k: string]: string } = { warn: '#f59e0b', limit: '#f87171' }
+const STATE_COLOR: { [k: string]: string } = { get warn() { return PAL.warn }, get limit() { return PAL.error } }
 const statusLine = (p: number) => {
   const st = stateOf(p)
   if (st === 'limit') return t('Limit reached')
@@ -220,7 +220,7 @@ function GaugeChart(c: ChartIn) {
   const st = stateOf(p)
   return (
     <div class="pd-qcol">
-      <div class="pd-gwrap" style={{ width: g + 'px', height: Math.round(g * 0.7) + 'px' }}>
+      <div class="pd-gwrap" data-part="gauge" style={{ width: g + 'px', height: Math.round(g * 0.7) + 'px' }}>
         <Gauge value={p} size={g} band={st === 'limit' ? 'risk' : st === 'warn' ? 'watch' : 'good'} color={stateColor(p, c.color)} />
         <div class="pd-gwrap__c">
           <AnimatedNumber value={Math.round(p)} class="pd-gwrap__n" style={{ fontSize: Math.round(g * 0.22) + 'px' }} suffix="%" />
@@ -347,7 +347,7 @@ function TallChart(c: ChartIn & { chart: string; narrow: boolean }) {
       <div class="pd-qt pd-qt--side">
         <div class="pd-qt__fig">
           {c.chart === 'gauge' && main ? (
-            <div class="pd-gwrap" style={{ width: fig + 'px', height: Math.round(fig * 0.7) + 'px' }}>
+            <div class="pd-gwrap" data-part="gauge" style={{ width: fig + 'px', height: Math.round(fig * 0.7) + 'px' }}>
               <Gauge value={pct(main)} size={fig} band={st === 'limit' ? 'risk' : st === 'warn' ? 'watch' : 'good'} color={stateColor(pct(main), c.color)} />
               <div class="pd-gwrap__c">
                 <AnimatedNumber value={Math.round(pct(main))} class="pd-gwrap__n" style={{ fontSize: Math.round(fig * 0.22) + 'px' }} suffix="%" />
@@ -486,7 +486,7 @@ function TallChart(c: ChartIn & { chart: string; narrow: boolean }) {
       <div class="pd-qt pd-qt--between">
         {main ? (
           <div class="pd-qt__hero">
-            <div class="pd-gwrap" style={{ width: g + 'px', height: Math.round(g * 0.7) + 'px' }}>
+            <div class="pd-gwrap" data-part="gauge" style={{ width: g + 'px', height: Math.round(g * 0.7) + 'px' }}>
               <Gauge value={pct(main)} size={g} band={st === 'limit' ? 'risk' : st === 'warn' ? 'watch' : 'good'} color={stateColor(pct(main), c.color)} />
               <div class="pd-gwrap__c">
                 <AnimatedNumber value={Math.round(pct(main))} class="pd-gwrap__n" style={{ fontSize: Math.round(g * 0.22) + 'px' }} suffix="%" />
@@ -776,7 +776,7 @@ export function SessionsWidget(props: AiWidgetProps) {
   const now = Date.now()
   return (
     <div class="pd-sessions" style={{ padding: pad + 'px', color: tc }}>
-      {props.showLabel ? <div class="pd-ml" style={{ fontSize: '10px', color: props.color || 'var(--pd-muted)' }}>{t('AI sessions').toUpperCase()}</div> : null}
+      {props.showLabel ? <div class="pd-ml" data-part="tile-label" style={{ fontSize: '10px', color: props.color || 'var(--pd-muted)' }}>{t('AI sessions').toUpperCase()}</div> : null}
       {list.length === 0 ? <div class="pd-sessions__none">{t('No sessions')}</div> : null}
       {list.slice(0, n).map((s) => {
         const since = Math.max(0, Math.floor((now - (toMs(s.updatedAt) || now)) / 1000))

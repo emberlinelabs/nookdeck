@@ -146,7 +146,7 @@ export function CustomizeHint() {
   useLanguage();
   const [gone, setGone] = useState(readHint);
   if (gone) return null;
-  const items = ["Theme presets", "Colours and accent", "Tile styles: soft, solid, outline, iOS", "Tile sizes", "Per-tile colour and fill", "Screen size preview"];
+  const items = ["Themes", "Colours and accent", "Tile styles: soft, solid, outline, iOS", "Tile sizes", "Per-tile colour and fill", "Screen size preview"];
   return (
     <div className="flex items-start gap-3 rounded-xl border bg-muted/30 px-3.5 py-2.5 text-[13px]">
       <Sparkles className="mt-0.5 size-4 flex-none text-primary" />

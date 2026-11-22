@@ -1,3 +1,4 @@
+import { PAL } from './theme'
 import { useEffect, useState } from 'preact/hooks'
 import { getLang } from './i18n'
 import { t } from './i18n'
@@ -412,10 +413,10 @@ export function ValueTile(props: ValueProps) {
   const col = props.textColor || props.color || undefined
   return (
     <div class={'pd-vl' + (stale ? ' pd-vl--stale' : '')} style={{ padding: pad + 'px' }}>
-      <span class="pd-vl__lb" style={{ color: props.color || undefined }}>
+      <span class="pd-vl__lb" data-part="tile-label" style={{ color: props.color || undefined }}>
         {label}
       </span>
-      <span class="pd-vl__v" style={{ fontSize: vs + 'px', color: col }}>
+      <span class="pd-vl__v" data-part="tile-value" style={{ fontSize: vs + 'px', color: col }}>
         {text}
         {unit ? <i style={{ fontSize: Math.max(10, Math.round(vs * 0.42)) + 'px' }}>{unit}</i> : null}
       </span>
@@ -427,7 +428,7 @@ export function ValueTile(props: ValueProps) {
 
 // ---------------- notifications ----------------
 
-export const LEVEL_COLOR: { [k: string]: string } = { info: '#60a5fa', warn: '#f59e0b', alert: '#f87171' }
+export const LEVEL_COLOR: { [k: string]: string } = { get info() { return PAL.info }, get warn() { return PAL.warn }, get alert() { return PAL.error } }
 
 export function NotificationsTile(props: { notes: Notice[]; tw: number; th: number; showLabel: boolean; textColor?: string }) {
   const now = useTick(20000)

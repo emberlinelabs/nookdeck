@@ -92,6 +92,10 @@ if (argv[0] === "__plugin-host") {
   process.exit(0);
 }
 // `nookdeck plugin new|dev|pack|logs`: tools for plugin authors.
+if (argv[0] === "theme") {
+  const { runThemeCli } = await import("./plugins/theme-cli");
+  process.exit(await runThemeCli(argv.slice(1), parsePort));
+}
 if (argv[0] === "plugin") {
   const { runPluginCli } = await import("./plugins/cli");
   process.exit(await runPluginCli(argv.slice(1), parsePort));

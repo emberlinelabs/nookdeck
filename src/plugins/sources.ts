@@ -74,6 +74,7 @@ export function cleanRender(render: Renderer, data: unknown): { data: unknown } 
       opt(out, "label", d.label !== undefined ? clip(d.label, 60) : undefined);
       opt(out, "delta", scalar(d.delta));
       opt(out, "color", colorOf(d.color));
+      if (Array.isArray(d.points)) { const pts = d.points.filter((n) => typeof n === "number" && Number.isFinite(n)).slice(-60); if (pts.length) out.points = pts; }
       return { data: out };
     }
     case "gauge": {
@@ -122,6 +123,13 @@ export function cleanRender(render: Renderer, data: unknown): { data: unknown } 
       if (!STATES.includes(d.state as string)) return { error: "state must be ok, warn, error or off" };
       out.state = d.state;
       out.label = clip(d.label ?? "", 80);
+      // optional richer fields (all may be absent: {state, label} alone still renders)
+      opt(out, "title", d.title !== undefined ? clip(d.title, 40) : undefined);
+      if (typeof d.value === "number" && Number.isFinite(d.value)) out.value = clip(d.value, 12);
+      else if (typeof d.value === "string") opt(out, "value", clip(d.value, 12));
+      opt(out, "unit", d.unit !== undefined ? clip(d.unit, 8) : undefined);
+      opt(out, "detail", d.detail !== undefined ? clip(d.detail, 60) : undefined);
+      if (Array.isArray(d.points)) { const pts = d.points.filter((n) => typeof n === "number" && Number.isFinite(n)).slice(-60); if (pts.length) out.points = pts; }
       return { data: out };
     }
   }

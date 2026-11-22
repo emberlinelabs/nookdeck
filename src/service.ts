@@ -82,6 +82,8 @@ export interface ServiceDeps {
   /** The program the service runs: the compiled binary, or [bun, index.ts] when run from source. */
   program: string[];
   log: (line: string) => void;
+  /** launchd timing (tests make it instant): how long to wait for a booted-out job to be gone, the poll step, and the pauses between bootstrap retries. */
+  timing?: { unloadMs?: number; pollMs?: number; backoffMs?: number[] };
   /** Windows: runs schtasks / reg / powershell (tests pass a fake). */
   winRun?: (argv: string[]) => Promise<{ code: number; out: string }>;
   /** Windows: where launch.vbs lives (default %LOCALAPPDATA%\\Nookdeck). */
@@ -120,6 +122,8 @@ export const realServiceDeps = (log: (l: string) => void = (l) => console.log(l)
   launchctl: runLaunchctl,
   uid: process.getuid?.() ?? 501,
   platform: platform.id,
+  // a fake launchctl (NOOKDECK_LAUNCHCTL, tests) has no unload delay to wait for
+  ...(process.env.NOOKDECK_LAUNCHCTL ? { timing: { unloadMs: 0, backoffMs: [] } } : {}),
   program: defaultProgram(),
   log,
 });
@@ -131,7 +135,41 @@ function needMac(d: ServiceDeps) {
   if (d.platform !== "darwin" && d.platform !== "win32" && !process.env.NOOKDECK_LAUNCHCTL) throw new Error("The background service is only available on macOS and Windows. Run `nookdeck` in a terminal instead.");
 }
 
-/** Writes the plist and (re)loads it: launchctl bootout (ignored if not loaded), then bootstrap. The agent starts at once (RunAtLoad). */
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * launchctl bootout returns BEFORE launchd has finished unloading the job; a bootstrap right after it fails with
+ * "5: Input/output error". So: bootout, then wait until `launchctl print` no longer finds the job (100 ms steps, 5 s at most).
+ */
+export async function unloadJob(d: ServiceDeps, tgt: string = target(d)): Promise<void> {
+  const r = await d.launchctl(["bootout", tgt]);
+  if (r.code !== 0) return; // it was not loaded
+  const end = Date.now() + (d.timing?.unloadMs ?? 5000);
+  while (Date.now() < end) {
+    if ((await d.launchctl(["print", tgt])).code !== 0) return;
+    await sleep(d.timing?.pollMs ?? 100);
+  }
+}
+
+/**
+ * Loads the plist. An EIO (code 5) is retried with back-off (3 retries); when the job turns out to be loaded anyway it is kicked
+ * instead (`kickstart -k` restarts it, `kickstart` alone only starts it when `restart` is false). Returns the last result.
+ */
+async function loadJob(d: ServiceDeps, file: string, restart = true): Promise<{ code: number; out: string }> {
+  const back = d.timing?.backoffMs ?? [300, 800, 1500];
+  for (let i = 0; ; i++) {
+    const r = await d.launchctl(["bootstrap", domain(d), file]);
+    if (r.code === 0) return r;
+    if ((await d.launchctl(["print", target(d)])).code === 0) {
+      const k = await d.launchctl(["kickstart", ...(restart ? ["-k"] : []), target(d)]);
+      if (k.code === 0) return k;
+    }
+    if (!(r.code === 5 || /Input\/output error/i.test(r.out)) || i >= back.length) return r;
+    await sleep(back[i]!);
+  }
+}
+
+/** Writes the plist and (re)loads it: bootout, wait until it is gone, bootstrap (with retries). The agent starts at once (RunAtLoad). A failure puts the old plist back and loads it, so the agent is never left stopped. */
 export async function serviceInstall(d: ServiceDeps, opts: { port?: number } = {}): Promise<{ plist: string; loaded: boolean }> {
   needMac(d);
   if (d.platform === "win32") return { plist: (await winInstall(winCtx(d, opts.port))).launcher, loaded: true };
@@ -143,11 +181,20 @@ export async function serviceInstall(d: ServiceDeps, opts: { port?: number } = {
   const file = plistPath();
   await mkdir(dirname(file), { recursive: true });
   await mkdir(logsDir(), { recursive: true, mode: 0o700 });
+  const oldText = await readFile(file, "utf8").catch(() => null);
   await writeFile(file, buildPlist({ args, env }), { mode: 0o644 });
   await chmod(file, 0o644);
-  await d.launchctl(["bootout", target(d)]); // not loaded is fine
-  const r = await d.launchctl(["bootstrap", domain(d), file]);
-  if (r.code !== 0) throw new Error(`launchctl bootstrap failed (${r.code}): ${r.out || "no output"}`);
+  await unloadJob(d);
+  const r = await loadJob(d, file);
+  if (r.code !== 0) {
+    let back = "";
+    if (oldText !== null) {
+      await writeFile(file, oldText, { mode: 0o644 });
+      const b = await loadJob(d, file);
+      back = b.code === 0 ? " The previous service was loaded again." : ` The previous service could not be loaded again either (${b.code}).`;
+    }
+    throw new Error(`launchctl bootstrap failed (${r.code}): ${r.out || "no output"}.${back}`);
+  }
   d.log(`Service installed: ${file}`);
   return { plist: file, loaded: true };
 }
@@ -157,7 +204,7 @@ export async function serviceUninstall(d: ServiceDeps): Promise<{ removed: boole
   if (d.platform === "win32") return winUninstall(winCtx(d));
   const file = plistPath();
   const had = await stat(file).then(() => true, () => false);
-  await d.launchctl(["bootout", target(d)]);
+  await unloadJob(d);
   if (had) await rm(file, { force: true });
   d.log(had ? `Service removed: ${file}` : "Service was not installed.");
   return { removed: had };
@@ -170,7 +217,7 @@ export async function serviceRestart(d: ServiceDeps): Promise<void> {
   const r = await d.launchctl(["kickstart", "-k", target(d)]);
   if (r.code !== 0) {
     // not loaded (for example after a reboot with it booted out): load it again
-    const b = await d.launchctl(["bootstrap", domain(d), plistPath()]);
+    const b = await loadJob(d, plistPath());
     if (b.code !== 0) throw new Error(`launchctl kickstart failed (${r.code}): ${r.out || "no output"}`);
   }
   d.log("Service restarted.");
@@ -181,7 +228,7 @@ export async function serviceStop(d: ServiceDeps): Promise<void> {
   needMac(d);
   if (d.platform === "win32") return winStopService(winCtx(d));
   if (!(await stat(plistPath()).then(() => true, () => false))) throw new Error("The service is not installed. Run `nookdeck service install`.");
-  await d.launchctl(["bootout", target(d)]); // not loaded is fine
+  await unloadJob(d); // not loaded is fine
   d.log("Service stopped.");
 }
 
@@ -190,9 +237,8 @@ export async function serviceStart(d: ServiceDeps): Promise<void> {
   needMac(d);
   if (d.platform === "win32") return winStartService(winCtx(d));
   if (!(await stat(plistPath()).then(() => true, () => false))) throw new Error("The service is not installed. Run `nookdeck service install`.");
-  const r = await d.launchctl(["bootstrap", domain(d), plistPath()]);
-  // already loaded is fine: kick it so it runs
-  if (r.code !== 0) await d.launchctl(["kickstart", target(d)]);
+  const r = await loadJob(d, plistPath(), false); // already loaded is fine: it is kicked so it runs
+  if (r.code !== 0) throw new Error(`launchctl bootstrap failed (${r.code}): ${r.out || "no output"}`);
   d.log("Service started.");
 }
 

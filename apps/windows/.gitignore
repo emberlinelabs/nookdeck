@@ -1,0 +1,5 @@
+# copied from apps/shared by build.sh (the single source of the strings and icons)
+internal/core/assets/
+cmd/nookdeck-tray/assets/
+dist/
+*.syso

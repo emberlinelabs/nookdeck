@@ -1,12 +1,21 @@
 name: Release
 
 # Push a tag like v0.2.0 (it must match "version" in package.json) to build and publish a release.
+# Run it by hand (Actions > Release > Run workflow) for a dry run: the same builds, tests and signing as a tag build, then every asset
+# is kept as a workflow artifact and NOTHING is published (no release, no tag). `publish` only runs for a pushed tag.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: build everything, publish nothing (a manual run never publishes, whatever this says)"
+        type: boolean
+        default: true
 
+# read-only by default; only `publish` (tags only) gets write access
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # The same tests on Windows: platform-neutral logic, the win32 builders and the real helper / Credential Manager calls.
@@ -25,13 +34,23 @@ jobs:
       - name: Test
         run: bun run test
 
+  # builds, tests and signs every CLI asset, then hands them to the app jobs and to `publish` as an artifact
   release:
     needs: test-windows
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
+      - name: Release version (the tag on a tag build, package.json on a manual run)
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' package.json | head -n1)"; fi
+          [ -n "$v" ] || { echo "::error::no version"; exit 1; }
+          echo "RELEASE_VERSION=$v" >> "$GITHUB_ENV"
+          echo "version $v"
+
       - name: The tag must match package.json
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
           tag="${GITHUB_REF_NAME#v}"
           pkg="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' package.json | head -n1)"
@@ -86,16 +105,181 @@ jobs:
       - name: The arm64 binary reports the tagged version
         run: |
           got="$(./dist/nookdeck-darwin-arm64 --version)"
-          [ "${got%% (*}" = "nookdeck ${GITHUB_REF_NAME#v}" ] || { echo "::error::binary printed '$got'"; exit 1; }
+          [ "${got%% (*}" = "nookdeck $RELEASE_VERSION" ] || { echo "::error::binary printed '$got'"; exit 1; }
 
       - name: The old-name binary answers the way 0.1.x updaters expect
         run: |
           got="$(./dist/phonedesk-darwin-arm64 --version)"
-          [ "${got%% (*}" = "phonedesk ${GITHUB_REF_NAME#v}" ] || { echo "::error::old-name binary printed '$got'"; exit 1; }
+          [ "${got%% (*}" = "phonedesk $RELEASE_VERSION" ] || { echo "::error::old-name binary printed '$got'"; exit 1; }
+
+      - name: Keep the CLI assets for the app jobs and the release
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-assets
+          retention-days: 3
+          path: |
+            dist/nookdeck-darwin-arm64
+            dist/nookdeck-darwin-x64
+            dist/nookdeck-windows-x64.exe
+            dist/nookdeck-darwin-arm64.gz
+            dist/nookdeck-darwin-x64.gz
+            dist/nookdeck-windows-x64.exe.gz
+            dist/phonedesk-darwin-arm64
+            dist/phonedesk-darwin-x64
+            dist/phonedesk-windows-x64.exe
+            dist/phonedesk-darwin-arm64.gz
+            dist/phonedesk-darwin-x64.gz
+            dist/phonedesk-windows-x64.exe.gz
+            dist/SHA256SUMS
+
+  # Nookdeck-Setup.exe (spec desktop-apps A4): the Go tray app + the agent above, in a per-user Inno Setup installer
+  windows-app:
+    needs: release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/windows/go.mod
+          cache-dependency-path: apps/windows/go.sum
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-assets
+          path: cli
+
+      - name: Release version (the tag on a tag build, package.json on a manual run)
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' package.json | head -n1)"; fi
+          [ -n "$v" ] || { echo "::error::no version"; exit 1; }
+          echo "RELEASE_VERSION=$v" >> "$GITHUB_ENV"
+          echo "version $v"
+
+      - name: Build the tray app (tests, then Nookdeck.exe)
+        shell: bash
+        run: |
+          NOOKDECK_VERSION="$RELEASE_VERSION" bash apps/windows/build.sh apps/windows/dist
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build Nookdeck-Setup.exe
+        shell: pwsh
+        run: |
+          $version = $env:RELEASE_VERSION
+          $agent = (Resolve-Path cli/nookdeck-windows-x64.exe).Path
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $iscc "/DAppVersion=$version" "/DDistDir=$((Resolve-Path apps/windows/dist).Path)" "/DAgentExe=$agent" "/DSharedDir=$((Resolve-Path apps/shared).Path)" apps/windows/installer/nookdeck.iss
+          if ($LASTEXITCODE -ne 0) { throw "iscc failed ($LASTEXITCODE)" }
+          Get-Item apps/windows/dist/Nookdeck-Setup.exe | Format-List Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-app
+          retention-days: 3
+          path: apps/windows/dist/Nookdeck-Setup.exe
+
+  # Nookdeck.dmg (spec desktop-apps A3), built by scripts/build-macos-app.ts and signed with the same release identity as the CLI
+  mac-app:
+    needs: release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.12
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-assets
+          path: cli
+
+      - name: Prerequisites of the app build
+        run: |
+          bun scripts/ensure-icons.ts
+          bun run build:web
+          bun scripts/build-mediaremote.ts
+          bun run gen-assets
+
+      - name: Build, sign and pack Nookdeck.dmg
+        env:
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_P12_PASSWORD: ${{ secrets.MACOS_SIGN_P12_PASSWORD }}
+          NOOKDECK_REQUIRE_CI_SIGNING: "1"
+        run: |
+          # the same (already signed) agent programs the CLI release ships: the app bundles exactly them
+          chmod +x cli/nookdeck-darwin-arm64 cli/nookdeck-darwin-x64
+          bun scripts/build-macos-app.ts --agent-arm64 cli/nookdeck-darwin-arm64 --agent-x64 cli/nookdeck-darwin-x64
+          ls -l dist/macos
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-app
+          retention-days: 3
+          path: |
+            dist/macos/Nookdeck.dmg
+            dist/macos/Nookdeck.dmg.sha256
+
+  publish:
+    # an app job that fails (red in the run) must not hold back the CLI release: whatever was built is attached
+    needs: [release, windows-app, mac-app]
+    if: ${{ !cancelled() && github.ref_type == 'tag' && needs.release.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Add the apps to SHA256SUMS (the tray app's updater checks Nookdeck-Setup.exe against it)
+        run: |
+          cd dist
+          for f in Nookdeck.dmg Nookdeck-Setup.exe; do
+            if [ -f "$f" ]; then sha256sum "$f" >> SHA256SUMS; else echo "::warning::$f was not built; the release goes out without it"; fi
+          done
+          cat SHA256SUMS
+          ls -l
 
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/nookdeck-darwin-arm64 dist/nookdeck-darwin-x64 dist/nookdeck-windows-x64.exe dist/nookdeck-darwin-arm64.gz dist/nookdeck-darwin-x64.gz dist/nookdeck-windows-x64.exe.gz dist/phonedesk-darwin-arm64 dist/phonedesk-darwin-x64 dist/phonedesk-windows-x64.exe dist/phonedesk-darwin-arm64.gz dist/phonedesk-darwin-x64.gz dist/phonedesk-windows-x64.exe.gz dist/SHA256SUMS \
-            --title "Nookdeck $GITHUB_REF_NAME" --notes-file .github/release-notes.md --generate-notes
+          gh release create "$GITHUB_REF_NAME" dist/nookdeck-darwin-arm64 dist/nookdeck-darwin-x64 dist/nookdeck-windows-x64.exe dist/nookdeck-darwin-arm64.gz dist/nookdeck-darwin-x64.gz dist/nookdeck-windows-x64.exe.gz dist/phonedesk-darwin-arm64 dist/phonedesk-darwin-x64 dist/phonedesk-windows-x64.exe dist/phonedesk-darwin-arm64.gz dist/phonedesk-darwin-x64.gz dist/phonedesk-windows-x64.exe.gz dist/SHA256SUMS $(ls dist/Nookdeck.dmg dist/Nookdeck.dmg.sha256 dist/Nookdeck-Setup.exe 2>/dev/null) \
+            --repo "$GITHUB_REPOSITORY" --title "Nookdeck $GITHUB_REF_NAME" --notes-file .github/release-notes.md --generate-notes
+
+  # manual runs only: every asset in one artifact, SHA256SUMS completed the way `publish` does it. Creates no release and no tag.
+  dry-run-bundle:
+    needs: [release, windows-app, mac-app]
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && needs.release.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Add the apps to SHA256SUMS
+        run: |
+          cd dist
+          for f in Nookdeck.dmg Nookdeck-Setup.exe; do
+            if [ -f "$f" ]; then sha256sum "$f" >> SHA256SUMS; else echo "::warning::$f was not built"; fi
+          done
+          cat SHA256SUMS
+          ls -l
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dry-run-release
+          retention-days: 7
+          path: dist/*

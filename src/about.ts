@@ -20,6 +20,12 @@ export interface About {
 }
 
 /** Everything is known at build or start time: no network calls, no update check. */
+/** The version a package's "nookdeck": ">=x" is checked against: a modified or source build (dirty, or no commit) counts as a development build, which satisfies any minimum. */
+export function compatVersion(): string {
+  const a = aboutInfo();
+  return a.dirty || !a.commit ? `${a.version}-dev` : a.version;
+}
+
 export function aboutInfo(): About {
   return {
     name: "Nookdeck",

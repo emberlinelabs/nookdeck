@@ -1,3 +1,4 @@
+import { PAL } from './theme'
 import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 
 /**
@@ -112,7 +113,7 @@ function arcPath(cx: number, cy: number, r: number, start = GAUGE_START, sweep =
 }
 
 export type Band = 'good' | 'watch' | 'risk'
-export const BAND_COLOR: { [k: string]: string } = { good: '#34d399', watch: '#f59e0b', risk: '#f87171' }
+export const BAND_COLOR: { [k: string]: string } = { get good() { return PAL.ok }, get watch() { return PAL.warn }, get risk() { return PAL.error } }
 
 /** The 0-100 arc gauge (240 degree arc opening at the bottom, 6px round stroke, faint track). Centre text is drawn by the caller. */
 export function Gauge(props: { value: number; size: number; band: Band; color?: string }) {

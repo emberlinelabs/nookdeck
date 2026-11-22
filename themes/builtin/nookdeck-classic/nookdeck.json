@@ -1,0 +1,156 @@
+{
+  "$schema": "https://nookdeck.app/schema/plugin.json",
+  "type": "theme",
+  "id": "dev.nookdeck.nookdeck-classic",
+  "name": "Nookdeck Classic",
+  "version": "1.0.0",
+  "nookdeck": ">=0.4.0",
+  "author": "Nookdeck",
+  "description": "The original one-click looks: iOS Shortcuts, Nookdeck cyan, Violet, Knowns purple, OLED black, Warm wood, Light and High contrast. Auto uses Light by day and Nookdeck cyan at night.",
+  "auto": {
+    "light": "light",
+    "dark": "cyan"
+  },
+  "variants": [
+    {
+      "id": "ios",
+      "name": "iOS Shortcuts",
+      "mode": "dark",
+      "theme": {
+        "accent": "#22d3ee",
+        "background": "#0b0b0d",
+        "tile": "#141417",
+        "radius": 14,
+        "gap": 10,
+        "fontScale": 1,
+        "tileStyle": "ios",
+        "iconScale": 1,
+        "iconStroke": 2.25,
+        "showLabels": true,
+        "mode": "dark"
+      }
+    },
+    {
+      "id": "cyan",
+      "name": "Nookdeck cyan",
+      "mode": "dark",
+      "theme": {
+        "accent": "#22d3ee",
+        "background": "#0b0b0d",
+        "tile": "#141417",
+        "radius": 14,
+        "gap": 10,
+        "fontScale": 1,
+        "tileStyle": "tint",
+        "iconScale": 1,
+        "showLabels": true,
+        "mode": "dark"
+      }
+    },
+    {
+      "id": "violet",
+      "name": "Violet",
+      "mode": "dark",
+      "theme": {
+        "accent": "#8b5cf6",
+        "background": "#0b0b0d",
+        "tile": "#141417",
+        "radius": 14,
+        "gap": 10,
+        "fontScale": 1,
+        "tileStyle": "tint",
+        "iconScale": 1,
+        "showLabels": true,
+        "mode": "dark"
+      }
+    },
+    {
+      "id": "knowns-purple",
+      "name": "Knowns purple",
+      "mode": "dark",
+      "theme": {
+        "accent": "#a78bfa",
+        "background": "#0e0a1c",
+        "tile": "#191330",
+        "radius": 18,
+        "gap": 10,
+        "fontScale": 1,
+        "tileStyle": "tint",
+        "iconScale": 1,
+        "showLabels": true,
+        "mode": "dark"
+      }
+    },
+    {
+      "id": "oled",
+      "name": "OLED black",
+      "mode": "dark",
+      "theme": {
+        "accent": "#34d399",
+        "background": "#000000",
+        "tile": "#0a0a0a",
+        "radius": 18,
+        "gap": 8,
+        "fontScale": 1,
+        "tileStyle": "outline",
+        "iconScale": 1.1,
+        "showLabels": true,
+        "mode": "dark"
+      }
+    },
+    {
+      "id": "wood",
+      "name": "Warm wood",
+      "mode": "dark",
+      "theme": {
+        "accent": "#e0a96d",
+        "background": "#17120e",
+        "tile": "#241d17",
+        "text": "#f3e9dc",
+        "radius": 12,
+        "gap": 10,
+        "fontScale": 1,
+        "tileStyle": "tint",
+        "iconScale": 1,
+        "showLabels": true,
+        "mode": "dark"
+      }
+    },
+    {
+      "id": "light",
+      "name": "Light",
+      "mode": "light",
+      "theme": {
+        "accent": "#0e7490",
+        "background": "#f4f4f6",
+        "tile": "#ffffff",
+        "text": "#111113",
+        "radius": 14,
+        "gap": 10,
+        "fontScale": 1,
+        "tileStyle": "tint",
+        "iconScale": 1,
+        "showLabels": true,
+        "mode": "light"
+      }
+    },
+    {
+      "id": "high-contrast",
+      "name": "High contrast",
+      "mode": "dark",
+      "theme": {
+        "accent": "#facc15",
+        "background": "#000000",
+        "tile": "#1a1a1a",
+        "text": "#ffffff",
+        "radius": 8,
+        "gap": 12,
+        "fontScale": 1.15,
+        "tileStyle": "solid",
+        "iconScale": 1.25,
+        "showLabels": true,
+        "mode": "dark"
+      }
+    }
+  ]
+}

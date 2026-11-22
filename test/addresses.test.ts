@@ -24,6 +24,7 @@ const IFACES = {
 };
 
 describe("phoneAddresses", () => {
+  beforeEach(async () => (await import("../src/i18n")).setLanguage(undefined)); // another file may have left the agent language set
   test("macOS: order, labels, filtering", () => {
     const list = phoneAddresses({ interfaces: IFACES, hostName: "my-mac", tailnetName: "my-mac.tail1234.ts.net", platformId: "darwin" });
     expect(list.map((a) => [a.id, a.kind, a.host, a.label])).toEqual([

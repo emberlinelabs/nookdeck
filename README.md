@@ -38,6 +38,7 @@ install on the phone and no account or cloud service.
 | **Home Assistant** | Lights with colour, colour temperature, scenes and effects; climate (mode, fan, swing), fans, covers, vacuums, locks and sensors (optional) |
 | **Automation** | Webhooks that push values and notifications, rules that react to activity on the computer |
 | **Make it yours** | Drag-and-drop grid (8×4, 8×3, 5×3…) with a preview for every screen size, 4 tile styles (Soft, Solid, Outline, iOS), any colour per tile, 5,000+ icons, English, Vietnamese or Simplified Chinese |
+| **Plugins** | Add tiles and buttons from the [plugin Store](https://nookdeck.app/plugins) ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)), or build your own in TypeScript: see the [plugin guide](docs/plugins.md) |
 
 The layout is a fixed grid of square tiles built in a drag-and-drop management page at `http://localhost:7420/manage/`.
 An MCP server lets an AI assistant arrange the layout for you. Runs on macOS, and on Windows 10/11 (experimental).
@@ -71,6 +72,18 @@ You need a **Mac** (macOS 13 or later) or a **Windows 10/11 PC**, and a **phone 
 is installed on the phone. It takes about 2 minutes.
 
 ### 1. Install on the computer
+
+**The app (no Terminal needed)**
+
+1. Download **[Nookdeck.dmg](https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck.dmg)** (Mac) or **[Nookdeck-Setup.exe](https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck-Setup.exe)** (Windows).
+2. **Mac:** open the dmg and drag **Nookdeck** into **Applications**, then open it. **Windows:** run the installer (no administrator needed).
+3. Nookdeck appears in the menu bar (Mac) or the system tray (Windows). Click it and choose **Pair a phone…** to see the QR code and PIN.
+
+The first time you open the Mac app, macOS may say it cannot check it for malicious software, because Nookdeck is not signed with an Apple Developer ID yet. This happens once: open **System Settings → Privacy & Security**, scroll down to the message about Nookdeck, click **Open Anyway**, and confirm. On Windows, SmartScreen may show "Windows protected your PC": click **More info → Run anyway**.
+
+The app only controls Nookdeck. Quitting it does not stop your phone panel. Full steps and help: [docs/install.md](docs/install.md).
+
+**Or one line in a terminal**, which does the same without the app:
 
 **On a Mac**
 
@@ -166,6 +179,18 @@ Privacy & Security → Accessibility). Windows asks once to allow Nookdeck on th
 - Known issue on Windows: keys that type text can produce wrong characters. Opening apps, shortcuts, media and volume work.
 
 </details>
+
+## Plugins
+
+- **Store:** in the management page, open **Plugins** → **Discover**, or browse [nookdeck.app/plugins](https://nookdeck.app/plugins) and press **Open in Nookdeck**. Every listed plugin is reviewed and pinned to its files ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)).
+- **From GitHub:** paste a repository or folder link in **Plugins** → **Install from a link**. Unlisted plugins are marked Unreviewed.
+- **Build one:** a `nookdeck.json` for simple tiles and buttons, or TypeScript with the `@nookdeck/plugin` SDK. Start with `nookdeck plugin new`, see the [plugin guide](docs/plugins.md), then open a pull request to [nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins) to get listed.
+
+## Themes
+
+- **Pick a look:** in the management page, open **Theme** → **Packs**. Catppuccin, Tokyo Night, Night Owl, One Dark Pro, JellyFish, SynthWave '84 and Cyberpunk are in the Store next to the built-in Nookdeck looks. Each pack has variants (like Latte and Mocha) and **Auto** for light and dark. Pick one, press **Apply**, and undo it if you do not like it.
+- **Make your own:** set up the look in **Theme** → **Customize**, press **Export this look**, edit the files, and install them again. Themes are data and CSS, and cannot run code. See the [theme guide](docs/themes.md).
+- **Share it:** open a pull request to [nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins) (`themes/`) to get listed.
 
 ## Install from source
 

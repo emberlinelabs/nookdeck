@@ -141,6 +141,8 @@ async function keychainClaude(p: Probes, ctx: DoctorCtx): Promise<DoctorItem> {
   if (!ctx.claude) return { id: "keychain-claude", title, status: "unknown", detail: t("the item exists; not read yet") };
   if (ctx.claude.pending) return { id: "keychain-claude", title, status: "unknown", detail: t("checking…") };
   if (ctx.claude.ok) return { id: "keychain-claude", title, status: "ok", detail: t("the item exists and the last read worked") };
+  // a rate limit (or another answer from Claude's server) means the Keychain read itself worked: not a permission problem
+  if (/rate.?limit|\b429\b/i.test(ctx.claude.error ?? "")) return { id: "keychain-claude", title, status: "ok", detail: t("the sign-in is readable; Claude is rate limiting the quota check, it retries later") };
   return { id: "keychain-claude", title, status: "denied", detail: t("the item exists but the last read failed: {why}", { why: ctx.claude.error ?? "?" }), fix: { text: t("If macOS asked to access the Keychain, choose Always Allow. Otherwise sign in to Claude Code again.") } };
 }
 

@@ -38,6 +38,7 @@ cài app trên điện thoại, không cần tài khoản hay dịch vụ đám 
 | **Home Assistant** | Đèn có màu, nhiệt độ màu, cảnh và hiệu ứng; điều hòa (chế độ, quạt, đảo gió), quạt, rèm, robot hút bụi, khóa và cảm biến (tùy chọn) |
 | **Tự động hóa** | Webhook đẩy giá trị và thông báo, rule phản ứng theo hoạt động trên máy |
 | **Tùy biến** | Lưới kéo thả (8×4, 8×3, 5×3…) có xem trước theo từng cỡ màn hình, 4 kiểu ô (Soft, Solid, Outline, iOS), màu riêng cho từng ô, hơn 5.000 icon, tiếng Anh, tiếng Việt và tiếng Trung |
+| **Plugin** | Thêm ô và nút từ [Cửa hàng plugin](https://nookdeck.app/plugins) ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)), hoặc tự viết bằng TypeScript: xem [hướng dẫn plugin](docs/plugins.md) |
 
 Layout là lưới ô vuông cố định, sắp xếp bằng kéo thả ở trang quản lý `http://localhost:7420/manage/`. Có MCP server để
 trợ lý AI sắp xếp layout giúp bạn. Chạy trên macOS, và Windows 10/11 (thử nghiệm).
@@ -71,6 +72,18 @@ Bạn cần một **máy Mac** (macOS 13 trở lên) hoặc **PC Windows 10/11**
 Wi-Fi**. Không cần cài gì trên điện thoại. Mất khoảng 2 phút.
 
 ### 1. Cài trên máy tính
+
+**Ứng dụng (không cần Terminal)**
+
+1. Tải **[Nookdeck.dmg](https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck.dmg)** (Mac) hoặc **[Nookdeck-Setup.exe](https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck-Setup.exe)** (Windows).
+2. **Mac:** mở file dmg và kéo **Nookdeck** vào **Applications**, rồi mở ứng dụng. **Windows:** chạy trình cài đặt (không cần quyền quản trị).
+3. Nookdeck hiện trên thanh menu (Mac) hoặc khay hệ thống (Windows). Bấm vào đó và chọn **Ghép đôi điện thoại…** để xem mã QR và PIN.
+
+Lần đầu mở ứng dụng trên Mac, macOS có thể báo không kiểm tra được phần mềm độc hại, vì Nookdeck chưa được ký bằng Apple Developer ID. Chỉ cần làm một lần: mở **Cài đặt hệ thống → Quyền riêng tư & Bảo mật**, kéo xuống thông báo về Nookdeck, bấm **Vẫn mở** (Open Anyway) rồi xác nhận. Trên Windows, SmartScreen có thể hiện "Windows protected your PC": bấm **More info → Run anyway**.
+
+Ứng dụng chỉ điều khiển Nookdeck. Thoát ứng dụng không làm bảng điều khiển trên điện thoại dừng. Hướng dẫn đầy đủ: [docs/install.md](docs/install.md).
+
+**Hoặc một dòng lệnh trong terminal**, cho kết quả tương tự mà không cần ứng dụng:
 
 **Trên Mac**
 
@@ -165,6 +178,18 @@ tư & Bảo mật → Trợ năng). Windows hỏi một lần cho Nookdeck dùng
 - Lỗi đã biết trên Windows: phím gõ chữ có thể ra sai ký tự. Mở app, phím tắt, media và âm lượng vẫn chạy bình thường.
 
 </details>
+
+## Plugin
+
+- **Cửa hàng:** trong trang quản lý, mở **Plugins** → **Discover**, hoặc xem [nookdeck.app/plugins](https://nookdeck.app/plugins) rồi bấm **Open in Nookdeck**. Mọi plugin trong danh sách đều được duyệt và ghim theo file ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)).
+- **Từ GitHub:** dán link repo hoặc thư mục vào **Plugins** → **Install from a link**. Plugin chưa có trong danh sách được đánh dấu Unreviewed.
+- **Tự viết:** một file `nookdeck.json` cho ô và nút đơn giản, hoặc TypeScript với SDK `@nookdeck/plugin`. Bắt đầu bằng `nookdeck plugin new`, xem [hướng dẫn plugin](docs/plugins.md), rồi gửi pull request vào [nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins) để được đưa vào Cửa hàng.
+
+## Giao diện
+
+- **Chọn giao diện:** trong trang quản lý, mở **Giao diện** → **Gói giao diện**. Catppuccin, Tokyo Night, Night Owl, One Dark Pro, JellyFish, SynthWave '84 và Cyberpunk có trong Store, cùng các kiểu Nookdeck dựng sẵn. Mỗi gói có nhiều biến thể (như Latte và Mocha) và chế độ **Tự động** cho sáng/tối. Chọn một gói, bấm **Áp dụng**, và hoàn tác nếu bạn không thích.
+- **Tự làm:** chỉnh giao diện ở **Giao diện** → **Tùy chỉnh**, bấm **Xuất giao diện này**, sửa các tệp rồi cài lại. Giao diện chỉ là dữ liệu và CSS, không chạy được mã. Xem [hướng dẫn giao diện](docs/themes.md).
+- **Chia sẻ:** mở pull request vào [nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins) (thư mục `themes/`) để được liệt kê.
 
 ## Cài từ mã nguồn
 

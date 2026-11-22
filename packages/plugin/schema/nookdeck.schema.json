@@ -241,6 +241,33 @@
           },
           "description": "For example \"2x1\"."
         },
+        "preview": {
+          "description": "Sample data for the renderer, shown in the Store and the tile picker before the plugin runs."
+        },
+        "style": {
+          "enum": [
+            "plain",
+            "spark",
+            "big",
+            "arc",
+            "ring",
+            "half",
+            "bar",
+            "minimal",
+            "rows",
+            "compact",
+            "line",
+            "area",
+            "bars",
+            "dots",
+            "cover",
+            "contain",
+            "card",
+            "pill",
+            "dot"
+          ],
+          "description": "Suggested display style (one of the renderer's styles); a tile's own choice overrides it."
+        },
         "settings": {
           "type": "array",
           "items": {

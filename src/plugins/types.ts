@@ -48,6 +48,8 @@ export interface WidgetDef {
   settings: SettingField[];
   /** Sample `data` for the renderer (validated at parse time), so the UI can show the tile before install. */
   preview?: unknown;
+  /** The style this widget suggests (one of STYLES[render]); a tile's own choice overrides it. */
+  style?: string;
   source: WidgetSource;
 }
 
@@ -98,8 +100,10 @@ export interface PluginState {
 /** `core` keeps what the user changed on a built-in plugin (the plugin itself ships with the agent and is never stored in `plugins`). */
 export interface StateFile { version: 1; plugins: Record<string, PluginState>; core?: Record<string, { enabled: boolean; settings: Settings }> }
 
+export { STYLES, ALL_STYLES } from "../config";
+
 /** What the deck gets for one tile. `error` is a short human message. */
-export type TileItem = { render: Renderer; data: unknown } | { error: string };
+export type TileItem = { render: Renderer; data: unknown; style?: string } | { error: string };
 export type TileItems = Record<string, TileItem>;
 
 export const ERR_MISSING = "plugin missing";

@@ -600,3 +600,29 @@ describe("server: REST, the plugin WS message and plugin buttons", () => {
     a.ws.close();
   });
 });
+
+describe("status data: rich fields (agent side)", () => {
+  test("cleanRender trims and keeps title, value, unit, detail, points", async () => {
+    const { cleanRender } = await import("../src/plugins/sources");
+    const r: any = cleanRender("status", { state: "ok", label: "x", title: "T", value: 123, unit: "ms", detail: "d".repeat(80), points: [1, "x", 2] });
+    expect(r.data).toMatchObject({ state: "ok", title: "T", value: "123", unit: "ms", points: [1, 2] });
+    expect(r.data.detail.length).toBe(60);
+    expect((cleanRender("status", { state: "off", label: "y" }) as any).data).toEqual({ state: "off", label: "y" });
+  });
+});
+
+describe("plugin styles", () => {
+  test("layout accepts plugin.view.style from the allow-list and rejects others", async () => {
+    const { validateLayout } = await import("../src/config");
+    const mk = (view: unknown) => ({ pages: [{ id: "p", name: "P", items: [{ id: "a", kind: "widget", widget: "plugin", plugin: { id: "dev.a.b", widget: "x", view } }] }] });
+    const ok: any = validateLayout(mk({ style: "bars" }));
+    expect(ok.pages[0].items[0].plugin.view).toEqual({ style: "bars" });
+    expect(() => validateLayout(mk({ style: "nope" }))).toThrow(/view.style/);
+    expect(() => validateLayout(mk("x"))).toThrow(/view/);
+  });
+  test("manifest widgets[].style must fit the renderer", async () => {
+    const { parseManifest } = await import("../src/plugins/manifest");
+    const m = (style: string) => ({ id: "dev.a.b", name: "A", version: "1.0.0", permissions: {}, widgets: [{ id: "w", name: "W", render: "chart", style, source: { http: { url: "https://x.y/z", every: 60 }, map: { points: "$.p" } } }], actions: [] });
+    expect(() => parseManifest(m("gauge") as any, {} as any)).toThrow(/style must be one of/);
+  });
+});

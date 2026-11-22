@@ -12,7 +12,7 @@ import type { PluginSlot } from './plugin-logic'
 import { EntityTile } from './entity'
 import { NotificationsTile, ValueTile, WeatherTile } from './automation'
 import { AnimatedNumber, BAND_COLOR, DeltaPill, Gauge, type Band } from './knowns'
-import { tint } from './theme'
+import { tint, chartColor } from './theme'
 import type { AiData, ClockOptions, MetricOptions, QuotaOptions, EntityOptions, WeatherOptions, PushOptions, WeatherData, PushedValue, Notice, HassEntity, IconAssets, Media, MediaCommand, Stats, WidgetKind } from './types'
 
 /** Live widgets: clock, cpu, memory, network, load, uptime, nowplaying. Sizes come from the tile (tw/th in px). */
@@ -31,6 +31,10 @@ export const HIST_LEN = 450
 
 const GB = 1024 * 1024 * 1024
 
+/** A built-in metric's own colour: the theme's chart colours in order when it has them. */
+export function naturalColor(kind: string): string | undefined {
+  return chartColor(['cpu', 'gpu', 'memory', 'network', 'load', 'uptime'].indexOf(kind), DEFAULT_COLOR[kind])
+}
 export const DEFAULT_COLOR: { [k: string]: string } = {
   cpu: '#2dd4bf',
   gpu: '#a78bfa',
@@ -99,6 +103,7 @@ export interface WidgetProps {
   wxData?: WeatherData
   pushed?: PushedValue
   plug?: PluginSlot | undefined
+  plugStyle?: string
   label?: string
   notes?: Notice[]
   hassEnt?: HassEntity
@@ -122,7 +127,7 @@ export function Widget(props: WidgetProps) {
   if ((props.kind === 'weather' || props.kind === 'quota') && props.plug && 'error' in props.plug) return <PluginTile entry={props.plug} tw={props.tw} th={props.th} showLabel={props.showLabel} color={props.color} textColor={props.textColor} assets={props.assets} label={props.label} />
   if (props.kind === 'weather') return <WeatherTile opts={props.weather} data={props.wxData} tw={props.tw} th={props.th} cw={props.cw} ch={props.ch} scale={props.scale} showLabel={props.showLabel} textColor={props.textColor} assets={props.assets} />
   if (props.kind === 'value' && props.push) return <ValueTile cfg={props.push} val={props.pushed} tw={props.tw} th={props.th} scale={props.scale} showLabel={props.showLabel} color={props.color} textColor={props.textColor} />
-  if (props.kind === 'plugin') return <PluginTile entry={props.plug} tw={props.tw} th={props.th} showLabel={props.showLabel} color={props.color} textColor={props.textColor} assets={props.assets} label={props.label} />
+  if (props.kind === 'plugin') return <PluginTile style={props.plugStyle} entry={props.plug} tw={props.tw} th={props.th} showLabel={props.showLabel} color={props.color} textColor={props.textColor} assets={props.assets} label={props.label} />
   if (props.kind === 'notifications') return <NotificationsTile notes={props.notes || []} tw={props.tw} th={props.th} showLabel={props.showLabel} textColor={props.textColor} />
   if (props.kind === 'nowplaying') return <NowPlayingTile media={props.media} last={props.last} stats={props.stats} tw={props.tw} th={props.th} scale={props.scale} showLabel={props.showLabel} textColor={props.textColor} onMedia={props.onMedia} onVolume={props.onVolume} />
   if (props.kind === 'quota') return <QuotaWidget {...(props as AiWidgetProps)} />
@@ -163,7 +168,7 @@ const BAND_TEXT: { [k: string]: string } = { good: 'Normal', watch: 'Elevated', 
 function Metric(props: WidgetProps) {
   const s = props.stats
   const kind = props.kind
-  const color = props.color || DEFAULT_COLOR[kind] || '#8b8b94'
+  const color = props.color || naturalColor(kind) || '#8b8b94'
   const compact = props.tw < 120
   const roomy = props.tw >= 170 && props.th >= 100
   let num = 0
@@ -248,13 +253,13 @@ function Metric(props: WidgetProps) {
   const lh = props.showLabel ? 16 : 0
   const band = cpuBand(pct)
   const labelEl = props.showLabel ? (
-    <div class="pd-ml" style={{ fontSize: '11px', color: props.textColor || color }}>
+    <div class="pd-ml" data-part="tile-label" style={{ fontSize: '11px', color: props.textColor || color }}>
       {label}
     </div>
   ) : null
   const deltaEl = (size: number) => (delta && showDeltaOpt ? <DeltaPill value={delta.v} unit={delta.unit} decimals={delta.dec} tone={delta.tone} size={size} /> : null)
   const bigNum = (size: number) => (
-    <div class="pd-mv" style={{ fontSize: size + 'px', color: tc0 }}>
+    <div class="pd-mv" data-part="tile-value" style={{ fontSize: size + 'px', color: tc0 }}>
       <AnimatedNumber value={num} format={fmt} />
       {unit ? <span class="pd-mu" style={{ fontSize: Math.max(9, Math.round(size * 0.42)) + 'px' }}>{' ' + unit}</span> : null}
     </div>
@@ -268,7 +273,7 @@ function Metric(props: WidgetProps) {
     return (
       <div class="pd-metric pd-metric--gauge" style={{ padding: pad + 'px' }}>
         {labelEl}
-        <div class="pd-gwrap" style={{ width: gSize + 'px', height: Math.round(gSize * 0.7) + 'px' }}>
+        <div class="pd-gwrap" data-part="gauge" style={{ width: gSize + 'px', height: Math.round(gSize * 0.7) + 'px' }}>
           <Gauge value={pct} size={gSize} band={band} />
           <div class="pd-gwrap__c">
             <AnimatedNumber value={kind === 'cpu' || kind === 'gpu' ? num : Math.round(pct)} class="pd-gwrap__n" style={{ fontSize: Math.round(gSize * 0.22) + 'px' }} suffix="%" />
@@ -319,7 +324,7 @@ function Metric(props: WidgetProps) {
           {bigNum(vs)}
           <div class="pd-cdelta">{deltaEl(11)}</div>
           {showSubOpt && chart === 'donut' && props.th >= 100 ? (
-            <div class="pd-msub pd-legend">
+            <div class="pd-msub pd-legend" data-part="tile-sub">
               <span>
                 <i class="pd-ldot" style={{ background: color }} />
                 {t('Used {0} GB', (s.memUsed / GB).toFixed(1))}
@@ -330,7 +335,7 @@ function Metric(props: WidgetProps) {
               </span>
             </div>
           ) : showSubOpt && sub ? (
-            <div class="pd-msub">{sub}</div>
+            <div class="pd-msub" data-part="tile-sub">{sub}</div>
           ) : null}
         </div>
       </div>
@@ -351,7 +356,7 @@ function Metric(props: WidgetProps) {
           {props.tw >= 150 && props.th >= 90 ? deltaEl(11) : null}
         </div>
         <div class="pd-mfill" />
-        {subOn ? <div class="pd-msub">{sub}</div> : null}
+        {subOn ? <div class="pd-msub" data-part="tile-sub">{sub}</div> : null}
         <MeterBar value={pct} limit={85} color={color} thick={thick} />
       </div>
     )
@@ -390,24 +395,24 @@ function Metric(props: WidgetProps) {
   return (
     <div class={'pd-metric' + (tallM && noChart ? ' pd-metric--mid' : '')} style={{ padding: pad + 'px', paddingBottom: pad + 'px' }} title={kind === 'gpu' && s && s.gpu && s.gpu.name ? s.gpu.name : undefined}>
       {props.showLabel ? (
-        <div class="pd-ml" style={{ fontSize: lSize + 'px', color: props.textColor || color }}>
+        <div class="pd-ml" data-part="tile-label" style={{ fontSize: lSize + 'px', color: props.textColor || color }}>
           {label}
         </div>
       ) : null}
       <div class="pd-mrow">
-        <div class="pd-mv" style={{ fontSize: vSize + 'px', color: tc }}>
+        <div class="pd-mv" data-part="tile-value" style={{ fontSize: vSize + 'px', color: tc }}>
           {dash ? '-' : <AnimatedNumber value={num} format={fmt} />}
           {unit && !dash ? <span class="pd-mu" style={{ fontSize: Math.max(9, Math.round(vSize * 0.42)) + 'px' }}>{' ' + unit}</span> : null}
         </div>
         {showDelta && delta ? <DeltaPill value={delta.v} unit={delta.unit} decimals={delta.dec} tone={delta.tone} size={11} /> : null}
       </div>
       {showSub && !isNet ? (
-        <div class="pd-msub" style={{ fontSize: subSize + 'px' }}>
+        <div class="pd-msub" data-part="tile-sub" style={{ fontSize: subSize + 'px' }}>
           {sub}
         </div>
       ) : null}
       {showSub && isNet ? (
-        <div class="pd-msub" style={{ fontSize: subSize + 'px' }}>
+        <div class="pd-msub" data-part="tile-sub" style={{ fontSize: subSize + 'px' }}>
           <i class="pd-ldot" style={{ background: tint(color, 0.5) || color }} />
           {'↑ ' + fmtRateStr(s && s.net ? s.net.tx : 0)}
         </div>

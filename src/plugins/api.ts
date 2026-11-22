@@ -32,6 +32,31 @@ export class PluginPermissionError extends Error {
 
 // ------------------------------------------------------------------------------------------------ what a plugin returns and receives
 
+/**
+ * The `data` each renderer takes (the deck validates it and shows a neutral error when it does not fit). `WidgetUpdate.data` stays `unknown`
+ * so a plugin can return a plain object; use these to type it, e.g. `const data: StatusData = {...}`.
+ */
+export interface StatData { value: string | number; unit?: string; label?: string; delta?: number; color?: string; /** up to 60 finite numbers; the "spark" style draws them as a sparkline */ points?: number[] }
+export interface GaugeData { value: number; label?: string; color?: string }
+export interface TextData { title?: string; body: string }
+export interface ListData { items: { title: string; subtitle?: string; value?: string; icon?: string }[] }
+export interface ChartData { points: number[]; label?: string; unit?: string }
+export interface ImageData { url: string; fit?: "cover" | "contain" }
+export interface StatusData {
+  state: "ok" | "warn" | "error" | "off";
+  label: string;
+  /** up to 40 characters */
+  title?: string;
+  /** up to 12 characters */
+  value?: number | string;
+  /** up to 8 characters */
+  unit?: string;
+  /** up to 60 characters */
+  detail?: string;
+  /** up to 60 finite numbers, drawn as a small trend */
+  points?: number[];
+}
+
 /** What a widget shows: a built-in renderer and its data (the contract table in the spec). `data` is validated by the deck per renderer. */
 export interface WidgetUpdate {
   render: Renderer;

@@ -224,7 +224,7 @@ export function EntityTile(props: EntityProps) {
   const nameText = compactStp && roomShort ? name + ' · ' + roomShort : name
 
   const icon$ = (
-    <span class="pd-ent__ic" style={{ color: icFg, width: isz + 'px', height: isz + 'px' }}>
+    <span class="pd-ent__ic" data-part="tile-icon" style={{ color: icFg, width: isz + 'px', height: isz + 'px' }}>
       <TileIcon value={icon} size={Math.round(isz * 0.78)} assets={props.assets} weight={hot ? 'Filled' : undefined} />
     </span>
   )
@@ -244,17 +244,17 @@ export function EntityTile(props: EntityProps) {
         </span>
       ) : null}
       {textVal ? (
-        <span class="pd-ent__tv" style={{ fontSize: Math.max(13, nameSize + 3) + 'px', color: fg || undefined }}>
+        <span class="pd-ent__tv" data-part="tile-value" style={{ fontSize: Math.max(13, nameSize + 3) + 'px', color: fg || undefined }}>
           {textVal}
         </span>
       ) : null}
       {showName ? (
-        <span class="pd-ent__n" style={{ fontSize: nameSize + 'px', color: fg || undefined }}>
+        <span class="pd-ent__n" data-part="tile-label" style={{ fontSize: nameSize + 'px', color: fg || undefined }}>
           {nameText}
         </span>
       ) : null}
       {line && (th >= 110 || !value) && !(tiny && textVal) ? (
-        <span class="pd-ent__s" style={{ fontSize: Math.max(10, nameSize - 1) + 'px', color: sub }}>
+        <span class="pd-ent__s" data-part="tile-sub" style={{ fontSize: Math.max(10, nameSize - 1) + 'px', color: sub }}>
           {line}
         </span>
       ) : null}

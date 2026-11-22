@@ -1,32 +1,23 @@
 import { OptionCards, StyleChips, modeOptions, orientationOptions, radiusOptions, headerOptions } from "@/components/visual-options";
-import { LANGUAGES, asLanguage, t, useLanguage } from "@/lib/i18n";
+import { asLanguage, t, useLanguage } from "@/lib/i18n";
 import { useState } from "react";
-import { IconArrowDown as ArrowDown, IconArrowRight as ArrowRight, IconRotate as RotateLeft, IconCheck as Check } from "@tabler/icons-react";
+import { IconRotate as RotateLeft } from "@tabler/icons-react";
 import { Button } from "@/components/ui/knowns/button";
 import { Card } from "@/components/ui/knowns/card";
 import { Field } from "@/components/ui/knowns/input";
 import { SegmentedControl } from "@/components/ui/knowns/segmented-control";
-import { Slider } from "@/components/ui/knowns/slider";
 import { Switch } from "@/components/ui/knowns/switch";
 import { ColorField } from "@/components/color-field";
 import { PhonePreview, type Orientation } from "@/components/phone-preview";
-import { THEME_PRESETS, presetMatches } from "@/components/theme-presets";
-import { cn } from "@/lib/utils";
-import { THEME_DEFAULTS, type Layout, type Theme } from "@/types";
+import { LanguageMenu } from "@/components/language-menu";
+import { ThemeLookGroups } from "@/components/theme-look";
+import { ExportThemeButton, ThemeAdvanced, ThemeCards } from "@/components/theme-pack-bar";
+import { THEME_DEFAULTS, type Layout, type Theme, type ThemeLook } from "@/types";
 
 /** Fields a preset owns (it replaces them all). */
-const LOOK_FIELDS = new Set(["mode", "accent", "background", "tile", "text", "radius", "gap", "fontScale", "tileStyle", "iconScale", "iconStroke", "showLabels"]);
-const OPEN_KEY = "nookdeck.manage.themeAdvancedOpen";
-
-function readOpen(): boolean {
-  try { return localStorage.getItem(OPEN_KEY) === "1"; } catch { return false; }
-}
-function writeOpen(v: boolean) {
-  try { localStorage.setItem(OPEN_KEY, v ? "1" : "0"); } catch { /* private mode */ }
-}
-
+export const LOOK_FIELDS = new Set(["mode", "accent", "background", "tile", "text", "muted", "radius", "gap", "fontScale", "tileStyle", "iconScale", "iconStroke", "showLabels", "font", "numberFont", "backgroundImage", "backgroundFit", "backgroundDim", "backgroundBlur", "gradient", "tileOpacity", "tileBlur", "border", "shadow", "labelPosition", "labelWeight", "iconStyle", "palette", "chartColors", "source"]);
 /** A small deck drawn from a preset's own tokens: background, tile colour, accent, radius and tile style. */
-function PresetThumb({ theme }: { theme: Theme }) {
+export function PresetThumb({ theme }: { theme: Theme }) {
   const d = THEME_DEFAULTS;
   const accent = theme.accent ?? d.accent;
   const bg = theme.background ?? d.background;
@@ -68,24 +59,34 @@ function PresetThumb({ theme }: { theme: Theme }) {
   );
 }
 
-export function ThemePanel({ layout, pageId, onChange, orientation, onOrientation }: {
+export function ThemePanel({ beforeApply, onOpenPacks, layout, pageId, onChange, onPageTheme, onLayoutChanged, orientation, onOrientation }: {
   layout: Layout;
   pageId: string;
   onChange: (theme: Theme | undefined) => void;
+  /** Writes (or clears, with undefined) the selected screen's own look override, page.theme. */
+  onPageTheme: (pageId: string, look: Partial<ThemeLook> | undefined) => void;
+  /** The agent changed the saved layout (a theme pack was applied): load it again. */
+  onLayoutChanged: () => void;
+  beforeApply?: () => Promise<void>;
+  /** Go to the Packs tab. */
+  onOpenPacks: () => void;
   orientation: Orientation;
   onOrientation: (o: Orientation) => void;
 }) {
   useLanguage();
   const th = layout.theme ?? {};
-  const [open, setOpen] = useState(readOpen);
-  const toggle = () => setOpen((v) => { writeOpen(!v); return !v; });
-  // one onChange call = one undo step
-  // A preset sets the look only: language, orientation and any field this page does not know are kept as they are.
-  const applyPreset = (preset: Theme) => {
-    const keep: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(th)) if (k === "language" || k === "orientation" || !LOOK_FIELDS.has(k)) keep[k] = v;
-    onChange({ ...preset, ...keep } as Theme);
+  const page = layout.pages.find((p) => p.id === pageId);
+  const [thisScreen, setThisScreen] = useState(false);
+  const scoped = thisScreen && !!page;
+  const pageLook = (page?.theme ?? {}) as Partial<ThemeLook>;
+  const lookValue = scoped ? ({ ...th, ...pageLook } as Partial<ThemeLook>) : (th as Partial<ThemeLook>);
+  const setLook = (patch: Partial<ThemeLook>) => {
+    if (!scoped) return set(patch as Partial<Theme>);
+    const next: Record<string, unknown> = { ...pageLook, ...patch };
+    for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
+    onPageTheme(pageId, Object.keys(next).length ? (next as Partial<ThemeLook>) : undefined);
   };
+  // one onChange call = one undo step
   const set = (patch: Partial<Theme>) => {
     const next: Record<string, unknown> = { ...th, ...patch };
     for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
@@ -95,35 +96,18 @@ export function ThemePanel({ layout, pageId, onChange, orientation, onOrientatio
     <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[400px_minmax(0,1fr)]">
       <Card className="min-h-0 overflow-y-auto p-4 kn-scroll-auto">
         <div className="flex flex-col gap-6">
-          <section aria-labelledby="t-presets" className="flex flex-col gap-2.5">
-            <h2 id="t-presets" className="text-sm font-semibold">{t("Theme presets")}</h2>
-            <div className="grid grid-cols-2 gap-2.5">
-              {THEME_PRESETS.map((p) => {
-                const on = presetMatches(th, p.theme, THEME_DEFAULTS);
-                return (
-                  <button
-                    key={p.name}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => applyPreset(p.theme)}
-                    className={cn(
-                      "flex flex-col gap-2 rounded-xl border p-2 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
-                      on && "border-primary bg-muted ring-1 ring-primary",
-                    )}
-                  >
-                    <PresetThumb theme={p.theme} />
-                    <span className="flex items-center justify-between gap-1.5 px-0.5">
-                      <span className="min-w-0">
-                        <span className="block truncate text-[13px] font-medium leading-tight">{t(p.name)}</span>
-                        <span className="block truncate text-[11px] leading-tight text-muted-foreground">{t(p.hint)}</span>
-                      </span>
-                      {on && <Check className="size-4 shrink-0 text-primary" aria-label={t("In use")} />}
-                    </span>
-                  </button>
-                );
-              })}
+          <div className="flex items-start justify-between gap-3 rounded-lg border p-2.5">
+            <div className="min-w-0">
+              <label htmlFor="t-scope" className="text-[13px] font-medium">{t("This screen only")}</label>
+              <p className="text-xs text-muted-foreground">{scoped ? t("Changes below apply to \"{name}\" only. Other screens keep the main look.", { name: page?.name ?? "" }) : t("Off: changes apply to every screen.")}</p>
             </div>
-          </section>
+            <Switch id="t-scope" checked={scoped} onCheckedChange={setThisScreen} aria-label={t("This screen only")} />
+          </div>
+          {scoped && Object.keys(pageLook).length > 0 && (
+            <Button size="sm" variant="secondary" icon={<RotateLeft />} onClick={() => onPageTheme(pageId, undefined)} className="self-start">{t("Use the main look on this screen")}</Button>
+          )}
+          {!scoped && <>
+          <ThemeCards theme={th} source={th.source} beforeApply={beforeApply} onChanged={onLayoutChanged} onBrowse={onOpenPacks} />
 
           <section aria-labelledby="t-basic" className="flex flex-col gap-4">
             <h2 id="t-basic" className="text-sm font-semibold">{t("Basics")}</h2>
@@ -161,57 +145,16 @@ export function ThemePanel({ layout, pageId, onChange, orientation, onOrientatio
               </div>
             </Field>
             <Field label={t("Language")} id="t-lang" hint={t("Language of this page and of the phone overlay.")}>
-              <SegmentedControl
-                size="sm"
-                aria-label={t("Language")}
-                value={asLanguage(th.language)}
-                onValueChange={(v) => set({ language: v === "vi" || v === "zh" ? v : "en" })}
-                options={LANGUAGES.map((l) => ({ value: l.id, label: l.label }))}
-              />
+              <LanguageMenu id="t-lang" value={asLanguage(th.language)} onChange={(l) => set({ language: l })} />
             </Field>
           </section>
 
-          <section aria-labelledby="t-more" className="flex flex-col gap-4 border-t pt-4">
-            <button
-              type="button"
-              id="t-more"
-              aria-expanded={open}
-              aria-controls="t-more-body"
-              onClick={toggle}
-              className="flex items-center justify-between gap-2 rounded-md text-left text-sm font-semibold focus-visible:outline-2 focus-visible:outline-ring"
-            >
-              <span>{t("More options")}</span>
-              {open ? <ArrowDown className="size-4 text-muted-foreground" /> : <ArrowRight className="size-4 text-muted-foreground" />}
-            </button>
-            {open && (
-              <div id="t-more-body" className="flex flex-col gap-4">
-                <Field label={t("Background color")} id="t-bg">
-                  <ColorField id="t-bg" value={th.background} onChange={(v) => set({ background: v })} fallback={THEME_DEFAULTS.background} withText />
-                </Field>
-                <Field label={t("Tile color")} id="t-tile">
-                  <ColorField id="t-tile" value={th.tile} onChange={(v) => set({ tile: v })} fallback={THEME_DEFAULTS.tile} withText />
-                </Field>
-                <Field label={t("Text color")} id="t-text">
-                  <ColorField id="t-text" value={th.text} onChange={(v) => set({ text: v })} fallback="#f4f4f5" noneLabel={t("Auto")} withText />
-                </Field>
-                <Slider label={t("Corner radius (px)")} min={0} max={40} step={1} value={th.radius ?? THEME_DEFAULTS.radius} onValueChange={(v) => set({ radius: v })} />
-                <Slider label={t("Tile gap (px)")} min={0} max={40} step={1} value={th.gap ?? THEME_DEFAULTS.gap} onValueChange={(v) => set({ gap: v })} />
-                <Slider label={t("Text size")} min={0.5} max={2} step={0.05} value={th.fontScale ?? THEME_DEFAULTS.fontScale}
-                  formatValue={(v) => `${Math.round(v * 100)}%`}
-                  onValueChange={(v) => set({ fontScale: Math.round(v * 100) / 100 })} />
-                <Slider label={t("Icon stroke weight")} min={1} max={3} step={0.25} value={th.iconStroke ?? THEME_DEFAULTS.iconStroke}
-                  formatValue={(v) => v.toFixed(2).replace(/\.?0+$/, "")}
-                  onValueChange={(v) => set({ iconStroke: Math.round(v * 100) / 100 })} />
-                <Slider label={t("Icon size")} min={0.5} max={2} step={0.05} value={th.iconScale ?? THEME_DEFAULTS.iconScale}
-                  formatValue={(v) => `${Math.round(v * 100)}%`}
-                  onValueChange={(v) => set({ iconScale: Math.round(v * 100) / 100 })} />
-                <div className="flex items-center justify-between gap-3">
-                  <label htmlFor="t-labels" className="text-[13px] font-medium">{t("Show label under the icon")}</label>
-                  <Switch id="t-labels" checked={th.showLabels ?? THEME_DEFAULTS.showLabels} onCheckedChange={(v) => set({ showLabels: v })} aria-label={t("Show label")} />
-                </div>
-                <Button size="sm" variant="secondary" icon={<RotateLeft />} onClick={() => onChange(undefined)} className="self-start">{t("Reset to defaults")}</Button>
-              </div>
-            )}
+          </>}
+          <section aria-labelledby="t-custom" className="flex flex-col gap-3">
+            <h2 id="t-custom" className="text-sm font-semibold">{t("Customize the look")}</h2>
+            <ThemeLookGroups value={lookValue} onChange={setLook} />
+            {!scoped && <div className="flex flex-wrap gap-2"><Button size="sm" variant="secondary" icon={<RotateLeft />} onClick={() => onChange(undefined)}>{t("Reset to defaults")}</Button><ExportThemeButton /></div>}
+            {!scoped && <section aria-labelledby="t-adv" className="flex flex-col gap-3 border-t pt-3"><h3 id="t-adv" className="text-sm font-semibold">{t("Advanced")}</h3><ThemeAdvanced source={th.source} onChanged={onLayoutChanged} /></section>}
           </section>
         </div>
       </Card>

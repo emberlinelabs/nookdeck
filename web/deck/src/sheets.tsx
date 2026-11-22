@@ -180,7 +180,7 @@ export function ProcessSheet(props: { client: DeckClient; initial: 'cpu' | 'mem'
               RAM
             </button>
           </div>
-          <button type="button" class="pd-iconbtn" aria-label={t('Close')} onClick={props.onClose}>
+          <button type="button" class="pd-iconbtn" data-part="button" aria-label={t('Close')} onClick={props.onClose}>
             <Icon name="x" size={18} />
           </button>
         </div>

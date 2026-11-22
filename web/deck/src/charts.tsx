@@ -95,7 +95,7 @@ export function SlotSpark(props: { values: number[]; color: string; height: numb
   const W = 600
   const padY = 3
   const padX = 1
-  if (vals.length < 2) return <div class="pd-spark" style={{ height: props.height + 'px' }} />
+  if (vals.length < 2) return <div class="pd-spark" data-part="chart" style={{ height: props.height + 'px' }} />
   let lo = props.domain ? props.domain[0] : Math.min.apply(null, vals)
   let hi = props.domain ? props.domain[1] : Math.max.apply(null, vals)
   const minR = props.minRange || 0
@@ -119,7 +119,7 @@ export function SlotSpark(props: { values: number[]; color: string; height: numb
   const ex = props.extra ? props.extra.values.slice(-slots) : []
   const exPts: Point[] = ex.map((v, i) => ({ x: padX + (i / span) * (W - padX * 2), y: H - padY - ((v - lo) / (hi - lo)) * (H - padY * 2) }))
   return (
-    <div class="pd-spark" style={{ height: props.height + 'px' }} aria-hidden="true">
+    <div class="pd-spark" data-part="chart" style={{ height: props.height + 'px' }} aria-hidden="true">
       <svg viewBox={'0 0 ' + W + ' ' + H} width="100%" height="100%" preserveAspectRatio="none" style={{ display: 'block', overflow: 'visible' }}>
         <defs>
           <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
@@ -158,7 +158,7 @@ export function Rings(props: { size: number; rings: RingSpec[]; gap?: number; ce
   const stroke = Math.max(3, Math.min(14, Math.floor((R * 0.62 - gap * (n - 1)) / n), Math.floor(R * 0.28)))
   const cx = R
   return (
-    <div class="pd-ring" style={{ width: props.size + 'px', height: props.size + 'px' }}>
+    <div class="pd-ring" data-part="gauge" style={{ width: props.size + 'px', height: props.size + 'px' }}>
       <svg width={props.size} height={props.size} viewBox={'0 0 ' + props.size + ' ' + props.size} aria-hidden="true">
         {props.rings.map((r, k) => {
           const rad = R - stroke / 2 - 1 - k * (stroke + gap)

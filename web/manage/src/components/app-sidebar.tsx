@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { IconAlarm as Alarm, IconBolt as Bolt, IconChevronDown as Chevron, IconBraces as Braces, IconDevices as Devices, IconInfoCircle as Info, IconLayoutGrid as Grid, IconPalette as Palette, IconPuzzle as Puzzle, IconShieldCheck as Shield, IconVolume as Volume } from "@tabler/icons-react";
 import { Tooltip } from "@/components/ui/knowns/tooltip";
-import { SegmentedControl } from "@/components/ui/knowns/segmented-control";
+import { LanguageMenu } from "@/components/language-menu";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarHeader, SidebarItem, useSidebar } from "@/components/ui/knowns/blocks/sidebar/sidebar";
 import { t, useLanguage, type Language } from "@/lib/i18n";
 import { BUILTIN_PLUGINS } from "@/lib/builtin-plugins";
@@ -82,12 +82,14 @@ function SubGroup({ label, count, open, onOpen, active, pinned, children }: { la
   );
 }
 
-const LANGS: { value: Language; label: string }[] = [{ value: "en", label: "EN" }, { value: "vi", label: "VI" }, { value: "zh", label: "中文" }];
 
-function VersionChip({ about, onAbout }: { about: About; onAbout: () => void }) {
-  const text = `v${about.version}${about.commit ? ` · ${about.commit}` : ""}${about.dirty ? "*" : ""}`;
-  const cls = "w-fit rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring";
-  return about.commit && !about.dirty
+/** The version, muted, as a link: the release notes for a release, the commit for a dev build (or About when there is no commit). */
+function VersionLink({ about, onAbout }: { about: About; onAbout: () => void }) {
+  const text = `v${about.version}${about.dirty && about.commit ? ` · ${about.commit}*` : ""}`;
+  const cls = "ml-auto shrink-0 rounded px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring";
+  const dev = about.dirty || !about.commit;
+  if (!dev) return <a href={`${about.repo}/releases/tag/v${about.version}`} target="_blank" rel="noopener noreferrer" title={t("Release notes")} className={cls}>{text}</a>;
+  return about.commit
     ? <a href={`${about.repo}/commit/${about.commit}`} target="_blank" rel="noopener noreferrer" title={t("Open this commit on GitHub")} className={cls}>{text}</a>
     : <button type="button" title={t("Open About")} className={cls} onClick={onAbout}>{text}</button>;
 }
@@ -138,7 +140,6 @@ export function AppSidebar({ tab, onTab, attention, about, repo, lang, onLang, o
     <Sidebar label={t("Main menu")} collapsible sheetHeader={brand}>
       <SidebarHeader>
         {!isMobile && <div className={rail ? "flex justify-center py-1" : "px-1 py-1"}>{brand}</div>}
-        {!rail && about && <div className="flex px-1"><VersionChip about={about} onAbout={onAbout} /></div>}
       </SidebarHeader>
       <SidebarContent>
         <nav aria-label={t("Sections")} className="flex flex-col gap-3">
@@ -173,19 +174,21 @@ export function AppSidebar({ tab, onTab, attention, about, repo, lang, onLang, o
         </nav>
       </SidebarContent>
       <SidebarFooter>
-        {rail ? (
-          <Tooltip content={t("Language")} side="right">
-            <button type="button" aria-label={t("Language")} className="mx-auto grid h-8 min-w-8 place-items-center rounded-lg px-1 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring" onClick={() => onLang(LANGS[(LANGS.findIndex((l) => l.value === lang) + 1) % LANGS.length]!.value)}>
-              {LANGS.find((l) => l.value === lang)?.label}
-            </button>
-          </Tooltip>
-        ) : (
-          <SegmentedControl size="sm" aria-label={t("Language")} value={lang} onValueChange={(v) => onLang(v === "vi" ? "vi" : v === "zh" ? "zh" : "en")} options={LANGS} className="w-full" />
-        )}
-        <a href={repo} target="_blank" rel="noopener noreferrer" title={t("Source code on GitHub")} aria-label={t("Source code on GitHub")} className="flex h-8 items-center gap-2.5 rounded-[9px] px-3 text-[13px] text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
-          <span className={rail ? "mx-auto" : ""}>{GITHUB}</span>
-          {!rail && <span>GitHub</span>}
-        </a>
+        <LanguageMenu value={lang} onChange={onLang} compact={rail} side="top" />
+        <div className="flex items-center">
+          {rail ? (
+            <Tooltip content={`GitHub${about ? ` · v${about.version}` : ""}`} side="right">
+              <a href={repo} target="_blank" rel="noopener noreferrer" aria-label={t("Source code on GitHub")} className="mx-auto flex h-8 w-8 items-center justify-center rounded-[9px] text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">{GITHUB}</a>
+            </Tooltip>
+          ) : (
+            <>
+              <a href={repo} target="_blank" rel="noopener noreferrer" title={t("Source code on GitHub")} aria-label={t("Source code on GitHub")} className="flex h-8 min-w-0 items-center gap-2.5 rounded-[9px] px-3 text-[13px] text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+                <span>{GITHUB}</span><span>GitHub</span>
+              </a>
+              {about && <VersionLink about={about} onAbout={onAbout} />}
+            </>
+          )}
+        </div>
       </SidebarFooter>
     </Sidebar>
   );

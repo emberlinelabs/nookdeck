@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parsePluginLink, sameRepo } from "../web/manage/src/lib/plugin-link";
+import { parsePluginLink, parseThemeLink, sameRepo } from "../web/manage/src/lib/plugin-link";
 
 describe("plugin deeplinks", () => {
   test("add with a valid registry id", () => {
@@ -26,5 +26,17 @@ describe("plugin deeplinks", () => {
   test("matches a registry repo", () => {
     expect(sameRepo("https://github.com/Alice/Crypto.git/", "https://github.com/alice/crypto")).toBe(true);
     expect(sameRepo("https://github.com/alice/other", "https://github.com/alice/crypto")).toBe(false);
+  });
+});
+
+describe("parseThemeLink", () => {
+  test("opens the Packs tab, with or without a pack", () => {
+    expect(parseThemeLink("#themes")).toEqual({ open: true });
+    expect(parseThemeLink("#themes?add=dev.nookdeck.catppuccin")).toEqual({ open: true, id: "dev.nookdeck.catppuccin" });
+  });
+  test("rejects a malformed id, ignores other hashes", () => {
+    expect(parseThemeLink("#themes?add=../x")).toEqual({ rejected: true });
+    expect(parseThemeLink("#theme")).toBeNull();
+    expect(parseThemeLink("#plugins?add=x")).toBeNull();
   });
 });

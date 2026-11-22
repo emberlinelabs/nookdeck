@@ -253,7 +253,7 @@ export function ScreenLayer(props: ScreenLayerProps) {
   return (
     <>
       {standby ? (
-        <div class="pd-sb" role="presentation" onTouchStart={wakeFromStandby} onMouseDown={wakeFromStandby} onClick={(e) => e.preventDefault()}>
+        <div class="pd-sb" data-part="standby" role="presentation" onTouchStart={wakeFromStandby} onMouseDown={wakeFromStandby} onClick={(e) => e.preventDefault()}>
           <div class="pd-sb__in" style={drift}>
             {sbStyle === 'analog' ? (
               <AnalogFace d={d} />
@@ -334,7 +334,7 @@ export function ScreenSheet(props: { settings?: ScreenSettings; alarms?: Alarm[]
         <div class="pd-proc__head">
           <b>{t('Screen & alarms')}</b>
           <span class="pd-spacer" />
-          <button type="button" class="pd-iconbtn" aria-label={t('Close')} onClick={props.onClose}>
+          <button type="button" class="pd-iconbtn" data-part="button" aria-label={t('Close')} onClick={props.onClose}>
             <Icon name="x" size={18} />
           </button>
         </div>

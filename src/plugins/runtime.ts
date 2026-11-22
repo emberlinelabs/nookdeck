@@ -108,7 +108,13 @@ export class PluginRuntime {
     if (Object.keys(changed).length) this.deps.onItems(changed);
   }
 
-  private put(id: string, item: TileItem, out: TileItems): void {
+  private put(id: string, item0: TileItem, out: TileItems): void {
+    let item = item0;
+    if ("render" in item) { // the widget's suggested style travels with the data (the tile's own choice is applied by the deck)
+      const ref = this.tiles.get(id)?.ref;
+      const st = ref ? this.store.entry(ref.id)?.manifest.widgets.find((w) => w.id === ref.widget)?.style : undefined;
+      if (st) item = { ...item, style: st };
+    }
     if (same(this.items[id], item)) return;
     this.items[id] = item;
     out[id] = item;

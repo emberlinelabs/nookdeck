@@ -43,3 +43,16 @@ export function cleanHttpsSource(raw: string): string | null {
 const norm = (s: string) => s.trim().replace(/\/+$/, "").replace(/\.git$/i, "").toLowerCase();
 /** True when a link address is a Store entry's repo (so the reviewed, pinned Add flow is used instead). */
 export function sameRepo(a: string, b: string): boolean { return norm(a) === norm(b); }
+
+/** #themes (the Packs tab of the Theme page) and #themes?add=<theme pack id>, which opens that pack's details. Nothing is installed until the user presses the button. */
+export function parseThemeLink(hash: string): { open: true; id?: string } | { rejected: true } | null {
+  const m = /^#themes(?:\?(.*))?$/.exec(hash);
+  if (!m) return null;
+  if (m[1] === undefined) return { open: true };
+  let params: URLSearchParams;
+  try { params = new URLSearchParams(m[1]); } catch { return { rejected: true }; }
+  const add = params.get("add");
+  if (add === null) return { open: true };
+  const id = add.trim();
+  return ID_RE.test(id) ? { open: true, id } : { rejected: true };
+}

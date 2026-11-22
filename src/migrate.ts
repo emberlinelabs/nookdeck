@@ -1,7 +1,7 @@
 import { userHome } from "./home";
 import { chmod, cp, lstat, mkdir, readFile, readdir, rename, rm, symlink, writeFile, appendFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { repointHooks, serviceInstall, plistPath, type ServiceDeps, type Instance } from "./service";
+import { repointHooks, serviceInstall, unloadJob, plistPath, type ServiceDeps, type Instance } from "./service";
 import type { HookTool } from "./hooks-install";
 
 /**
@@ -168,7 +168,7 @@ async function migrateLaunchd(o: MigrateOptions, program: string[], say: (s: str
   await serviceInstall({ ...o.svc, program }, { port });
   await rm(oldPlist, { force: true });
   say(`replaced the launchd service ${OLD_SERVICE_LABEL} with dev.nookdeck.agent`);
-  await o.svc.launchctl(["bootout", `gui/${o.svc.uid}/${OLD_SERVICE_LABEL}`]);
+  await unloadJob(o.svc, `gui/${o.svc.uid}/${OLD_SERVICE_LABEL}`);
 }
 
 async function migrateWindows(o: MigrateOptions, program: string[], newHome: string, say: (s: string) => void, notes: string[]) {

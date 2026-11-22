@@ -5,7 +5,7 @@ import { isMac } from './platform'
 import { Icon } from './icon'
 import { reducedMotion } from './knowns'
 import { crossfadeGains, easeOut } from './crossfade'
-import { clampPosition, clampVolume, coverFallback, coverGradient, fitLevels, formatTime, projectPosition, reconcilePosition, resolveLabels, spokenPosition, DEFAULT_LABELS, type NowPlayingLabels } from './now-playing-utils'
+import { clampPosition, clampVolume, coverFallback, coverGradient, fitLevels, formatTime, projectPosition, reconcilePosition, resolveLabels, spokenPosition, DEFAULT_LABELS, npVariant, npInlineVol, npCoverSize, type NowPlayingLabels } from './now-playing-utils'
 import type { Media, MediaCommand, Stats } from './types'
 
 /**
@@ -271,12 +271,12 @@ export function NowPlayingTile(props: NowPlayingTileProps) {
 
   const tw = props.tw
   const th = props.th
-  const variant: Variant = tw < 130 || th < 56 ? 'capsule' : th < 120 ? 'compact' : tw < 260 ? 'medium' : tw >= 360 ? 'large' : 'mid'
+  const variant: Variant = npVariant(tw, th)
   const tc = props.textColor || undefined
   const disabled = pending || state !== 'playing' // transport needs a live session
   const idle = state === 'playing' ? '' : ' pd-npl--idle pd-npl--' + state
   const two = variant === 'compact' && tw < 260 // narrow row: the title may use two lines instead of truncating to 5 letters
-  const inlineVol = th >= 250 && tw >= 260 && !!vol
+  const inlineVol = npInlineVol(variant, tw, th) && !!vol
 
   const PlayBtn = (size: number) => (
     <button type="button" class="pd-npl__play" style={{ width: size + 'px', height: size + 'px' }} aria-label={state === 'playing' ? (playing ? L.pause : L.play) : state === 'last' ? t('Resume') : tn('Play')} aria-pressed={state === 'playing' ? playing : undefined} disabled={pending} onClick={state === 'playing' ? onPlay : state === 'last' ? onResume : onOpen}>
@@ -381,10 +381,10 @@ export function NowPlayingTile(props: NowPlayingTileProps) {
   if (variant === 'compact') {
     return (
       <div class={'pd-npl pd-npl--compact' + idle} style={{ color: tc }} aria-busy={pending || undefined}>
-        {CoverX(Math.min(44, th - 16), 8)}
+        {tw >= 230 ? CoverX(Math.min(44, th - 16), 8) : null}
         {Text(false)}
         {tw >= 300 && state === 'playing' ? <Levels playing={playing} /> : null}
-        {tw >= 260 && vol ? VolBtn() : null}
+        {vol ? VolBtn() : null}
         {PlayBtn(NP_HIT.playRow)}
         {Popover()}
       </div>
@@ -449,7 +449,7 @@ export function NowPlayingTile(props: NowPlayingTileProps) {
   }
 
   // large (4x2 and up): cover on the left, controls on the right
-  const cs = Math.min(168, th - 24)
+  const cs = npCoverSize(tw, th)
   return (
     <div class={'pd-npl pd-npl--large' + idle} style={{ color: tc }} aria-busy={pending || undefined}>
       {CoverX(cs, 12)}

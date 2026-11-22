@@ -205,3 +205,24 @@ describe("a stripped environment", () => {
     expect(v.stdout.toString()).toStartWith("nookdeck ");
   });
 });
+
+describe("the stable copy is unchanged and the service already runs it", () => {
+  test("a restart is used instead of a reinstall; anything else falls back to service install", async () => {
+    const a = deps();
+    await runInstall(a.d, { yes: true });
+    const stable = join(a.home, ".nookdeck", "bin", "nookdeck");
+    const mk = (status: string, restartCode = 0) => deps({
+      home: a.home, execPath: a.d.execPath, version: "0.3.1",
+      run: async (argv) => { runs2.push(argv.slice(1).join(" ")); return { code: argv[2] === "restart" ? restartCode : 0, out: argv.includes("--version") ? "nookdeck 0.3.1" : argv[2] === "status" ? status : "" }; },
+    });
+    let runs2: string[] = [];
+    await runInstall(mk(`Service: installed, running\nProgram: ${stable}`).d, { yes: true });
+    expect(runs2).toEqual(["--version", "migrate --no-service", "service status", "service restart"]);
+    runs2 = [];
+    await runInstall(mk(`Service: installed, running\nProgram: /somewhere/else`).d, { yes: true });
+    expect(runs2.at(-1)).toBe("service install");
+    runs2 = [];
+    await runInstall(mk(`Service: installed, running\nProgram: ${stable}`, 1).d, { yes: true });
+    expect(runs2.slice(-2)).toEqual(["service restart", "service install"]);
+  });
+});

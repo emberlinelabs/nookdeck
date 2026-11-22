@@ -132,6 +132,7 @@ export const VI_APP: Record<string, string> = {
   "Open Settings": "Mở Cài đặt",
   "Nothing to check.": "Không có gì cần kiểm tra.",
   "Windows Firewall (phone connections)": "Tường lửa Windows (kết nối từ điện thoại)",
+  "Firewall (phone connections)": "Tường lửa (kết nối từ điện thoại)",
   "SmartScreen (downloaded app warning)": "SmartScreen (cảnh báo ứng dụng tải về)",
   "Media and sound helper": "Trình hỗ trợ nhạc và âm thanh",
   "Nookdeck checks that Windows lets phone connections and the helper through. Fix anything marked below, then check again.": "Nookdeck kiểm tra Windows có cho phép kết nối từ điện thoại và trình hỗ trợ hay không. Hãy xử lý mục được đánh dấu bên dưới rồi kiểm tra lại.",

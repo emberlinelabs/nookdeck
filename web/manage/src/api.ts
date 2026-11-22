@@ -1,6 +1,6 @@
 import { t } from "./lib/i18n";
 import { asPlatform, type Platform } from "./lib/platform";
-import { AI_PROVIDERS, type IconCatalog, type MacApp, type Sound, type HassConfig, type HassEntity, type HassService, type GeoPlace, type WebhookInfo, type AiProvider, type DeviceInfo, type About, type UpdateInfo, type DoctorItem, type DoctorStatus, type Integration, type Layout, type Pairing, type PluginInfo, type RegistryEntry, type RegistryManifest, type RegistryResult, type PluginProcess, type PluginProcessState, type PluginField, type PluginPermissions, type Theme, type HassStatus } from "./types";
+import { AI_PROVIDERS, type IconCatalog, type MacApp, type Sound, type HassConfig, type HassEntity, type HassService, type GeoPlace, type WebhookInfo, type AiProvider, type DeviceInfo, type About, type UpdateInfo, type DoctorItem, type DoctorStatus, type Integration, type Layout, type Pairing, type PluginInfo, type RegistryEntry, type RegistryManifest, type RegistryResult, type PluginProcess, type PluginProcessState, type PluginField, type PluginPermissions, type Theme, type HassStatus, type ThemeLook, type ThemePack, type ThemeVariantInfo, type ThemeOptionInfo, type ThemeOptionValue, type ThemeSource, type ThemesResult } from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -167,6 +167,32 @@ export function normalizeRegistryEntry(raw: unknown): RegistryEntry | null {
   };
 }
 
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+const strs = (v: unknown): string[] => arr(v).filter((x): x is string => typeof x === "string");
+function normalizeThemePack(raw: unknown, installed: boolean): ThemePack | null {
+  const r = rec(raw);
+  const id = str(r.id);
+  if (!id) return null;
+  const variants = arr(r.variants).flatMap((x): ThemeVariantInfo[] => {
+    const v = rec(x); const vid = str(v.id);
+    return vid ? [{ id: vid, name: str(v.name) ?? vid, mode: v.mode === "light" ? "light" : "dark", look: rec(v.look ?? v.theme) as Partial<ThemeLook>, preview: str(v.preview) }] : [];
+  });
+  const options = arr(r.options).flatMap((x): ThemeOptionInfo[] => {
+    const o = rec(x); const oid = str(o.id);
+    if (!oid) return [];
+    const values = arr(o.values).flatMap((y): ThemeOptionValue[] => { const w = rec(y); const wid = str(w.id); return wid ? [{ id: wid, name: str(w.name) ?? wid, ...(w.theme ? { theme: rec(w.theme) as Partial<ThemeLook> } : {}), ...(w.variants ? { variants: rec(w.variants) as Record<string, Partial<ThemeLook>> } : {}) }] : []; });
+    return [{ id: oid, name: str(o.name) ?? oid, values }];
+  });
+  const a = rec(r.auto);
+  return {
+    id, name: str(r.name) ?? id, version: str(r.version) ?? "", author: str(r.author), description: str(r.description), preview: str(r.preview), repo: str(r.repo),
+    variants, options, auto: str(a.light) && str(a.dark) ? { light: str(a.light)!, dark: str(a.dark)! } : undefined,
+    hasCss: r.hasCss === true, fonts: strs(r.fonts), icons: strs(r.icons),
+    builtin: r.builtin === true, installed: installed || r.installed === true, installedVersion: str(r.installedVersion) ?? (installed ? str(r.version) : undefined),
+    updateAvailable: r.updateAvailable === true, applied: r.applied === true, appliedOlder: r.appliedOlder === true, reviewed: r.reviewed !== false,
+  };
+}
+
 /** Until the agent has the process endpoints, open the page with ?mockprocess to see the UI with made-up data. */
 const mockProcess = (): boolean => typeof window !== "undefined" && /[?&]mockprocess\b/.test(window.location.search);
 const mockStates = new Map<string, { state: PluginProcessState; since: number; lines: string[] }>();
@@ -210,7 +236,7 @@ export function normalizePlugin(raw: unknown): PluginInfo | null {
     widgets: (Array.isArray(r.widgets) ? r.widgets : []).flatMap((x: unknown) => {
       const w = rec(x);
       const wid = str(w.id);
-      return wid ? [{ id: wid, name: str(w.name) ?? wid, render: str(w.render) ?? "", sizes: (Array.isArray(w.sizes) ? w.sizes : []).filter((s): s is string => typeof s === "string"), settings: normalizeFields(w.settings), preview: w.preview }] : [];
+      return wid ? [{ id: wid, name: str(w.name) ?? wid, render: str(w.render) ?? "", sizes: (Array.isArray(w.sizes) ? w.sizes : []).filter((s): s is string => typeof s === "string"), settings: normalizeFields(w.settings), preview: w.preview, ...(str(w.style) ? { style: str(w.style) } : {}) }] : [];
     }),
     actions: (Array.isArray(r.actions) ? r.actions : []).flatMap((x: unknown) => {
       const a = rec(x);
@@ -420,6 +446,38 @@ export const api = {
   setPluginEnabled: (id: string, enabled: boolean) => request<unknown>(`/api/plugins/${encodeURIComponent(id)}/enabled`, json("POST", { enabled })),
   putPluginSettings: (id: string, settings: Record<string, unknown>) => request<unknown>(`/api/plugins/${encodeURIComponent(id)}/settings`, json("PUT", settings)),
   /** The community registry. null when this agent has no registry endpoint (older agent); throws when the agent has nothing to show (502). */
+  /** Installed theme packs plus the registry's; an agent without themes answers 404 and this returns null. */
+  getThemes: async (): Promise<ThemesResult | null> => {
+    try {
+      const o = rec(await request<unknown>("/api/themes"));
+      const own = arr(o.themes).flatMap((x) => normalizeThemePack(x, true) ?? []);
+      const have = new Set(own.map((p) => p.id));
+      const reg = arr(o.registry).flatMap((x) => normalizeThemePack(x, false) ?? []).filter((p) => !have.has(p.id));
+      const ap = rec(o.applied);
+      return { packs: [...own, ...reg], applied: str(ap.pack) ? (ap as unknown as ThemeSource) : null };
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
+  },
+  installTheme: async (body: { id: string } | { source: string }) => normalizeThemePack(await request<unknown>("/api/themes/install", json("POST", body)), true),
+  applyTheme: (id: string, body: { variant?: string; auto?: { light: string; dark: string }; options?: Record<string, string> }) =>
+    request<unknown>(`/api/themes/${encodeURIComponent(id)}/apply`, json("POST", body)),
+  /** A local, editable copy of an installed pack (its applied variant and options by default). Does not apply it. */
+  forkTheme: async (id: string, body: { name?: string; variant?: string; options?: Record<string, string> }) => normalizeThemePack(await request<unknown>(`/api/themes/${encodeURIComponent(id)}/fork`, json("POST", body)), true),
+  removeTheme: (id: string) => request<unknown>(`/api/themes/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  undoLayout: () => request<unknown>("/api/layout/undo", { method: "POST" }),
+  /** The theme package (a zip) for the current look. */
+  exportTheme: async (body: { id: string; name: string; version?: string; author?: string; description?: string; preview?: string }): Promise<Blob> => {
+    let res: Response;
+    try { res = await fetch("/api/themes/export", { method: "POST", headers: { "X-Nookdeck": "1", "Content-Type": "application/json" }, body: JSON.stringify(body) }); } catch { throw new ApiError(t("Cannot reach the Nookdeck agent"), 0); }
+    if (!res.ok) { let m = ""; try { m = str(rec(await res.json()).error) ?? ""; } catch { /* no body */ } throw new ApiError(m || t("Could not export the theme"), res.status); }
+    return res.blob();
+  },
+  getThemeCss: async (id: string, variant?: string): Promise<string> => {
+    const res = await fetch(`/api/themes/${encodeURIComponent(id)}/css${variant ? `?variant=${encodeURIComponent(variant)}` : ""}`);
+    return res.ok ? res.text() : "";
+  },
   getRegistry: async (refresh = false): Promise<RegistryResult | null> => {
     try {
       const o = rec(await request<unknown>(`/api/plugins/registry${refresh ? "?refresh=1" : ""}`));

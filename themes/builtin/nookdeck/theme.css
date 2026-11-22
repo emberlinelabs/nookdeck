@@ -1,0 +1,4 @@
+/* Nookdeck built-in themes. Only the Neon variant adds CSS: a light glow on the accent and on big numbers. Kept cheap on purpose (small radii, no animation). */
+[data-theme-variant="neon"] [data-part="tile-value"] { text-shadow: 0 0 6px var(--nd-accent); }
+[data-theme-variant="neon"] [data-kind="clock"] [data-part="tile-value"] { text-shadow: 0 0 8px var(--nd-accent); }
+[data-theme-variant="neon"] [data-part="tile"] { box-shadow: 0 0 6px var(--nd-accent); }

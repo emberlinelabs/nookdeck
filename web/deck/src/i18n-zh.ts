@@ -198,6 +198,8 @@ export const ZH: { [en: string]: string } = {
   "Plugin unavailable": "插件不可用",
   "Nothing to show": "没有可显示的内容",
   "OK": "正常",
+  "Slow": "较慢",
+  "Down": "宕机",
   "Warning": "警告",
   "No preview": "暂无预览",
   "Plugin missing": "插件缺失",

@@ -3401,7 +3401,7 @@
 .pd-ent__swb:active { -webkit-transform: scale(0.88); transform: scale(0.88); }
 .pd-ent__br { -webkit-flex: none; flex: none; width: 100%; display: block; margin-top: 8px; }
 .pd-ent__br input { display: block; width: 100%; height: 22px; margin: 0; }
-.pd-cs__row { display: block; margin-top: 12px; }
+.pd-cs__r .pd-cs__row { display: block; margin-top: 12px; }
 .pd-cs__lb { margin-bottom: 6px; font-size: 12px; color: var(--pd-muted); }
 .pd-cs__sw { display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; }
 .pd-cs__swb { width: 44px; height: 44px; margin: 0 12px 8px 0; padding: 0; border: 2px solid rgba(255, 255, 255, 0.35); border-radius: 50%; box-sizing: border-box; cursor: pointer; }
@@ -3566,3 +3566,66 @@
 .pd-pl__dot { display: block; width: 14px; height: 14px; border-radius: 50%; margin-bottom: 12px; }
 .pd-pl__sl { font-size: 15px; font-weight: 600; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pd-pl__m { margin-top: 2px; font-size: 10px; line-height: 1.25; color: var(--pd-muted); opacity: 0.8; max-width: 100%; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: break-word; }
+
+/* status tile, rich form (title, value, pill, detail, sparkline) */
+.pd-pl--s { -webkit-justify-content: flex-start; justify-content: flex-start; }
+.pd-pl__sh { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: space-between; justify-content: space-between; min-width: 0; }
+.pd-pl--s1 .pd-pl__sh { -webkit-justify-content: flex-start; justify-content: flex-start; }
+.pd-pl__st { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; margin-right: 8px; opacity: 0.85; }
+.pd-pl__pill { -webkit-flex: none; flex: none; font-size: 10px; font-weight: 700; line-height: 1; padding: 4px 8px; border-radius: 999px; letter-spacing: 0.03em; }
+.pd-pl__sv { display: block; margin-top: 4px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pd-pl__sv i { font-style: normal; font-weight: 500; margin-left: 3px; color: var(--pd-muted); }
+.pd-pl__sd { display: block; margin-top: 5px; font-size: 11px; color: var(--pd-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pd-pl__ss { position: relative; margin-top: auto; -webkit-flex: none; flex: none; }
+.pd-pl__sb { display: -webkit-flex; display: flex; -webkit-align-items: stretch; align-items: stretch; min-width: 0; margin-top: 2px; }
+.pd-pl__sc { min-width: 0; -webkit-flex: none; flex: none; max-width: 100%; }
+.pd-pl__sr { position: relative; -webkit-flex: 1; flex: 1; min-width: 0; margin-left: 10px; -webkit-align-self: flex-end; align-self: flex-end; }
+.pd-pl__sm { display: -webkit-flex; display: flex; -webkit-justify-content: space-between; justify-content: space-between; font-size: 10px; color: var(--pd-muted); font-variant-numeric: tabular-nums; padding-top: 4px; white-space: nowrap; }
+
+.pd-pl-dots { position: absolute; left: 0; bottom: 0; width: 100%; box-sizing: border-box; display: -webkit-flex; display: flex; pointer-events: none; }
+.pd-pl-dots__c { -webkit-flex: 1; flex: 1; min-width: 0; position: relative; height: 100%; }
+.pd-pl-dots__c i { position: absolute; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; }
+.pd-pl--s .pd-pl__sb { margin-top: 2px; }
+.pd-pl__bigpill { display: inline-block; max-width: 100%; box-sizing: border-box; padding: 6px 12px; border-radius: 999px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- Theme look layer (spec D14-D16): driven by variables set from layout.theme; Safari 12 safe ---------- */
+.pd-bgimg {
+  display: none;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 0;
+  pointer-events: none;
+  -webkit-transform: scale(1.05);
+  transform: scale(1.05);
+}
+.pd-root[data-pd-bg='image'] .pd-sheet,
+.pd-root[data-pd-bg='image'] .pd-panel,
+.pd-root[data-pd-bg='gradient'] .pd-sheet,
+.pd-root[data-pd-bg='gradient'] .pd-panel { background: transparent; }
+.pd-root[data-pd-bg='image'] .pd-bgimg { display: block; }
+.pd-root { font-family: var(--pd-ff, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif); }
+.pd-root .pd-wv, .pd-root .pd-clock__t, .pd-root .pd-ent__v, .pd-root [data-part='tile-value'] { font-family: var(--pd-ff-num, inherit); }
+/* tile surface: opacity (colour alpha, set from JS), blur, border, shadow; each only when the theme sets it */
+.pd-root[data-pd-sh] .pd-tile { box-shadow: var(--pd-shadow); }
+.pd-root[data-pd-bd] .pd-tile { border-width: var(--pd-bw, 1px); border-color: var(--pd-bc, var(--pd-border)); }
+.pd-root[data-pd-blur] .pd-tile { -webkit-backdrop-filter: blur(var(--pd-tile-blur)); backdrop-filter: blur(var(--pd-tile-blur)); }
+/* labels */
+.pd-root[data-pd-labels='hidden'] .pd-tile__lb, .pd-root[data-pd-labels='hidden'] .pd-ios__lb { display: none; }
+.pd-root[data-pd-labels='top'] .pd-tile--btn { -webkit-flex-direction: column-reverse; flex-direction: column-reverse; }
+.pd-root[data-pd-weight='regular'] .pd-tile__lb, .pd-root[data-pd-weight='regular'] .pd-ios__lb { font-weight: 400; }
+.pd-root[data-pd-weight='medium'] .pd-tile__lb, .pd-root[data-pd-weight='medium'] .pd-ios__lb { font-weight: 500; }
+.pd-root[data-pd-weight='bold'] .pd-tile__lb, .pd-root[data-pd-weight='bold'] .pd-ios__lb { font-weight: 700; }
+/* a theme's own animation never runs in lite mode or with reduced motion */
+.pd-lite[data-theme-pkg] *, .pd-lite[data-theme-pkg] *::before, .pd-lite[data-theme-pkg] *::after { -webkit-animation: none !important; animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .pd-root[data-theme-pkg] *, .pd-root[data-theme-pkg] *::before, .pd-root[data-theme-pkg] *::after { -webkit-animation: none !important; animation: none !important; }
+}
+/* standby clock assets from the theme package */
+.pd-root[data-pd-sbface] .pd-sb__analog { background: var(--nd-standby-face) center / contain no-repeat; }
+.pd-root[data-pd-sbbg] .pd-sb { background: var(--nd-standby-bg) center / cover no-repeat, #000; }
+/* Now Playing: the transport row may squeeze its buttons a little, never clip the volume button */
+.pd-root .pd-npl__tr--sb .pd-npl__ghost, .pd-root .pd-npl__tr3 .pd-npl__ghost { -webkit-flex: 0 1 auto; flex: 0 1 auto; min-width: 32px; }
+.pd-npl__tr--sb, .pd-npl__tr3 { min-width: 0; max-width: 100%; }

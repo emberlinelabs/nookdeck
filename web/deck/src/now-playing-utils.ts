@@ -136,3 +136,26 @@ export function resolveLabels<T extends object>(defaults: T, given?: Partial<T>)
   for (const k of Object.keys(given ?? {}) as (keyof T)[]) if (given![k] !== undefined) out[k] = given![k] as T[keyof T];
   return out;
 }
+
+/** What each layout needs (px) to show every control without clipping: compact is one row (cover?, text, volume button, play); the others stack rows. */
+export type NpVariant = 'capsule' | 'compact' | 'medium' | 'mid' | 'large'
+export const NP_NEED: { [v: string]: { w: number; h: number } } = { capsule: { w: 0, h: 0 }, compact: { w: 180, h: 56 }, medium: { w: 180, h: 150 }, mid: { w: 260, h: 150 }, large: { w: 360, h: 180 } }
+/** The layout for a tile: the richest one whose width and height both fit, so a short tile gets the one-row layout instead of stacked rows that overflow. */
+export function npVariant(tw: number, th: number): NpVariant {
+  if (tw < 130 || th < 56) return 'capsule'
+  if (th < NP_NEED.medium.h || tw < NP_NEED.compact.w) return 'compact'
+  if (tw < 260) return 'medium'
+  if (tw >= NP_NEED.large.w && th >= NP_NEED.large.h) return 'large'
+  return 'mid'
+}
+
+/** The volume slider gets its own row when the tile is tall enough (large layouts fit it from 236 px); otherwise the volume button in the transport row opens the popover. */
+export function npInlineVol(variant: string, tw: number, th: number): boolean {
+  return tw >= 260 && th >= (variant === 'large' ? 236 : 250)
+}
+/** Width of the controls column of the large layout that always fits: 3 transport buttons + the volume button. */
+export const NP_COL_MIN = 44 + 52 + 44 + 44 + 8
+/** Cover of the large layout: as big as the height allows, but never so wide that the controls column drops under NP_COL_MIN. */
+export function npCoverSize(tw: number, th: number): number {
+  return Math.max(48, Math.min(168, th - 24, tw - 32 - 14 - NP_COL_MIN))
+}

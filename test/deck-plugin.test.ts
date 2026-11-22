@@ -199,3 +199,29 @@ describe("previewSlot for core plugin tiles", () => {
     expect(ct.wx.hourly.length).toBeGreaterThan(2);
   });
 });
+
+describe("status renderer: rich fields", () => {
+  test("keeps the optional fields, trims them, and still accepts {state, label}", async () => {
+    
+    const old = validatePlugin("status", { state: "ok", label: "x" }) as any;
+    expect(old.data).toEqual({ state: "ok", label: "x", title: undefined, value: undefined, unit: undefined, detail: undefined, points: undefined });
+    const r = validatePlugin("status", { state: "warn", label: "x", title: "t".repeat(50), value: 123, unit: "ms", detail: "HTTP 200", points: [1, "a", NaN, 2] }) as any;
+    expect(r.data.title.length).toBe(40);
+    expect(r.data.value).toBe("123");
+    expect(r.data.points).toEqual([1, 2]);
+  });
+});
+
+describe("plugin styles (deck)", () => {
+  test("pickStyle: the tile's choice, then the widget's suggestion, then the default", async () => {
+    const { pickStyle } = await import("../web/deck/src/plugin-logic");
+    expect(pickStyle("chart", "bars", "area")).toBe("bars");
+    expect(pickStyle("chart", "nope", "area")).toBe("area");
+    expect(pickStyle("chart", undefined, undefined)).toBe("line");
+    expect(pickStyle("gauge", "bars", undefined)).toBe("arc");
+  });
+  test("parsePluginItem keeps the suggested style", () => {
+    const r: any = parsePluginItem({ render: "chart", data: { points: [1, 2] }, style: "area" });
+    expect(r.style).toBe("area");
+  });
+});
