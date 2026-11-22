@@ -1,9 +1,9 @@
 {
-  "id": "dev.alice.crypto",
+  "id": "dev.nookdeck.crypto-price",
   "name": "Crypto price",
   "version": "1.0.0",
   "nookdeck": ">=0.2.0",
-  "author": "alice",
+  "author": "Nookdeck",
   "description": "Live price of a coin",
   "icon": "icon.svg",
   "permissions": { "network": ["api.coingecko.com"] },
