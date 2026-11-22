@@ -27,9 +27,9 @@ describe("phoneAddresses", () => {
   test("macOS: order, labels, filtering", () => {
     const list = phoneAddresses({ interfaces: IFACES, hostName: "my-mac", tailnetName: "my-mac.tail1234.ts.net", platformId: "darwin" });
     expect(list.map((a) => [a.id, a.kind, a.host, a.label])).toEqual([
-      ["local", "local", "my-mac.local", "Computer name"],
       ["lan:192.168.1.20", "lan", "192.168.1.20", "Wi-Fi · 192.168.1.20 (192.168.1.0/24)"],
       ["lan:10.0.0.7", "lan", "10.0.0.7", "Ethernet · 10.0.0.7 (10.0.0.0/24)"],
+      ["local", "local", "my-mac.local", "Computer name"],
       ["tailscale:dns", "tailscale", "my-mac.tail1234.ts.net", "Tailscale (MagicDNS)"],
       ["tailscale:100.101.102.103", "tailscale", "100.101.102.103", "Tailscale · 100.101.102.103"],
       ["vpn:10.8.0.2", "vpn", "10.8.0.2", "utun5 · 10.8.0.2 (10.8.0.0/24)"],
@@ -44,12 +44,12 @@ describe("phoneAddresses", () => {
       hostName: "DESKTOP-ABC", platformId: "win32",
     });
     expect(list.map((a) => [a.kind, a.host, a.label])).toEqual([
-      ["local", "DESKTOP-ABC.local", "Computer name"],
       ["lan", "192.168.0.5", "Wi-Fi · 192.168.0.5 (192.168.0.0/24)"],
       ["lan", "10.1.1.9", "Ethernet · 10.1.1.9 (10.1.1.0/24)"],
+      ["local", "DESKTOP-ABC.local", "Computer name"],
       ["tailscale", "100.64.1.2", "Tailscale · 100.64.1.2"],
     ]);
-    expect(list[0]!.note).toContain("Android");
+    expect(list.find((a) => a.kind === "local")!.note).toContain("Android");
   });
   test("every subnet: two IPs on one NIC, two NICs, other netmasks; ?all=1 adds the virtual and link-local ones", () => {
     const ifs = {
@@ -69,9 +69,11 @@ describe("phoneAddresses", () => {
     expect(all.filter((a) => a.kind === "other").map((a) => a.host).sort()).toEqual(["169.254.12.3", "172.17.0.1"]);
     expect(all.filter((a) => a.kind === "lan").length).toBe(3);
   });
-  test("default: .local on macOS when it resolves, else the LAN address of the default route", () => {
+  test("default: the LAN address of the default route, .local only when there is no LAN address", () => {
     const list = phoneAddresses({ interfaces: IFACES, hostName: "my-mac", platformId: "darwin" });
-    expect(defaultAddress(list, { localResolves: true, platformId: "darwin", lanIp: "192.168.1.20" })).toBe("local");
+    expect(defaultAddress(list, { localResolves: true, platformId: "darwin", lanIp: "192.168.1.20" })).toBe("lan:192.168.1.20");
+    const noLan = phoneAddresses({ interfaces: { utun4: [nic("100.100.1.1")] }, hostName: "my-mac", platformId: "darwin" });
+    expect(defaultAddress(noLan, { localResolves: true, platformId: "darwin" })).toBe("local");
     expect(defaultAddress(list, { localResolves: false, platformId: "darwin", lanIp: "10.0.0.7" })).toBe("lan:10.0.0.7");
     expect(defaultAddress(list, { localResolves: true, platformId: "win32", lanIp: "192.168.1.20" })).toBe("lan:192.168.1.20");
     const onlyTs = phoneAddresses({ interfaces: { utun4: [nic("100.100.1.1")] }, hostName: "", platformId: "darwin" });
@@ -137,8 +139,8 @@ describe("GET /api/pairing and the phone Host check", () => {
     await start();
     const a = await (await rawFetch(`http://localhost:${app.port}/api/pairing`)).json() as any;
     // ".local" is the default only on macOS (the server uses the real platform)
-    expect(a.defaultAddress).toBe(process.platform === "darwin" ? "local" : "lan:192.168.1.20");
-    expect(a.addresses.map((x: any) => x.id)).toEqual(["local", "lan:192.168.1.20", "lan:10.0.0.7", "tailscale:dns", "tailscale:100.101.102.103", "vpn:10.8.0.2"]);
+    expect(a.defaultAddress).toBe("lan:192.168.1.20");
+    expect(a.addresses.map((x: any) => x.id)).toEqual(["lan:192.168.1.20", "lan:10.0.0.7", "local", "tailscale:dns", "tailscale:100.101.102.103", "vpn:10.8.0.2"]);
     expect(a.addresses[3].url).toBe(`http://my-mac.tail1234.ts.net:${app.port}/?pin=111111`);
     expect(a.url).toContain("/?pin=111111");
     expect(a.urlLocal).toBe(`http://my-mac.local:${app.port}/?pin=111111`);

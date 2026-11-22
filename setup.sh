@@ -635,7 +635,7 @@ summary() {
       printf '  %-9s %s\n' Phone "${url:-http://<this-mac>:$port}" PIN "${pin:-see the logs}" Manage "http://localhost:$port/manage/"
     fi
     printf '%s  ───────────────────────────────────────%s\n' "$C_BRAND" "$C_OFF"
-    if [ -t 1 ] && [ -n "$pin" ] && [ -n "$url" ]; then printf '\n'; "$bin" qr "${url_local:-$url}" 2>/dev/null || true; fi
+    if [ -t 1 ] && [ -n "$pin" ] && [ -n "$url" ]; then printf '\n'; "$bin" qr "$url" 2>/dev/null || true; fi
     say "On a phone on the same Wi-Fi, open the Phone address and type the PIN (or scan the code)."
     if [ "$open_page" = 1 ] && have open && [ -z "${NOOKDECK_INSTALL_HOME:-}" ] && ! { [ "$up_to_date" = 1 ] && [ "$already_running" = 1 ]; }; then
       if ask "Open the manage page now?" y; then open "http://localhost:$port/manage/" >/dev/null 2>&1 || true; fi

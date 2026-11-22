@@ -64,7 +64,7 @@ function PairingCard() {
     setSaved(id);
     try { window.localStorage.setItem(ADDRESS_KEY, id); } catch { /* the choice just is not remembered */ }
   };
-  const link = !pairing ? "" : chosen ? addressLink(chosen.host, pairing) : pairing.urlLocal ?? pairing.url;
+  const link = !pairing ? "" : chosen ? addressLink(chosen.host, pairing) : pairing.url ?? pairing.urlLocal;
 
   const load = useCallback(async () => {
     try {

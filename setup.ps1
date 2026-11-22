@@ -650,7 +650,7 @@ function Install-Nookdeck {
       }
       Put '  -----------------------------------' 'Cyan'
       if (-not $NoStart -and $S.pairing) {
-        if (-not [Console]::IsOutputRedirected -and $S.pairing.url) { try { Write-Host ''; $qrUrl = if ($S.pairing.urlLocal) { $S.pairing.urlLocal } else { $S.pairing.url }; & $exe qr "$qrUrl" } catch { } }
+        if (-not [Console]::IsOutputRedirected -and $S.pairing.url) { try { Write-Host ''; $qrUrl = $S.pairing.url; & $exe qr "$qrUrl" } catch { } }
         Say 'On a phone on the same Wi-Fi, open the Phone address and type the PIN (or scan the code).'
         if (-not $NoOpen -and -not $relocated -and -not ($S.upToDate -and $S.alreadyRunning)) {
           if (Ask 'Open the manage page now?' $true) { try { Start-Process "http://localhost:$Port/manage/" } catch { } }

@@ -71,7 +71,7 @@ function ifaceLabel(name: string, id: string): string {
   if (id === "darwin") return name === "en0" ? "Wi-Fi" : /^en\d+$/.test(name) ? "Ethernet" : name;
   return /^(wl|wlan)/i.test(name) ? "Wi-Fi" : /^(en|eth)/i.test(name) ? "Ethernet" : name;
 }
-const rank = (a: PhoneAddress): number => ({ local: 0, lan: 1, tailscale: 2, vpn: 3, other: 4 })[a.kind];
+const rank = (a: PhoneAddress): number => ({ lan: 0, local: 1, tailscale: 2, vpn: 3, other: 4 })[a.kind];
 
 export interface AddressInput {
   interfaces?: NodeJS.Dict<NetworkInterfaceInfo[]>;
@@ -130,14 +130,14 @@ export function phoneAddresses(o: AddressInput): PhoneAddress[] {
 }
 
 /**
- * The address to show first: `<name>.local` on macOS when it resolves, else the first LAN address (the Wi-Fi/Ethernet one
- * the default route uses, `ip` from lanIp()), else the first address of any kind.
+ * The address to show first: the Wi-Fi/Ethernet address the default route uses (`ip` from lanIp()), else the first LAN
+ * address, else `<name>.local` (when it resolves), else the first address of any kind. Wi-Fi is what most people pair over;
+ * the .local name and Tailscale stay one pick away in the address list.
  */
 export function defaultAddress(list: PhoneAddress[], o: { localResolves: boolean; platformId?: string; lanIp?: string }): string | undefined {
-  const mac = (o.platformId ?? platform.id) === "darwin";
-  if (mac && o.localResolves && list.some((a) => a.id === "local")) return "local";
   const lan = list.filter((a) => a.kind === "lan");
-  return (lan.find((a) => a.host === o.lanIp) ?? lan[0] ?? list.find((a) => a.kind !== "local") ?? list[0])?.id;
+  const local = o.localResolves ? list.find((a) => a.id === "local") : undefined;
+  return (lan.find((a) => a.host === o.lanIp) ?? lan[0] ?? local ?? list.find((a) => a.kind !== "local") ?? list[0])?.id;
 }
 
 /** Does `<name>.local` answer on this machine (mDNS)? Short timeout, cached 60 s. */
