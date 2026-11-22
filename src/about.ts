@@ -3,7 +3,7 @@ import pkg from "../package.json" with { type: "json" };
 import { BUILD_INFO, DECK_BUILD } from "./assets.gen";
 import { platform } from "./platform";
 
-export const REPO_URL = "https://github.com/howznguyen/phonedesk";
+export const REPO_URL = "https://github.com/howznguyen/nookdeck";
 
 export interface About {
   name: string;
@@ -22,7 +22,7 @@ export interface About {
 /** Everything is known at build or start time: no network calls, no update check. */
 export function aboutInfo(): About {
   return {
-    name: "PhoneDesk",
+    name: "Nookdeck",
     version: pkg.version,
     build: DECK_BUILD,
     commit: BUILD_INFO?.commit ?? "",
@@ -36,7 +36,10 @@ export function aboutInfo(): About {
   };
 }
 
-/** "phonedesk 0.1.0 (abc1234)", "(abc1234-dirty)" for a tree with changes, plain "phonedesk 0.1.0" without git info. */
-export function versionLine(a: About = aboutInfo()): string {
-  return `phonedesk ${a.version}${a.commit ? ` (${a.commit}${a.dirty ? "-dirty" : ""})` : ""}`;
+/** "nookdeck 0.1.0 (abc1234)", "(abc1234-dirty)" for a tree with changes, plain "nookdeck 0.1.0" without git info. */
+export function versionLine(a: About = aboutInfo(), exe: string = process.execPath): string {
+  // 0.1.x updaters run the downloaded file as `.phonedesk.update --version` and insist on "phonedesk <version>": a program that carries
+  // the old name (the phonedesk-* release assets, a not yet migrated bin/phonedesk) answers in the old way
+  const name = /phonedesk/i.test(exe.split(/[\\/]/).pop() ?? "") ? "phonedesk" : "nookdeck";
+  return `${name} ${a.version}${a.commit ? ` (${a.commit}${a.dirty ? "-dirty" : ""})` : ""}`;
 }

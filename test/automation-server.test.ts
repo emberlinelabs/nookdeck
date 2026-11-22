@@ -5,7 +5,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-process.env.PHONEDESK_HOME = mkdtempSync(join(tmpdir(), "pd-auto-"));
+process.env.NOOKDECK_HOME = mkdtempSync(join(tmpdir(), "pd-auto-"));
 const { startServer } = await import("../src/server");
 
 const ran: any[] = [];
@@ -56,7 +56,7 @@ beforeAll(async () => {
   const q = (id: string) => ({ id, name: id, windows: [], updatedAt: 1 });
   app = await startServer({
     port: 0, pin: "444444", hostName: async () => "my-mac",
-    webhookKeyFile: join(process.env.PHONEDESK_HOME!, "webhook-key"),
+    webhookKeyFile: join(process.env.NOOKDECK_HOME!, "webhook-key"),
     layoutHistoryDir: mkdtempSync(join(tmpdir(), "pd-auto-hist-")),
     hass: { connected: () => hassUp, getState: () => undefined, callService: async (s, e, d) => { hassCalls.push([s, e, d]); } },
     weatherFetch: async (u) => { weatherUrls.push(u); return Response.json(u.includes("geocoding") ? { results: [{ name: "Hanoi", latitude: 21, longitude: 105.8 }] } : { current: { time: "2026-11-17T10:00", temperature_2m: 31, weather_code: 0, is_day: 1 }, hourly: { time: [], temperature_2m: [], weather_code: [] }, daily: { time: [], weather_code: [], temperature_2m_max: [], temperature_2m_min: [] } }); },

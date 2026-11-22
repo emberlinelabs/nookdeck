@@ -180,6 +180,16 @@ export interface HassConfig {
   error?: string;
   version?: string;
 }
+/** GET /api/hass/status once the agent supports "Sign in with Home Assistant". */
+export interface HassStatus {
+  connected: boolean;
+  /** "oauth" = signed in with Home Assistant, "token" = a long-lived access token. */
+  mode?: "oauth" | "token";
+  haName?: string;
+  haVersion?: string;
+  user?: string;
+  error?: string;
+}
 export interface HassEntity {
   id: string;
   name: string;
@@ -245,7 +255,7 @@ export interface Theme {
   language?: "en" | "vi" | "zh";
   /** Unit for every temperature on the phone; missing means Celsius. A weather widget's own `units` wins for that widget. */
   temperatureUnit?: "c" | "f";
-  /** Look for a newer PhoneDesk once a day; missing means on. */
+  /** Look for a newer Nookdeck once a day; missing means on. */
   updateCheck?: boolean;
   /** Phone screen behaviour: lite mode, keep awake, standby clock, dimming. */
   screen?: ScreenSettings;
@@ -367,7 +377,7 @@ export interface Integration {
   updatedAt?: string;
   /** Where the quota comes from. */
   source?: "oauth" | "local" | "claude-code" | "codex" | "agy";
-  /** Human reason the agent gives for where the quota comes from (read-only, no sign-in in PhoneDesk). */
+  /** Human reason the agent gives for where the quota comes from (read-only, no sign-in in Nookdeck). */
   reason?: string;
   /** Quota windows as in the WebSocket "ai" message: usedPercent 0-100. */
   windows: { id: string; label: string; usedPercent: number; resetsAt?: string }[];

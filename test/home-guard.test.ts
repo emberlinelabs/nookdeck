@@ -1,5 +1,5 @@
-// The test suite must never touch the real home of whoever runs it. test/_preload.ts sandboxes PHONEDESK_HOME and blocks
-// writes under the real ~/.phonedesk, ~/.claude, ~/.codex and ~/Library/LaunchAgents; this file proves both hold.
+// The test suite must never touch the real home of whoever runs it. test/_preload.ts sandboxes NOOKDECK_HOME and blocks
+// writes under the real ~/.nookdeck, ~/.claude, ~/.codex and ~/Library/LaunchAgents; this file proves both hold.
 import { describe, expect, test } from "bun:test";
 import fs, { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import * as fsNs from "node:fs";
@@ -7,18 +7,18 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-const realHome = join(homedir(), ".phonedesk");
+const realHome = join(homedir(), ".nookdeck");
 const probe = join(realHome, "__test_guard_probe__");
 
 describe("the real home is off limits to tests", () => {
-  test("PHONEDESK_HOME is a sandbox under the temp dir, not the real home", async () => {
+  test("NOOKDECK_HOME is a sandbox under the temp dir, not the real home", async () => {
     const { HOME } = await import("../src/config");
-    expect(process.env.PHONEDESK_TEST_SANDBOX).toBe("1");
+    expect(process.env.NOOKDECK_TEST_SANDBOX).toBe("1");
     expect(resolve(HOME)).not.toBe(resolve(realHome));
     expect(resolve(HOME).startsWith(resolve(tmpdir()))).toBe(true);
   });
 
-  test("writes under the real ~/.phonedesk throw, by every import style, and leave nothing behind", async () => {
+  test("writes under the real ~/.nookdeck throw, by every import style, and leave nothing behind", async () => {
     const dyn = await import("node:fs");
     const attempts: Array<[string, () => unknown]> = [
       ["writeFileSync named", () => writeFileSync(probe, "x")],
@@ -54,7 +54,7 @@ describe("the real home is off limits to tests", () => {
     expect(Array.isArray(existsSync(realHome) ? readdirSync(realHome) : [])).toBe(true); // reading the real home is allowed
   });
 
-  test("every subprocess a test starts gets its own PHONEDESK_HOME (or a fake HOME / install home)", () => {
+  test("every subprocess a test starts gets its own NOOKDECK_HOME (or a fake HOME / install home)", () => {
     const dir = join(import.meta.dir);
     const bad: string[] = [];
     for (const name of readdirSync(dir)) {
@@ -66,7 +66,7 @@ describe("the real home is off limits to tests", () => {
         // the call plus the lines that build its env: no env at all inherits the sandboxed process.env, an explicit env must name its home
         const ctx = lines.slice(Math.max(0, i - 20), i + 4).join("\n");
         const explicitEnv = /\benv\b/.test(l) || /\benv\b\s*[:=]/.test(lines.slice(i, i + 4).join("\n"));
-        if (explicitEnv && !/PHONEDESK_HOME|PHONEDESK_INSTALL_HOME|HOME:|\.\.\.process\.env/.test(ctx)) bad.push(`${name}:${i + 1}`);
+        if (explicitEnv && !/NOOKDECK_HOME|NOOKDECK_INSTALL_HOME|HOME:|\.\.\.process\.env/.test(ctx)) bad.push(`${name}:${i + 1}`);
       });
     }
     expect(bad).toEqual([]);

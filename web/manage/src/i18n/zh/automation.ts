@@ -224,7 +224,7 @@ export const ZH_AUTOMATION: Record<string, string> = {
   "Create a long-lived access token": "创建长期访问令牌",
   "Open Home Assistant and click your name at the bottom of the sidebar (Profile).": "打开 Home Assistant，点击侧边栏底部的用户名（「配置文件」）。",
   "Choose the Security tab and scroll down to “Long-lived access tokens”.": "选择「安全」标签页，向下滚动到「长期访问令牌」。",
-  "Click “Create token”, give it a name (e.g. PhoneDesk) and copy the token right away, because Home Assistant shows it only once.": "点击「创建令牌」，命名（例如 PhoneDesk）并立即复制，因为 Home Assistant 只显示一次。",
+  "Click “Create token”, give it a name (e.g. Nookdeck) and copy the token right away, because Home Assistant shows it only once.": "点击「创建令牌」，命名（例如 Nookdeck）并立即复制，因为 Home Assistant 只显示一次。",
   "Paste the token into the field above and click “Save token”. The token is stored only on this computer and is not sent to the phone.": "将令牌粘贴到上方输入框并点击「保存令牌」。令牌只存储在本机，不会发送到手机。",
 
   // components/webhook-card.tsx
@@ -239,7 +239,7 @@ export const ZH_AUTOMATION: Record<string, string> = {
   Copied: "已复制",
   "Copy key": "复制密钥",
   "Change key": "更改密钥",
-  "Other machines on the LAN send this key in the Authorization: Bearer header. The key can only call the webhook, not the phone control API. Calls from this machine also need the header X-PhoneDesk: 1.": "局域网内的其他机器通过 Authorization: Bearer 请求头发送此密钥。该密钥只能调用 webhook，不能调用手机控制 API。来自本机的调用还需附加请求头 X-PhoneDesk: 1。",
+  "Other machines on the LAN send this key in the Authorization: Bearer header. The key can only call the webhook, not the phone control API. Calls from this machine also need the header X-Nookdeck: 1.": "局域网内的其他机器通过 Authorization: Bearer 请求头发送此密钥。该密钥只能调用 webhook，不能调用手机控制 API。来自本机的调用还需附加请求头 X-Nookdeck: 1。",
   "Example (replace <KEY> with the copied key)": "示例（将 <KEY> 替换为已复制的密钥）",
   "Copy command": "复制命令",
   "Other machines on the LAN paste the key into the Authorization: Bearer header.": "局域网内的其他机器将密钥粘贴到 Authorization: Bearer 请求头中。",

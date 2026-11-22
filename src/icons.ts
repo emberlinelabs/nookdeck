@@ -38,7 +38,7 @@ const APPLE_CATEGORIES: Record<string, string> = {
   "com.apple.Safari": "utilities", "com.apple.finder": "utilities",
 };
 
-/** Where the macOS system apps live; they get PhoneDesk's own "system" category so "utilities" stays useful. */
+/** Where the macOS system apps live; they get Nookdeck's own "system" category so "utilities" stays useful. */
 export const SYSTEM_APP_DIRS = ["/System/Library/CoreServices", "/System/Library/CoreServices/Applications"];
 
 export function appCategory(bundleId: string, fromPlist: unknown, system = false): string | null {
@@ -75,7 +75,7 @@ export function imageKind(b: Uint8Array): "png" | "jpeg" | null {
 }
 
 export interface IconsOptions {
-  /** Defaults to ~/.phonedesk. */
+  /** Defaults to ~/.nookdeck. */
   home?: string;
   /** Home directory used for ~/Applications. */
   userHome?: string;

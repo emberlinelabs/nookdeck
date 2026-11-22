@@ -189,7 +189,7 @@ export class AskSettingsStore {
   }
 }
 
-// ---------- hook process side (`phonedesk hook claude-ask`) ----------
+// ---------- hook process side (`nookdeck hook claude-ask`) ----------
 
 /** The PreToolUse JSON Claude Code expects: allow, with the original input plus the answers. */
 export function formatAskOutput(toolInput: Record<string, any>, answers: Answers): string {
@@ -216,7 +216,7 @@ export async function runAskHook(io: { stdin: string; port: number; secret: stri
   try {
     const res = await (io.fetch ?? fetch)(`http://127.0.0.1:${io.port}/api/hooks/question`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-phonedesk-hook": io.secret },
+      headers: { "content-type": "application/json", "x-nookdeck-hook": io.secret },
       body: JSON.stringify({ questions: toolInput.questions, ...(typeof (o.session_id ?? o.sessionId) === "string" ? { sessionId: o.session_id ?? o.sessionId } : {}), ...(typeof o.cwd === "string" ? { cwd: o.cwd } : {}) }),
       signal: ctl.signal,
     });

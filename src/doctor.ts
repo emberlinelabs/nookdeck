@@ -10,7 +10,7 @@ import { readFile } from "node:fs/promises";
 import type { HassStatus } from "./hass/client";
 
 /**
- * `phonedesk doctor`: what macOS lets PhoneDesk do. TCC attributes a permission to the RESPONSIBLE process: the phonedesk
+ * `nookdeck doctor`: what macOS lets Nookdeck do. TCC attributes a permission to the RESPONSIBLE process: the nookdeck
  * binary under the LaunchAgent, the terminal app when started from a terminal. So these checks must run inside the
  * running agent (GET /api/doctor). Nothing here ever triggers a permission prompt, except `request()` which the user asks for.
  */
@@ -38,7 +38,7 @@ export interface Probes {
   /** What our hook commands should run: [exe] for the compiled binary, [bun, index.ts] from source. */
   program: string[];
   version: string;
-  /** Started by launchd as dev.phonedesk.agent (so macOS attributes permissions to the phonedesk binary). */
+  /** Started by launchd as dev.nookdeck.agent (so macOS attributes permissions to the nookdeck binary). */
   asService: boolean;
   /** Runs a command and returns its exit code and stdout+stderr. Never throws. */
   run(argv: string[]): Promise<{ code: number; out: string }>;
@@ -84,7 +84,13 @@ export const AUTOMATION_TARGETS = [
   { id: "automation-spotify", name: "Spotify", bundle: "com.spotify.client" },
 ] as const;
 
-const who = (p: Probes) => (p.asService ? t("the phonedesk program") : t("the terminal app you started PhoneDesk from"));
+const who = (p: Probes) => (p.asService ? t("the nookdeck program") : t("the terminal app you started Nookdeck from"));
+
+/** True when this build is signed ad hoc (its designated requirement is a cdhash, not a certificate): Accessibility resets on update. */
+async function adhocBuild(p: Probes): Promise<boolean> {
+  const r = await p.run(["codesign", "-d", "-r-", p.exe]);
+  return /designated/.test(r.out) && !/certificate (leaf|root)|anchor apple/.test(r.out);
+}
 
 async function accessibility(p: Probes): Promise<DoctorItem> {
   const title = t("Accessibility");
@@ -92,9 +98,10 @@ async function accessibility(p: Probes): Promise<DoctorItem> {
   const ok = await p.axTrusted();
   if (ok === null) return { id: "accessibility", title, status: "unknown", detail: t("macOS did not answer") };
   if (ok) return { id: "accessibility", title, status: "ok", detail: t("granted to {who}", { who: who(p) }) };
+  const adhoc = p.asService && (await adhocBuild(p));
   return {
     id: "accessibility", title, status: "missing", detail: t("not granted to {who}: key press and typing tiles will not work", { who: who(p) }),
-    fix: { text: t("Open System Settings > Privacy & Security > Accessibility and turn {who} on. Run `phonedesk doctor --request accessibility` to make it appear in the list.", { who: p.asService ? "phonedesk" : t("your terminal app") }), settingsUrl: PANES.accessibility },
+    fix: { text: t("Open System Settings > Privacy & Security > Accessibility and turn {who} on. Run `nookdeck doctor --request accessibility` to make it appear in the list.", { who: p.asService ? "nookdeck" : t("your terminal app") }) + (adhoc ? " " + t("This is an ad-hoc build: Accessibility resets on every update.") : ""), settingsUrl: PANES.accessibility },
   };
 }
 
@@ -103,11 +110,11 @@ async function automation(p: Probes, tg: (typeof AUTOMATION_TARGETS)[number]): P
   if (p.platform !== "darwin") return { id: tg.id, title, status: "n/a", detail: t("macOS only") };
   if (!p.installed(tg.bundle)) return { id: tg.id, title, status: "n/a", detail: t("{app} is not installed", { app: tg.name }) };
   const s = await p.automation(tg.bundle);
-  const fix = { text: t("Open System Settings > Privacy & Security > Automation and allow {who} to control {app}.", { who: p.asService ? "phonedesk" : t("your terminal app"), app: tg.name }), settingsUrl: PANES.automation };
+  const fix = { text: t("Open System Settings > Privacy & Security > Automation and allow {who} to control {app}.", { who: p.asService ? "nookdeck" : t("your terminal app"), app: tg.name }), settingsUrl: PANES.automation };
   switch (s) {
-    case "granted": return { id: tg.id, title, status: "ok", detail: t("allowed: phonedesk itself reads {app} for Now Playing", { app: tg.name }) };
+    case "granted": return { id: tg.id, title, status: "ok", detail: t("allowed: nookdeck itself reads {app} for Now Playing", { app: tg.name }) };
     case "denied": return { id: tg.id, title, status: "denied", detail: t("denied: Now Playing for {app} will not work", { app: tg.name }), fix };
-    case "not-asked": return { id: tg.id, title, status: "missing", detail: t("not asked yet: macOS asks the first time a tile needs it"), fix: { ...fix, text: t("Press a tile that uses {app}, or run `phonedesk doctor --request {id}`, then click Allow.", { app: tg.name, id: tg.id }) } };
+    case "not-asked": return { id: tg.id, title, status: "missing", detail: t("not asked yet: macOS asks the first time a tile needs it"), fix: { ...fix, text: t("Press a tile that uses {app}, or run `nookdeck doctor --request {id}`, then click Allow.", { app: tg.name, id: tg.id }) } };
     case "not-running": return { id: tg.id, title, status: "unknown", detail: t("{app} is not running, so macOS cannot say; open it and run the check again", { app: tg.name }) };
     default: return { id: tg.id, title, status: "unknown", detail: t("macOS did not answer") };
   }
@@ -120,7 +127,7 @@ async function nowPlayingAll(p: Probes): Promise<DoctorItem> {
   if (r.ok) return { id: "now-playing", title, status: "ok", detail: t("reads what Safari, Chrome, YouTube, Spotify, Music and other apps play") };
   return {
     id: "now-playing", title, status: "missing", detail: t("only Spotify and Music can be read: {why}", { why: r.why ?? "?" }),
-    fix: { text: t("Update phonedesk (`phonedesk update`); if it persists, check that /usr/bin/perl exists and report it.") },
+    fix: { text: t("Update nookdeck (`nookdeck update`); if it persists, check that /usr/bin/perl exists and report it.") },
   };
 }
 
@@ -154,7 +161,7 @@ function localNetwork(p: Probes, ctx: DoctorCtx): DoctorItem {
   const why = `${h.detail ?? ""} ${h.error ?? ""}`;
   if (UNREACHABLE.test(why)) return {
     id: "local-network", title, status: "denied", detail: t("Home Assistant is unreachable ({why}): macOS may be blocking Local Network access", { why: (h.detail || h.error || "").slice(0, 80) }),
-    fix: { text: t("Open System Settings > Privacy & Security > Local Network and turn {who} on.", { who: p.asService ? "phonedesk" : t("your terminal app") }), settingsUrl: PANES.localNetwork },
+    fix: { text: t("Open System Settings > Privacy & Security > Local Network and turn {who} on.", { who: p.asService ? "nookdeck" : t("your terminal app") }), settingsUrl: PANES.localNetwork },
   };
   return { id: "local-network", title, status: "unknown", detail: t("the last Home Assistant connection failed: {why}", { why: (h.error ?? "?").slice(0, 100) }) };
 }
@@ -167,12 +174,12 @@ async function firewall(p: Probes): Promise<DoctorItem> {
   if (g.code !== 0) return { id: "firewall", title, status: "unknown", detail: t("could not read the firewall state") };
   if (!/enabled|State = [12]/i.test(g.out) || /disabled|State = 0/i.test(g.out)) return { id: "firewall", title, status: "ok", detail: t("the macOS firewall is off: phones can connect") };
   const a = await p.run([fw, "--getappblocked", p.exe]);
-  if (/permitted|allowed/i.test(a.out) && !/not part|blocked/i.test(a.out)) return { id: "firewall", title, status: "ok", detail: t("the firewall is on and allows incoming connections to phonedesk") };
+  if (/permitted|allowed/i.test(a.out) && !/not part|blocked/i.test(a.out)) return { id: "firewall", title, status: "ok", detail: t("the firewall is on and allows incoming connections to nookdeck") };
   if (/block/i.test(a.out) && !/not part/i.test(a.out)) return {
-    id: "firewall", title, status: "denied", detail: t("the firewall is on and blocks incoming connections to phonedesk: phones cannot connect"),
-    fix: { text: t("Open System Settings > Network > Firewall > Options and allow incoming connections for phonedesk."), settingsUrl: PANES.firewall },
+    id: "firewall", title, status: "denied", detail: t("the firewall is on and blocks incoming connections to nookdeck: phones cannot connect"),
+    fix: { text: t("Open System Settings > Network > Firewall > Options and allow incoming connections for nookdeck."), settingsUrl: PANES.firewall },
   };
-  return { id: "firewall", title, status: "unknown", detail: t("the firewall is on and phonedesk is not in its list: macOS asks to allow incoming connections the first time a phone connects"), fix: { text: t("Click Allow when macOS asks, or add phonedesk under Firewall > Options."), settingsUrl: PANES.firewall } };
+  return { id: "firewall", title, status: "unknown", detail: t("the firewall is on and nookdeck is not in its list: macOS asks to allow incoming connections the first time a phone connects"), fix: { text: t("Click Allow when macOS asks, or add nookdeck under Firewall > Options."), settingsUrl: PANES.firewall } };
 }
 
 async function signature(p: Probes): Promise<DoctorItem> {
@@ -181,7 +188,7 @@ async function signature(p: Probes): Promise<DoctorItem> {
   const r = await p.run(["codesign", "-dv", "--verbose=2", p.exe]);
   if (/Signature=adhoc|flags=0x[0-9a-f]*\(adhoc/i.test(r.out)) return {
     id: "signature", title, status: "ok", detail: t("ad-hoc signed: macOS asks for permissions again after every update"),
-    fix: { text: t("After an update, remove the old phonedesk entries in the Privacy lists and add it again (this goes away with Developer ID signing).") },
+    fix: { text: t("After an update, remove the old nookdeck entries in the Privacy lists and add it again (this goes away with Developer ID signing).") },
   };
   const auth = /Authority=(Developer ID Application:[^\n]+)/.exec(r.out)?.[1];
   if (auth) return { id: "signature", title, status: "ok", detail: t("signed by {who}", { who: auth }) };
@@ -196,7 +203,7 @@ async function hooks(p: Probes, ctx: DoctorCtx): Promise<DoctorItem[]> {
     const id = `hooks-${tool}`;
     const title = t("{tool} hooks", { tool: tool === "claude" ? "Claude Code" : "Codex" });
     const file = files[tool];
-    if (!file) { out.push({ id, title, status: "n/a", detail: t("not checked (sandboxed PHONEDESK_HOME)") }); continue; }
+    if (!file) { out.push({ id, title, status: "n/a", detail: t("not checked (sandboxed NOOKDECK_HOME)") }); continue; }
     let data: any;
     try { data = JSON.parse(await readFile(file, "utf8")); } catch { out.push({ id, title, status: "n/a", detail: t("not installed") }); continue; }
     const mine: string[] = [];
@@ -207,7 +214,7 @@ async function hooks(p: Probes, ctx: DoctorCtx): Promise<DoctorItem[]> {
     if (!mine.length) { out.push({ id, title, status: "n/a", detail: t("not installed") }); continue; }
     const stale = mine.filter((c) => repointCommand(c, p.program) !== null);
     out.push(stale.length
-      ? { id, title, status: "missing", detail: t("installed, but {n} hook(s) point at another program", { n: stale.length }), fix: { text: t("Run `phonedesk hooks repoint` (an update does this for you).") } }
+      ? { id, title, status: "missing", detail: t("installed, but {n} hook(s) point at another program", { n: stale.length }), fix: { text: t("Run `nookdeck hooks repoint` (an update does this for you).") } }
       : { id, title, status: "ok", detail: t("installed and pointing at this program") });
   }
   return out;
@@ -215,7 +222,7 @@ async function hooks(p: Probes, ctx: DoctorCtx): Promise<DoctorItem[]> {
 
 async function runWindows(p: Probes, ctx: DoctorCtx): Promise<DoctorReport> {
   const W = await import("./platform/win32/doctor");
-  const items: DoctorItem[] = [{ id: "agent", title: t("PhoneDesk"), status: "ok", detail: `${p.version} · ${p.exe}` }];
+  const items: DoctorItem[] = [{ id: "agent", title: t("Nookdeck"), status: "ok", detail: `${p.version} · ${p.exe}` }];
   // every probe is bounded (see realProbes.run / helperPing) and they run side by side: the whole check takes as long as the slowest one
   const [startup, signature, smartscreen, helper, claude, network, firewall, hookItems] = await Promise.all([
     W.startup(p), W.signature(p), W.smartscreen(p), W.helper(p), W.claudeSignIn(p, ctx), W.network(p), W.firewall(p), hooks(p, ctx),
@@ -227,12 +234,12 @@ async function runWindows(p: Probes, ctx: DoctorCtx): Promise<DoctorReport> {
 export async function runDoctor(p: Probes, ctx: DoctorCtx): Promise<DoctorReport> {
   if (p.platform === "win32") return runWindows(p, ctx);
   const items: DoctorItem[] = [];
-  items.push({ id: "agent", title: t("PhoneDesk"), status: "ok", detail: `${p.version} · ${p.exe}` });
+  items.push({ id: "agent", title: t("Nookdeck"), status: "ok", detail: `${p.version} · ${p.exe}` });
   items.push({
     id: "service", title: t("Background service"),
     status: p.asService ? "ok" : "n/a",
-    detail: p.asService ? t("running as the launchd service (permissions belong to phonedesk)") : t("started from a terminal (permissions belong to {who})", { who: t("the terminal app you started PhoneDesk from") }),
-    ...(p.asService ? {} : { fix: { text: t("Run `phonedesk service install` to run in the background; macOS then asks for permissions for phonedesk itself.") } }),
+    detail: p.asService ? t("running as the launchd service (permissions belong to nookdeck)") : t("started from a terminal (permissions belong to {who})", { who: t("the terminal app you started Nookdeck from") }),
+    ...(p.asService ? {} : { fix: { text: t("Run `nookdeck service install` to run in the background; macOS then asks for permissions for nookdeck itself.") } }),
   });
   items.push(await signature(p));
   items.push(await accessibility(p));
@@ -273,7 +280,7 @@ export function tccServiceFor(id: string): string | null {
 
 /**
  * Asks macOS to show its permission prompt for `id`, so it lists the binary. Only runs when the user asked
- * (`phonedesk doctor --request <id>` / POST /api/doctor/request). Returns the state right after the call.
+ * (`nookdeck doctor --request <id>` / POST /api/doctor/request). Returns the state right after the call.
  */
 export function describeRequest(id: string): { id: string; kind: "accessibility" | "automation" | "local-network"; bundle?: string } | null {
   if (id === "accessibility") return { id, kind: "accessibility" };
@@ -288,12 +295,12 @@ export const STATUS_MARK: Record<DoctorStatus, string> = { ok: "✓", missing: "
 export function formatReport(r: DoctorReport, opts: { color?: boolean } = {}): string {
   const c = (code: string, s: string) => (opts.color ? `\x1b[${code}m${s}\x1b[0m` : s);
   const mark = (s: DoctorStatus) => (s === "ok" ? c("32", "✓") : s === "missing" || s === "denied" ? c("31", "✗") : s === "unknown" ? c("33", "?") : c("90", "-"));
-  const lines = [`PhoneDesk doctor · ${r.version}`, ""];
+  const lines = [`Nookdeck doctor · ${r.version}`, ""];
   for (const it of r.items) {
     lines.push(`${mark(it.status)} ${it.title} - ${it.detail}`);
     if (it.status !== "ok" && it.status !== "n/a" && it.fix) {
       lines.push(`    ${t("Fix")}: ${it.fix.text}`);
-      if (it.fix.settingsUrl) lines.push(`    ${t("Open the pane")}: phonedesk doctor --open ${it.id}`);
+      if (it.fix.settingsUrl) lines.push(`    ${t("Open the pane")}: nookdeck doctor --open ${it.id}`);
     } else if (it.fix && (it.status === "n/a" || it.id === "signature")) lines.push(`    ${t("Note")}: ${it.fix.text}`);
   }
   const bad = r.items.filter((i) => i.status === "missing" || i.status === "denied").length;
@@ -355,7 +362,7 @@ export function realAutomation(bundleId: string, ask = false): AutomationState {
 /**
  * macOS permission calls (Apple Events, Accessibility) are synchronous and can block for good: tccd stuck, a target app that is
  * launching or hung. On the agent's main thread that freezes Bun.serve, so they never run there: each is asked of a short-lived
- * child (`phonedesk __ae <bundle> [ask]`, `phonedesk __ax [prompt]`) with a hard timeout, killed when it does not answer.
+ * child (`nookdeck __ae <bundle> [ask]`, `nookdeck __ax [prompt]`) with a hard timeout, killed when it does not answer.
  * A granted answer is cached for 60 s; any other answer for 3 s, so a permission the user just turned on shows up at once.
  * At most one child per question is in flight.
  */
@@ -454,7 +461,7 @@ export function realProbes(version: string): Probes {
     exe: process.execPath,
     program: defaultProgram(),
     version,
-    asService: process.env.XPC_SERVICE_NAME === SERVICE_LABEL || process.env.PHONEDESK_SERVICE === "1",
+    asService: process.env.XPC_SERVICE_NAME === SERVICE_LABEL || process.env.NOOKDECK_SERVICE === "1",
     run: async (argv) => {
       try {
         const p = Bun.spawn(argv, { stdout: "pipe", stderr: "pipe" });
@@ -482,6 +489,6 @@ export function realProbes(version: string): Probes {
     desktop: () => (platform === "win32" ? { station: winStation(), idle: winIdle() } : { station: null, idle: null }),
     helperPing: async () => { try { return (await winHelperPing()) === "pong"; } catch { return false; } },
     fileExists: (f) => existsSync(f),
-    claudeCredentialsFile: () => join(process.env.PHONEDESK_CLAUDE_DIR ?? join(homedir(), ".claude"), ".credentials.json"),
+    claudeCredentialsFile: () => join(process.env.NOOKDECK_CLAUDE_DIR ?? join(homedir(), ".claude"), ".credentials.json"),
   };
 }

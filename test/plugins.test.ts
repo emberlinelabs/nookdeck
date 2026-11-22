@@ -5,8 +5,8 @@ import { cpSync, mkdtempSync, readFileSync, writeFileSync, existsSync, mkdirSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// every plugin file goes to a temp dir: never the real ~/.phonedesk
-process.env.PHONEDESK_HOME = mkdtempSync(join(tmpdir(), "pd-plug-home-"));
+// every plugin file goes to a temp dir: never the real ~/.nookdeck
+process.env.NOOKDECK_HOME = mkdtempSync(join(tmpdir(), "pd-plug-home-"));
 const { parseManifest, covers, hostMatches, versionAtLeast, describePermissions } = await import("../src/plugins/manifest");
 const S = await import("../src/plugins/sources");
 const { PluginStore, PluginError, manifestUrls, packageHash } = await import("../src/plugins/store");
@@ -14,7 +14,7 @@ const { PluginRuntime } = await import("../src/plugins/runtime");
 const { validateLayout, defaultLayout } = await import("../src/config");
 
 const FIX = join(import.meta.dir, "fixtures", "plugins");
-const fixtureJson = (name: string) => JSON.parse(readFileSync(join(FIX, name, "phonedesk.json"), "utf8"));
+const fixtureJson = (name: string) => JSON.parse(readFileSync(join(FIX, name, "nookdeck.json"), "utf8"));
 const tmp = (p = "pd-plug-") => mkdtempSync(join(tmpdir(), p));
 const mk = (extra: Record<string, unknown> = {}) => ({ id: "dev.t.x", name: "X", version: "1.0.0", ...extra });
 const newStore = (o: Record<string, unknown> = {}) => { const d = tmp(); return new PluginStore({ dir: join(d, "plugins"), stateFile: join(d, "plugins.json"), agentVersion: "0.2.0", ...o }); };
@@ -41,7 +41,7 @@ describe("manifest", () => {
     expect(() => parseManifest({ ...mk(), version: "1" })).toThrow("version");
     expect(() => parseManifest({ ...mk(), name: "" })).toThrow("name");
     bad({ main: "index.js" }, "has code");
-    bad({ phonedesk: ">=9.0.0" }, "needs PhoneDesk >=9.0.0");
+    bad({ nookdeck: ">=9.0.0" }, "needs Nookdeck >=9.0.0");
     bad({ permissions: { root: true } }, "not a known permission");
     bad({ permissions: { network: ["not a host"] } }, "host name");
     bad({ widgets: [{ id: "a", render: "pie", source: { http: { url: "https://h.com/" } } }] }, "render must be one of");
@@ -188,13 +188,13 @@ describe("store", () => {
     expect(r).toMatchObject({ updated: false, unchanged: false });
     expect(r.plugin).toMatchObject({ id: "dev.example.crypto", version: "1.0.0", enabled: false, needsApproval: true, unreviewed: true, permissions: { network: ["api.example.com"] }, granted: { network: [] } });
     expect(r.plugin.permissionLines).toEqual(["Connect to api.example.com"]);
-    expect(r.plugin.sha256).toBe(packageHash(new Map([["phonedesk.json", new Uint8Array(readFileSync(join(src, "phonedesk.json")))]])));
-    expect(existsSync(join(store.dir, "dev.example.crypto", "1.0.0", "phonedesk.json"))).toBe(true);
+    expect(r.plugin.sha256).toBe(packageHash(new Map([["nookdeck.json", new Uint8Array(readFileSync(join(src, "nookdeck.json")))]])));
+    expect(existsSync(join(store.dir, "dev.example.crypto", "1.0.0", "nookdeck.json"))).toBe(true);
     expect(store.runnable("dev.example.crypto")).toBe("disabled");
   });
   test("install from a manifest file, and the same install again changes nothing", async () => {
     const store = newStore();
-    const file = join(copyFixture("dev.example.macro"), "phonedesk.json");
+    const file = join(copyFixture("dev.example.macro"), "nookdeck.json");
     expect((await store.install(file)).plugin.id).toBe("dev.example.macro");
     expect(await store.install(file)).toMatchObject({ unchanged: true, updated: false });
   });
@@ -202,35 +202,35 @@ describe("store", () => {
     const store = newStore();
     const d = tmp();
     await expect(store.install(join(d, "nope"))).rejects.toThrow("does not exist");
-    await expect(store.install(d)).rejects.toThrow("no phonedesk.json");
-    writeFileSync(join(d, "phonedesk.json"), "{ not json");
+    await expect(store.install(d)).rejects.toThrow("no nookdeck.json");
+    writeFileSync(join(d, "nookdeck.json"), "{ not json");
     await expect(store.install(d)).rejects.toThrow("not valid JSON");
-    writeFileSync(join(d, "phonedesk.json"), JSON.stringify({ id: "bad", name: "x", version: "1.0.0" }));
-    await expect(store.install(d)).rejects.toThrow("phonedesk.json: id must look like");
+    writeFileSync(join(d, "nookdeck.json"), JSON.stringify({ id: "bad", name: "x", version: "1.0.0" }));
+    await expect(store.install(d)).rejects.toThrow("nookdeck.json: id must look like");
     await expect(store.install("")).rejects.toThrow("folder path");
-    await expect(store.install("http://example.com/phonedesk.json")).rejects.toThrow("only https");
+    await expect(store.install("http://example.com/nookdeck.json")).rejects.toThrow("only https");
     await expect(store.install("ftp://example.com/x")).rejects.toThrow("only https");
     expect(store.list()).toEqual([]);
   });
-  test("a plugin that needs a newer PhoneDesk is refused", async () => {
+  test("a plugin that needs a newer Nookdeck is refused", async () => {
     const store = newStore({ agentVersion: "0.1.5" });
     const d = tmp();
-    writeFileSync(join(d, "phonedesk.json"), JSON.stringify(mk({ phonedesk: ">=0.2.0" })));
-    await expect(store.install(d)).rejects.toThrow("needs PhoneDesk >=0.2.0, you have 0.1.5");
+    writeFileSync(join(d, "nookdeck.json"), JSON.stringify(mk({ nookdeck: ">=0.2.0" })));
+    await expect(store.install(d)).rejects.toThrow("needs Nookdeck >=0.2.0, you have 0.1.5");
   });
   test("install from an https URL (the file itself, or a GitHub repo page)", async () => {
     const seen: string[] = [];
     const body = JSON.stringify(fixtureJson("dev.example.crypto"));
-    const fakeFetch: any = async (u: string) => { seen.push(String(u)); return String(u).endsWith("/main/phonedesk.json") ? new Response(null, { status: 404 }) : new Response(body); };
+    const fakeFetch: any = async (u: string) => { seen.push(String(u)); return String(u).endsWith("/main/nookdeck.json") ? new Response(null, { status: 404 }) : new Response(body); };
     const store = newStore({ fetch: fakeFetch });
-    expect((await store.install("https://example.org/p/phonedesk.json")).plugin.id).toBe("dev.example.crypto");
+    expect((await store.install("https://example.org/p/nookdeck.json")).plugin.id).toBe("dev.example.crypto");
     const store2 = newStore({ fetch: fakeFetch });
     seen.length = 0;
     expect((await store2.install("https://github.com/alice/crypto")).plugin.source).toBe("https://github.com/alice/crypto");
-    expect(seen).toEqual(["https://raw.githubusercontent.com/alice/crypto/main/phonedesk.json", "https://raw.githubusercontent.com/alice/crypto/master/phonedesk.json"]);
-    expect(manifestUrls("https://github.com/a/b/tree/dev/sub/dir")).toEqual(["https://raw.githubusercontent.com/a/b/dev/sub/dir/phonedesk.json"]);
+    expect(seen).toEqual(["https://raw.githubusercontent.com/alice/crypto/main/nookdeck.json", "https://raw.githubusercontent.com/alice/crypto/master/nookdeck.json"]);
+    expect(manifestUrls("https://github.com/a/b/tree/dev/sub/dir")).toEqual(["https://raw.githubusercontent.com/a/b/dev/sub/dir/nookdeck.json"]);
     const gone = newStore({ fetch: (async () => new Response(null, { status: 404 })) as any });
-    await expect(gone.install("https://example.org/x.json")).rejects.toThrow("no phonedesk.json found");
+    await expect(gone.install("https://example.org/x.json")).rejects.toThrow("no nookdeck.json found");
     const broken = newStore({ fetch: (async () => new Response(null, { status: 500 })) as any });
     await expect(broken.install("https://example.org/x.json")).rejects.toThrow("answered 500");
   });
@@ -251,7 +251,7 @@ describe("store", () => {
   test("a plugin without permissions can be enabled right away", async () => {
     const store = newStore();
     const d = tmp();
-    writeFileSync(join(d, "phonedesk.json"), JSON.stringify(mk()));
+    writeFileSync(join(d, "nookdeck.json"), JSON.stringify(mk()));
     const r = await store.install(d);
     expect(r.plugin.needsApproval).toBe(false);
     expect((await store.setEnabled("dev.t.x", true)).enabled).toBe(true);
@@ -265,12 +265,12 @@ describe("store", () => {
     await store.setSettings("dev.example.crypto", { apiKey: "S3CRET" });
     // same permissions, new version: stays enabled
     const m = fixtureJson("dev.example.crypto");
-    writeFileSync(join(src, "phonedesk.json"), JSON.stringify({ ...m, version: "1.1.0" }));
+    writeFileSync(join(src, "nookdeck.json"), JSON.stringify({ ...m, version: "1.1.0" }));
     const u1 = await store.install(src);
     expect(u1).toMatchObject({ updated: true, plugin: { version: "1.1.0", enabled: true, needsApproval: false } });
     expect(existsSync(join(store.dir, "dev.example.crypto", "1.0.0"))).toBe(false); // the old version is gone
     // new permission: off, needs approval
-    writeFileSync(join(src, "phonedesk.json"), JSON.stringify({ ...m, version: "1.2.0", permissions: { network: ["api.example.com", "cdn.example.com"] } }));
+    writeFileSync(join(src, "nookdeck.json"), JSON.stringify({ ...m, version: "1.2.0", permissions: { network: ["api.example.com", "cdn.example.com"] } }));
     const u2 = await store.install(src);
     expect(u2.plugin).toMatchObject({ version: "1.2.0", enabled: false, needsApproval: true });
     expect(store.entry("dev.example.crypto")!.state.settings.apiKey).toBe("S3CRET");
@@ -293,7 +293,7 @@ describe("store", () => {
     await expect(store.setSettings("dev.example.crypto", [] as any)).rejects.toThrow("object");
     const store2 = newStore();
     const d = tmp();
-    writeFileSync(join(d, "phonedesk.json"), JSON.stringify(mk({ settings: [{ key: "n", type: "number", label: "N", default: 5 }, { key: "s", type: "select", label: "S", options: ["a", "b"] }] })));
+    writeFileSync(join(d, "nookdeck.json"), JSON.stringify(mk({ settings: [{ key: "n", type: "number", label: "N", default: 5 }, { key: "s", type: "select", label: "S", options: ["a", "b"] }] })));
     await store2.install(d);
     expect((await store2.setSettings("dev.t.x", { n: "12", junk: 1 })).settings).toEqual({ n: 12 });
     await expect(store2.setSettings("dev.t.x", { n: "abc" })).rejects.toThrow("not a valid number");
@@ -328,7 +328,7 @@ describe("store", () => {
     await a.install(copyFixture("dev.example.crypto"));
     await a.grant("dev.example.crypto", { network: ["api.example.com"] });
     await a.setEnabled("dev.example.crypto", true);
-    const file = join(opts.dir, "dev.example.crypto", "1.0.0", "phonedesk.json");
+    const file = join(opts.dir, "dev.example.crypto", "1.0.0", "nookdeck.json");
     writeFileSync(file, readFileSync(file, "utf8").replace("Crypto price", "Crypto prices"));
     const b = new PluginStore(opts);
     await b.load();

@@ -196,7 +196,7 @@ export function ScreenPanel({ layout, pageId, update, orientation, onOrientation
             </div>
           </Section>
 
-          <Section title={t("Alarms")} hint={t("Alarms ring on the phone itself, even when the Mac is off. Tap the phone once after opening PhoneDesk so the sound can play.")}>
+          <Section title={t("Alarms")} hint={t("Alarms ring on the phone itself, even when the Mac is off. Tap the phone once after opening Nookdeck so the sound can play.")}>
             {alarms.length === 0 && <p className="rounded-xl border border-dashed p-4 text-center text-[13px] text-muted-foreground">{t("No alarms yet.")}</p>}
             {alarms.map((a, i) => (
               <AlarmCard key={a.id} alarm={a} devices={devices} onChange={(n) => setAlarms(alarms.map((x, j) => (j === i ? n : x)))} onDelete={() => setAlarms(alarms.filter((_, j) => j !== i))} />

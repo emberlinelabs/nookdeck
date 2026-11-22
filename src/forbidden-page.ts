@@ -1,24 +1,24 @@
-import markSvg from "../docs/brand/phonedesk-mark.svg" with { type: "text" };
+import markSvg from "../docs/brand/nookdeck-mark.svg" with { type: "text" };
 import type { Language } from "./i18n";
 
 const TEXT: Record<Language, { title: string; lead: string; open: string; back: string; lang: string }> = {
   en: {
     title: "Management page is only on the computer",
-    lead: "For safety, PhoneDesk's management page only opens on the computer it runs on.",
+    lead: "For safety, Nookdeck's management page only opens on the computer it runs on.",
     open: "Open this address on that computer:",
     back: "Back to the phone panel",
     lang: "en",
   },
   vi: {
     title: "Trang quản lý chỉ mở được trên máy tính",
-    lead: "Vì an toàn, trang quản lý của PhoneDesk chỉ mở được trên chính máy tính đang chạy nó.",
+    lead: "Vì an toàn, trang quản lý của Nookdeck chỉ mở được trên chính máy tính đang chạy nó.",
     open: "Hãy mở địa chỉ này trên máy tính đó:",
     back: "Quay lại bảng điều khiển trên điện thoại",
     lang: "vi",
   },
   zh: {
     title: "管理页面只能在电脑上打开",
-    lead: "为了安全，PhoneDesk 的管理页面只能在运行它的那台电脑上打开。",
+    lead: "为了安全，Nookdeck 的管理页面只能在运行它的那台电脑上打开。",
     open: "请在那台电脑上打开此地址：",
     back: "返回手机控制面板",
     lang: "zh",
@@ -48,7 +48,7 @@ export function forbiddenPage(port: number, lang: Language): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>${x.title} - PhoneDesk</title>
+<title>${x.title} - Nookdeck</title>
 <style>
   :root { color-scheme: dark; --bg: #0b0d10; --card: #12161b; --line: #232a32; --text: #e8edf2; --dim: #9aa6b2; --key: #22d3ee; }
   * { box-sizing: border-box; }

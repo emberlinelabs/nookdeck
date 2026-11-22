@@ -30,7 +30,7 @@ export const realHelperSpawn: HelperSpawn = (argv) => {
 /** Where the script is written: a file named by its content hash, so an update never runs a stale copy. */
 export function scriptPath(script = HELPER_SCRIPT, dir = tmpdir()): string {
   const hash = createHash("sha256").update(script).digest("hex").slice(0, 12);
-  return join(dir, `phonedesk-helper-${hash}.ps1`);
+  return join(dir, `nookdeck-helper-${hash}.ps1`);
 }
 
 export function helperArgv(file: string): string[] {

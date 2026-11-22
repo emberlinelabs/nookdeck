@@ -1,6 +1,6 @@
 {
-  "name": "PhoneDesk",
-  "short_name": "PhoneDesk",
+  "name": "Nookdeck",
+  "short_name": "Nookdeck",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

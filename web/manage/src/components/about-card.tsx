@@ -40,7 +40,7 @@ export function AboutCard({ about }: { about: About | null }) {
   return (
     <Card id="about" className="max-w-3xl">
       <CardContent className="flex flex-col gap-3 p-4">
-        <h3 className="text-[15px] font-semibold">{t("About PhoneDesk")}</h3>
+        <h3 className="text-[15px] font-semibold">{t("About Nookdeck")}</h3>
         <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-[13px]">
           {rows.filter(([, v]) => v).map(([k, v]) => (
             <div key={k} className="contents"><dt className="text-muted-foreground">{k}</dt><dd className="font-mono text-xs">{v}</dd></div>

@@ -53,7 +53,7 @@ describe("the platform boundary", () => {
   });
 
   test("hook command paths: forward slashes on Windows only", () => {
-    expect(createPlatform("win32").hookPath("C:\\Users\\Me\\AppData\\Local\\PhoneDesk\\bin\\phonedesk.exe")).toBe("C:/Users/Me/AppData/Local/PhoneDesk/bin/phonedesk.exe");
+    expect(createPlatform("win32").hookPath("C:\\Users\\Me\\AppData\\Local\\Nookdeck\\bin\\nookdeck.exe")).toBe("C:/Users/Me/AppData/Local/Nookdeck/bin/nookdeck.exe");
     expect(createPlatform("darwin").hookPath("/a/b")).toBe("/a/b");
   });
 });
@@ -247,11 +247,11 @@ describe("win32 platform adapter (fake helper, fake input, fake credentials)", (
   test("secrets use the Credential Manager target service/account; idle and claude credentials", async () => {
     const store = new Map<string, string>();
     const { p } = make({}, { cred: { read: (t: string) => store.get(t), write: (t: string, _u: string, v: string) => { store.set(t, v); return true; }, remove: (t: string) => { store.delete(t); } }, idle: () => 12.5 });
-    expect(await p.secrets!.set("PhoneDesk-HASS", "token", "abc")).toBe(true);
-    expect([...store.keys()]).toEqual(["PhoneDesk-HASS/token"]);
-    expect(await p.secrets!.get("PhoneDesk-HASS", "token")).toBe("abc");
-    await p.secrets!.remove("PhoneDesk-HASS", "token");
-    expect(await p.secrets!.get("PhoneDesk-HASS", "token")).toBeUndefined();
+    expect(await p.secrets!.set("Nookdeck-HASS", "token", "abc")).toBe(true);
+    expect([...store.keys()]).toEqual(["Nookdeck-HASS/token"]);
+    expect(await p.secrets!.get("Nookdeck-HASS", "token")).toBe("abc");
+    await p.secrets!.remove("Nookdeck-HASS", "token");
+    expect(await p.secrets!.get("Nookdeck-HASS", "token")).toBeUndefined();
     expect(await p.idleSeconds()).toBe(12.5);
     expect(await p.claudeCredentials()).toBeNull(); // Windows keeps them in ~/.claude/.credentials.json
   });
@@ -345,15 +345,15 @@ describe("WinHelper (JSON lines over a fake process)", () => {
 });
 
 describe("win32 service (Task Scheduler)", () => {
-  const prog = ["C:\\Users\\Me\\AppData\\Local\\PhoneDesk\\bin\\phonedesk.exe"];
+  const prog = ["C:\\Users\\Me\\AppData\\Local\\Nookdeck\\bin\\nookdeck.exe"];
 
   test("the launcher is a hidden cmd with logs and the service marker; quoting survives spaces and quotes", () => {
-    const vbs = WS.buildLauncher({ program: ["C:\\Program Files\\PhoneDesk\\phonedesk.exe"], env: { PHONEDESK_HOME: 'D:\\data "x"' }, logDir: "C:\\Users\\Me\\.phonedesk\\logs", port: 7500 });
-    expect(vbs).toContain('sh.Environment("Process")("PHONEDESK_SERVICE") = "1"');
-    expect(vbs).toContain('sh.Environment("Process")("PHONEDESK_HOME") = "D:\\data ""x"""');
+    const vbs = WS.buildLauncher({ program: ["C:\\Program Files\\Nookdeck\\nookdeck.exe"], env: { NOOKDECK_HOME: 'D:\\data "x"' }, logDir: "C:\\Users\\Me\\.nookdeck\\logs", port: 7500 });
+    expect(vbs).toContain('sh.Environment("Process")("NOOKDECK_SERVICE") = "1"');
+    expect(vbs).toContain('sh.Environment("Process")("NOOKDECK_HOME") = "D:\\data ""x"""');
     expect(vbs).toContain(', 0, False'); // window style 0 = hidden, do not wait
     expect(vbs).toContain('cmd /s /c ""');
-    expect(vbs).toContain('""C:\\Program Files\\PhoneDesk\\phonedesk.exe"" --port 7500');
+    expect(vbs).toContain('""C:\\Program Files\\Nookdeck\\nookdeck.exe"" --port 7500');
     expect(vbs).toContain('agent.out.log');
     expect(WS.buildLauncher({ program: prog, logDir: "L" })).not.toContain("--port");
     expect(vbs.endsWith("\r\n")).toBe(true);
@@ -373,11 +373,11 @@ describe("win32 service (Task Scheduler)", () => {
   });
 
   test("schtasks / reg argument builders", () => {
-    expect(WS.schtasksCreate("t.xml")).toEqual(["schtasks", "/Create", "/TN", "PhoneDesk", "/XML", "t.xml", "/F"]);
-    expect(WS.schtasksRun()).toEqual(["schtasks", "/Run", "/TN", "PhoneDesk"]);
-    expect(WS.schtasksDelete()).toEqual(["schtasks", "/Delete", "/TN", "PhoneDesk", "/F"]);
-    expect(WS.regAddRun("C:\\L\\launch.vbs")).toEqual(["reg", "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "PhoneDesk", "/t", "REG_SZ", "/d", 'wscript.exe //B //Nologo "C:\\L\\launch.vbs"', "/f"]);
-    expect(WS.parseQuery("TaskName: \\PhoneDesk\r\nStatus:                                Running\r\n")).toEqual({ running: true, state: "Running" });
+    expect(WS.schtasksCreate("t.xml")).toEqual(["schtasks", "/Create", "/TN", "Nookdeck", "/XML", "t.xml", "/F"]);
+    expect(WS.schtasksRun()).toEqual(["schtasks", "/Run", "/TN", "Nookdeck"]);
+    expect(WS.schtasksDelete()).toEqual(["schtasks", "/Delete", "/TN", "Nookdeck", "/F"]);
+    expect(WS.regAddRun("C:\\L\\launch.vbs")).toEqual(["reg", "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "Nookdeck", "/t", "REG_SZ", "/d", 'wscript.exe //B //Nologo "C:\\L\\launch.vbs"', "/f"]);
+    expect(WS.parseQuery("TaskName: \\Nookdeck\r\nStatus:                                Running\r\n")).toEqual({ running: true, state: "Running" });
     expect(WS.parseQuery("Status:   Ready")).toEqual({ running: false, state: "Ready" });
     const stop = WS.stopAgentArgv("C:\\a\\it's.exe", 42);
     expect(stop[stop.length - 1]).toContain("$_.Path -eq 'C:\\a\\it''s.exe' -and $_.Id -ne 42");
@@ -400,10 +400,10 @@ describe("win32 service (Task Scheduler)", () => {
     const r = await WS.winInstall(a.c);
     expect(r.method).toBe("task");
     expect(existsSync(r.launcher)).toBe(true);
-    expect(readFileSync(r.launcher, "utf8")).toContain("PHONEDESK_SERVICE");
+    expect(readFileSync(r.launcher, "utf8")).toContain("NOOKDECK_SERVICE");
     expect(a.calls.map((c) => c.slice(0, 2).join(" "))).toEqual(expect.arrayContaining(["schtasks /End", "schtasks /Create", "schtasks /Run"]));
     const create = a.calls.find((c) => c[1] === "/Create")!;
-    expect(create).toEqual(["schtasks", "/Create", "/TN", "PhoneDesk", "/XML", join(a.dir, "task.xml"), "/F"]);
+    expect(create).toEqual(["schtasks", "/Create", "/TN", "Nookdeck", "/XML", join(a.dir, "task.xml"), "/F"]);
     expect(existsSync(join(a.dir, "task.xml"))).toBe(false); // temp file removed
     const b = ctx({ fail: (argv) => argv[1] === "/Create" });
     expect((await WS.winInstall(b.c)).method).toBe("run-key");
@@ -454,11 +454,11 @@ describe("win32 service (Task Scheduler)", () => {
 });
 
 describe("win32 doctor", () => {
-  const EXE = "C:\\Users\\Me\\AppData\\Local\\PhoneDesk\\bin\\phonedesk.exe";
+  const EXE = "C:\\Users\\Me\\AppData\\Local\\Nookdeck\\bin\\nookdeck.exe";
   function probes(out: Record<string, { code: number; out: string }> = {}, over: any = {}) {
     const calls: string[][] = [];
     const p: import("../src/doctor").Probes = {
-      platform: "win32", exe: EXE, program: [EXE], version: "phonedesk 1.2.3", asService: true,
+      platform: "win32", exe: EXE, program: [EXE], version: "nookdeck 1.2.3", asService: true,
       run: async (argv) => { calls.push(argv); const key = argv[0] === "powershell.exe" ? (argv[argv.length - 1]!.match(/Get-AuthenticodeSignature|Zone\.Identifier|Get-NetFirewallProfile/)?.[0] ?? "ps") : `${argv[0]} ${argv[1]}`; return out[key] ?? { code: 0, out: "" }; },
       axTrusted: () => null, automation: () => "unknown", requestAccessibility: () => null, requestAutomation: () => "unknown", installed: () => false,
       which: () => null, hookFiles: () => ({}), desktop: () => ({ station: "WinSta0", idle: 3.2 }), helperPing: async () => true, fileExists: () => true, claudeCredentialsFile: () => "C:\\Users\\Me\\.claude\\.credentials.json",
@@ -466,7 +466,7 @@ describe("win32 doctor", () => {
     };
     return { p, calls };
   }
-  const INST = { port: 7420, home: join(require("node:os").homedir(), ".phonedesk") };
+  const INST = { port: 7420, home: join(require("node:os").homedir(), ".nookdeck") };
   const run = async (o: any = {}, over: any = {}, ctx: any = {}) => { const k = probes(o, over); const r = await D.runDoctor(k.p, { instance: INST, ...ctx }); return { r, ...k, by: (id: string) => r.items.find((i) => i.id === id)! }; };
 
   test("the Windows item ids", async () => {
@@ -496,7 +496,7 @@ describe("win32 doctor", () => {
     expect((await run(fw("profile=True\nrule=Phone;enabled=True;action=Allow;dir=Inbound;profile=Private"))).by("firewall").status).toBe("ok");
     expect((await run(fw("profile=True\nrule=Phone;enabled=True;action=Block;dir=Inbound;profile=Any"))).by("firewall")).toMatchObject({ status: "denied", fix: { settingsUrl: expect.any(String) } });
     // Windows makes BLOCK rules when its popup is unanswered; they beat an allow rule
-    const both = (await run(fw("profile=True\nrule=PhoneDesk;enabled=True;action=Allow;dir=Inbound;profile=Any\nrule=phonedesk.exe;enabled=True;action=Block;dir=Inbound;profile=Public"))).by("firewall");
+    const both = (await run(fw("profile=True\nrule=Nookdeck;enabled=True;action=Allow;dir=Inbound;profile=Any\nrule=nookdeck.exe;enabled=True;action=Block;dir=Inbound;profile=Public"))).by("firewall");
     expect(both.status).toBe("denied");
     expect(both.fix!.text).toContain("delete rule name=all");
     const none = (await run(fw("profile=True"))).by("firewall");
@@ -534,8 +534,8 @@ describe("win32 doctor", () => {
 
 describe("hook commands on Windows", () => {
   test("paths in the hook line use forward slashes through the platform (macOS is unchanged)", () => {
-    expect(HI.hookCommand("claude", { execPath: "/h/.phonedesk/bin/phonedesk" })).toBe("'/h/.phonedesk/bin/phonedesk' hook claude # phonedesk hook");
-    expect(createPlatform("win32").hookPath("C:\\Users\\Me\\phonedesk.exe")).toBe("C:/Users/Me/phonedesk.exe");
+    expect(HI.hookCommand("claude", { execPath: "/h/.nookdeck/bin/nookdeck" })).toBe("'/h/.nookdeck/bin/nookdeck' hook claude # nookdeck hook");
+    expect(createPlatform("win32").hookPath("C:\\Users\\Me\\nookdeck.exe")).toBe("C:/Users/Me/nookdeck.exe");
   });
 });
 
@@ -556,7 +556,7 @@ describe.skipIf(process.platform !== "win32")("real Windows (read-only)", () => 
   }, 90_000);
   test("credentials round trip in the Credential Manager under a test target", async () => {
     const { realCredApi } = await import("../src/platform/win32/ffi");
-    const t = "PhoneDeskTest/" + Date.now();
+    const t = "NookdeckTest/" + Date.now();
     try {
       // a session without a loaded credential store (an SSH logon, error 1312) cannot write: nothing to test there
       if (!realCredApi.write(t, "tester", "s3cret-ü")) return;

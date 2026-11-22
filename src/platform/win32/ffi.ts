@@ -1,7 +1,7 @@
 import { decodeVkScan, INPUT_SIZE, packInputs, type KeyEvent, type VkScan } from "./keys";
 
 /**
- * The few Win32 calls PhoneDesk makes through bun:ffi: SendInput (keys), GetLastInputInfo (idle),
+ * The few Win32 calls Nookdeck makes through bun:ffi: SendInput (keys), GetLastInputInfo (idle),
  * VkKeyScanW (layout lookup) and the Credential Manager (secrets). Loaded lazily, only on Windows.
  */
 interface Win {

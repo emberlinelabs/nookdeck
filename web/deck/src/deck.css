@@ -1,5 +1,5 @@
 /*
- * PhoneDesk deck overlay. Plain CSS that Safari 12 (iOS 12) understands, same rules as the other embedded UIs:
+ * Nookdeck deck overlay. Plain CSS that Safari 12 (iOS 12) understands, same rules as the other embedded UIs:
  * hex/rgba colours, custom properties, grid gaps and margins. No flex `gap`, no @layer,
  * no oklch/color-mix, no :is()/:where(), no clamp(), no `inset`.
  * Everything is scoped under .pd-root / pd-* so the deck can be embedded in another page.

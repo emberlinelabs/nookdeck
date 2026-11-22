@@ -6,13 +6,13 @@ import { hookCommand, installHook, isHookInstalled, uninstallHook, HOOK_MARKER }
 
 const dir = () => mkdtempSync(join(tmpdir(), "pd-hk-"));
 const read = (f: string) => JSON.parse(readFileSync(f, "utf8"));
-const CMD = hookCommand("claude", { execPath: "/opt/phonedesk", indexPath: "/x/src/index.ts" });
+const CMD = hookCommand("claude", { execPath: "/opt/nookdeck", indexPath: "/x/src/index.ts" });
 
 describe("hookCommand", () => {
   test("compiled vs source mode, always carries the marker", () => {
-    expect(hookCommand("claude", { execPath: "/opt/pd dir/phonedesk" })).toBe(`'/opt/pd dir/phonedesk' hook claude # ${HOOK_MARKER}`);
+    expect(hookCommand("claude", { execPath: "/opt/pd dir/nookdeck" })).toBe(`'/opt/pd dir/nookdeck' hook claude # ${HOOK_MARKER}`);
     expect(hookCommand("codex", { execPath: "/u/.bun/bin/bun", indexPath: "/r/src/index.ts" })).toBe(`'/u/.bun/bin/bun' '/r/src/index.ts' hook codex # ${HOOK_MARKER}`);
-    expect(hookCommand("claude", { execPath: "/it's/phonedesk" })).toContain(`'/it'\\''s/phonedesk'`);
+    expect(hookCommand("claude", { execPath: "/it's/nookdeck" })).toContain(`'/it'\\''s/nookdeck'`);
   });
 });
 
@@ -25,7 +25,7 @@ describe("install / uninstall", () => {
     expect(read(f).hooks.PermissionRequest[0].hooks[0]).toMatchObject({ type: "command", command: CMD });
     expect((await installHook(f, CMD)).changed).toBe(false);
     expect(read(f).hooks.PermissionRequest.length).toBe(1);
-    expect(existsSync(f + ".phonedesk.bak")).toBe(false);
+    expect(existsSync(f + ".nookdeck.bak")).toBe(false);
   });
 
   test("keeps other settings and hooks, backs up the original, updates a moved binary", async () => {
@@ -33,14 +33,14 @@ describe("install / uninstall", () => {
     const original = { theme: "dark", hooks: { PermissionRequest: [{ hooks: [{ type: "command", command: "echo other" }] }], PostToolUse: [{ hooks: [{ type: "command", command: "x" }] }] } };
     writeFileSync(f, JSON.stringify(original, null, 2));
     await installHook(f, CMD);
-    expect(read(f + ".phonedesk.bak")).toEqual(original);
+    expect(read(f + ".nookdeck.bak")).toEqual(original);
     const after = read(f);
     expect(after.theme).toBe("dark");
     expect(after.hooks.PostToolUse).toEqual(original.hooks.PostToolUse);
     expect(after.hooks.PermissionRequest.length).toBe(2);
     expect(after.hooks.PermissionRequest[0]).toEqual(original.hooks.PermissionRequest[0]);
 
-    const moved = hookCommand("claude", { execPath: "/new/phonedesk" });
+    const moved = hookCommand("claude", { execPath: "/new/nookdeck" });
     expect((await installHook(f, moved)).changed).toBe(true);
     expect(read(f).hooks.PermissionRequest.length).toBe(2);
     expect(read(f).hooks.PermissionRequest[1].hooks[0].command).toBe(moved);
@@ -68,15 +68,15 @@ describe("install / uninstall", () => {
     writeFileSync(f, "{ not json");
     await expect(installHook(f, CMD)).rejects.toThrow("not valid JSON");
     expect(readFileSync(f, "utf8")).toBe("{ not json");
-    expect(existsSync(f + ".phonedesk.bak")).toBe(false);
+    expect(existsSync(f + ".nookdeck.bak")).toBe(false);
   });
 });
 
 describe("hookCommand targets the installing agent", () => {
   test("default port and home add no flags", () => {
-    expect(hookCommand("claude", { execPath: "/bin/phonedesk", port: 7420, home: "/h/.phonedesk", defaultHome: "/h/.phonedesk" })).toBe("'/bin/phonedesk' hook claude # phonedesk hook");
+    expect(hookCommand("claude", { execPath: "/bin/nookdeck", port: 7420, home: "/h/.nookdeck", defaultHome: "/h/.nookdeck" })).toBe("'/bin/nookdeck' hook claude # nookdeck hook");
   });
   test("other port and home are carried, quoted", () => {
-    expect(hookCommand("codex", { execPath: "/bin/phonedesk", port: 7460, home: "/tmp/a b", defaultHome: "/h/.phonedesk" })).toBe("'/bin/phonedesk' hook codex --port 7460 --home '/tmp/a b' # phonedesk hook");
+    expect(hookCommand("codex", { execPath: "/bin/nookdeck", port: 7460, home: "/tmp/a b", defaultHome: "/h/.nookdeck" })).toBe("'/bin/nookdeck' hook codex --port 7460 --home '/tmp/a b' # nookdeck hook");
   });
 });

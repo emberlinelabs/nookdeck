@@ -19,8 +19,8 @@ export const osName = (a: About): string | undefined => {
   const p = asPlatform(a.platform);
   return [p ? OS[p] : a.platform, a.arch].filter(Boolean).join(" ") || undefined;
 };
-/** One line for bug reports: "PhoneDesk 0.1.0 (abc1234) · macOS arm64". */
+/** One line for bug reports: "Nookdeck 0.1.0 (abc1234) · macOS arm64". */
 export const aboutLine = (a: About): string => {
   const os = osName(a);
-  return `PhoneDesk ${a.version}${a.commit ? ` (${a.commit})` : ""}${os ? ` · ${os}` : ""}`;
+  return `Nookdeck ${a.version}${a.commit ? ` (${a.commit})` : ""}${os ? ` · ${os}` : ""}`;
 };

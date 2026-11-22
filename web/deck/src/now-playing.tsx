@@ -10,7 +10,7 @@ import type { Media, MediaCommand, Stats } from './types'
 
 /**
  * Level bars: while playing they move with a decorative CSS equalizer (5 bars, own periods and negative delays, 25%-100% scaleY). The motion is NOT
- * audio-driven (PhoneDesk is a remote and has no audio signal); real `levels`, if ever passed, replace it. Paused or reduced motion: calm static bars.
+ * audio-driven (Nookdeck is a remote and has no audio signal); real `levels`, if ever passed, replace it. Paused or reduced motion: calm static bars.
  *
  * Now Playing tile: a Preact + Safari 12 port of Knowns UI registry/knowns/ui/knowns/now-playing/now-playing.tsx (commit cff14e21):
  * NowPlayingCover, NowPlayingLevels, useShownPosition (time keeps running between pushes and never jumps back), Scrub (read-only

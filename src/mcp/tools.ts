@@ -12,10 +12,10 @@ export class AgentApi {
     let res: Response;
     try {
       // the agent rejects mutating requests without the CSRF header and a JSON content type
-      const headers = { "x-phonedesk": "1", ...(init?.body !== undefined ? { "content-type": "application/json" } : {}), ...(init?.headers as Record<string, string> | undefined) };
+      const headers = { "x-nookdeck": "1", ...(init?.body !== undefined ? { "content-type": "application/json" } : {}), ...(init?.headers as Record<string, string> | undefined) };
       res = await this.fetchFn(`http://127.0.0.1:${this.port}${path}`, { ...init, headers });
     } catch {
-      throw new Error(`PhoneDesk agent is not reachable on port ${this.port}. Start it with "phonedesk" (or pass --port to the mcp command).`);
+      throw new Error(`Nookdeck agent is not reachable on port ${this.port}. Start it with "nookdeck" (or pass --port to the mcp command).`);
     }
     const text = await res.text();
     let body: any;

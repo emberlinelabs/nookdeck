@@ -3,9 +3,9 @@ import { open, readdir, stat } from "node:fs/promises";
 import { clampPercent, safeHome, windowLabel, type ProviderQuota, type QuotaWindow } from "./types";
 import { t } from "../i18n";
 
-/** Codex home. Overridable for tests: PHONEDESK_CODEX_DIR, then CODEX_HOME. */
+/** Codex home. Overridable for tests: NOOKDECK_CODEX_DIR, then CODEX_HOME. */
 export function codexDir(): string {
-  return process.env.PHONEDESK_CODEX_DIR ?? process.env.CODEX_HOME ?? join(safeHome(), ".codex");
+  return process.env.NOOKDECK_CODEX_DIR ?? process.env.CODEX_HOME ?? join(safeHome(), ".codex");
 }
 
 /** Reads the last `bytes` of a file as text (drops a possibly cut first line). */

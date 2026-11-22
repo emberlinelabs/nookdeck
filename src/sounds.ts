@@ -55,7 +55,7 @@ export interface LibraryOptions {
   now?: () => number;
 }
 
-/** ~/.phonedesk/sounds/<16hex>.<ext> plus names and sizes in sounds.json. */
+/** ~/.nookdeck/sounds/<16hex>.<ext> plus names and sizes in sounds.json. */
 export class SoundLibrary {
   private home: string;
   private run: NonNullable<LibraryOptions["run"]>;

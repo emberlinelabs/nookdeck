@@ -35,7 +35,7 @@ const toneOf = (i: DoctorItem): StatusDotTone => (/signature|signing/i.test(i.id
 const MAC_ONLY = new Set(["accessibility", "screen-recording", "automation", "input-monitoring"]);
 /** Checks the agent can ask macOS to prompt for. */
 const REQUESTABLE = new Set(["accessibility", "local-network"]);
-/** Checks whose stale grant (from an older PhoneDesk build) can be cleared so macOS asks again. */
+/** Checks whose stale grant (from an older Nookdeck build) can be cleared so macOS asks again. */
 const RESETTABLE = new Set(["accessibility"]);
 
 export function PermissionsPanel({ items, missing, error, reload }: { items: DoctorItem[] | null; missing: boolean; error: string | null; reload: () => Promise<void> }) {
@@ -64,11 +64,11 @@ export function PermissionsPanel({ items, missing, error, reload }: { items: Doc
     <div className="flex max-w-3xl flex-col gap-3">
       <div className="flex items-start gap-3">
         <p className="flex-1 text-sm text-muted-foreground">
-          {win ? t("PhoneDesk checks that Windows lets phone connections and the helper through. Fix anything marked below, then check again.") : t("PhoneDesk needs a few macOS permissions to press keys, type text and control apps for you. Grant them in System Settings, then check again.")}
+          {win ? t("Nookdeck checks that Windows lets phone connections and the helper through. Fix anything marked below, then check again.") : t("Nookdeck needs a few macOS permissions to press keys, type text and control apps for you. Grant them in System Settings, then check again.")}
         </p>
         <Button size="sm" variant="secondary" icon={<Refresh />} loading={busy === "all"} onClick={() => void act("all", reload)}>{t("Check again")}</Button>
       </div>
-      <Alert tone="info">{win ? t("Windows may show a SmartScreen warning for a downloaded app: choose More info, then Run anyway. The setup script adds a firewall rule for PhoneDesk on any network profile, limited to your local subnet, so phones on your network can connect.") : t("If you update PhoneDesk and the app is signed ad hoc, macOS may forget the permissions. Remove the old entry in System Settings, then grant it again.")}</Alert>
+      <Alert tone="info">{win ? t("Windows may show a SmartScreen warning for a downloaded app: choose More info, then Run anyway. The setup script adds a firewall rule for Nookdeck on any network profile, limited to your local subnet, so phones on your network can connect.") : t("If you update Nookdeck and the app is signed ad hoc, macOS may forget the permissions. Remove the old entry in System Settings, then grant it again.")}</Alert>
       {missing && <Alert tone="info">{t("This agent does not report permissions yet (/api/doctor returned 404). Update the agent and reload the page.")}</Alert>}
       {error && !missing && (!items || items.length === 0) && <Alert tone="danger" action={{ label: t("Retry"), onClick: () => void reload() }}>{error}</Alert>}
       {note && <Alert tone={note.tone} onDismiss={() => setNote(null)}>{note.text}</Alert>}
@@ -92,7 +92,7 @@ export function PermissionsPanel({ items, missing, error, reload }: { items: Doc
                     </div>
                     {actionable && (
                       <div className="flex flex-none items-center gap-2">
-                        {!win && RESETTABLE.has(i.id) && <Button size="xs" variant="secondary" icon={<Reset />} loading={busy === `reset-${i.id}`} title={t("Clears the old entry (left by an earlier PhoneDesk version) and asks macOS again. Turn phonedesk on when the prompt appears.")} onClick={() => void act(`reset-${i.id}`, () => api.requestDoctor(i.id, true), t("The old entry was cleared and macOS was asked again."))}>{t("Reset and ask again")}</Button>}
+                        {!win && RESETTABLE.has(i.id) && <Button size="xs" variant="secondary" icon={<Reset />} loading={busy === `reset-${i.id}`} title={t("Clears the old entry (left by an earlier Nookdeck version) and asks macOS again. Turn nookdeck on when the prompt appears.")} onClick={() => void act(`reset-${i.id}`, () => api.requestDoctor(i.id, true), t("The old entry was cleared and macOS was asked again."))}>{t("Reset and ask again")}</Button>}
                         {REQUESTABLE.has(i.id) && <Button size="xs" icon={<Shield />} loading={busy === `req-${i.id}`} onClick={() => void act(`req-${i.id}`, () => api.requestDoctor(i.id), t("macOS was asked to show its permission prompt."))}>{t("Request")}</Button>}
                         {(i.fix?.settingsUrl || !REQUESTABLE.has(i.id)) && <Button size="xs" variant="secondary" icon={<Settings />} loading={busy === `open-${i.id}`} onClick={() => void act(`open-${i.id}`, () => api.openDoctorSettings(i.id))}>{win ? t("Open Windows Settings") : t("Open Settings")}</Button>}
                       </div>

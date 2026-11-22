@@ -224,7 +224,7 @@ export const VI_AUTOMATION: Record<string, string> = {
   "Create a long-lived access token": "Tạo token truy cập dài hạn",
   "Open Home Assistant and click your name at the bottom of the sidebar (Profile).": "Mở Home Assistant, bấm tên của bạn ở góc dưới thanh bên (Hồ sơ).",
   "Choose the Security tab and scroll down to “Long-lived access tokens”.": "Chọn tab Bảo mật, kéo xuống mục “Token truy cập dài hạn”.",
-  "Click “Create token”, give it a name (e.g. PhoneDesk) and copy the token right away, because Home Assistant shows it only once.": "Bấm “Tạo token”, đặt tên (vd. PhoneDesk) rồi chép token ngay, vì Home Assistant chỉ hiện một lần.",
+  "Click “Create token”, give it a name (e.g. Nookdeck) and copy the token right away, because Home Assistant shows it only once.": "Bấm “Tạo token”, đặt tên (vd. Nookdeck) rồi chép token ngay, vì Home Assistant chỉ hiện một lần.",
   "Paste the token into the field above and click “Save token”. The token is stored only on this computer and is not sent to the phone.": "Dán token vào ô trên và bấm “Lưu token”. Token chỉ lưu trên máy này, không gửi xuống điện thoại.",
 
   // components/webhook-card.tsx
@@ -239,7 +239,7 @@ export const VI_AUTOMATION: Record<string, string> = {
   Copied: "Đã chép",
   "Copy key": "Chép key",
   "Change key": "Đổi key",
-  "Other machines on the LAN send this key in the Authorization: Bearer header. The key can only call the webhook, not the phone control API. Calls from this machine also need the header X-PhoneDesk: 1.": "Máy khác trong LAN gửi key này qua header Authorization: Bearer. Key chỉ gọi được webhook, không mở được API điều khiển điện thoại. Gọi từ chính máy này thì cần thêm header X-PhoneDesk: 1.",
+  "Other machines on the LAN send this key in the Authorization: Bearer header. The key can only call the webhook, not the phone control API. Calls from this machine also need the header X-Nookdeck: 1.": "Máy khác trong LAN gửi key này qua header Authorization: Bearer. Key chỉ gọi được webhook, không mở được API điều khiển điện thoại. Gọi từ chính máy này thì cần thêm header X-Nookdeck: 1.",
   "Example (replace <KEY> with the copied key)": "Ví dụ (thay <KEY> bằng key đã chép)",
   "Copy command": "Chép lệnh",
   "Other machines on the LAN paste the key into the Authorization: Bearer header.": "Máy khác trong LAN dán key vào header Authorization: Bearer.",

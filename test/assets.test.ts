@@ -106,10 +106,10 @@ test("generate bakes the build info in; versionLine shows the commit", async () 
   generate(join(root, "web"), out, { commit: "abc1234", dirty: true, builtAt: "2026-01-02T03:04:05.000Z" });
   expect(readFileSync(out, "utf8")).toContain('{"commit":"abc1234","dirty":true,"builtAt":"2026-01-02T03:04:05.000Z"}');
   const { versionLine } = await import("../src/about");
-  const base = { name: "PhoneDesk", version: "1.2.3", build: "b", builtAt: "", platform: "darwin", arch: "arm64", bun: "1", repo: "", license: "MIT" };
-  expect(versionLine({ ...base, commit: "abc1234", dirty: false })).toBe("phonedesk 1.2.3 (abc1234)");
-  expect(versionLine({ ...base, commit: "abc1234", dirty: true })).toBe("phonedesk 1.2.3 (abc1234-dirty)");
-  expect(versionLine({ ...base, commit: "", dirty: false })).toBe("phonedesk 1.2.3");
+  const base = { name: "Nookdeck", version: "1.2.3", build: "b", builtAt: "", platform: "darwin", arch: "arm64", bun: "1", repo: "", license: "MIT" };
+  expect(versionLine({ ...base, commit: "abc1234", dirty: false })).toBe("nookdeck 1.2.3 (abc1234)");
+  expect(versionLine({ ...base, commit: "abc1234", dirty: true })).toBe("nookdeck 1.2.3 (abc1234-dirty)");
+  expect(versionLine({ ...base, commit: "", dirty: false })).toBe("nookdeck 1.2.3");
 });
 
 test("forbidden page: language choice and escaping of the port", async () => {

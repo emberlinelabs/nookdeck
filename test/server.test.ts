@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-process.env.PHONEDESK_HOME = mkdtempSync(join(tmpdir(), "pd-srv-"));
+process.env.NOOKDECK_HOME = mkdtempSync(join(tmpdir(), "pd-srv-"));
 
 const { startServer } = await import("../src/server");
 const { SoundLibrary } = await import("../src/sounds");
@@ -117,7 +117,7 @@ describe("http", () => {
     const { DECK_BUILD } = await import("../src/assets.gen");
     const a = await (await fetch(`${base}/api/about`)).json() as any;
     const pkg = JSON.parse(readFileSync(join(import.meta.dir, "..", "package.json"), "utf8"));
-    expect(a).toMatchObject({ name: "PhoneDesk", version: pkg.version, build: DECK_BUILD, repo: "https://github.com/howznguyen/phonedesk", license: "MIT" });
+    expect(a).toMatchObject({ name: "Nookdeck", version: pkg.version, build: DECK_BUILD, repo: "https://github.com/howznguyen/nookdeck", license: "MIT" });
     expect(typeof a.commit).toBe("string");
     expect(typeof a.dirty).toBe("boolean");
     expect(Number.isNaN(Date.parse(a.builtAt))).toBe(false);
@@ -282,7 +282,7 @@ describe("AI, permissions, integrations, processes", () => {
   const hook = (body: any, secret: string | null = "test-secret") =>
     fetch(`${base}/api/hooks/permission`, {
       method: "POST",
-      headers: secret ? { "x-phonedesk-hook": secret } : {},
+      headers: secret ? { "x-nookdeck-hook": secret } : {},
       body: JSON.stringify(body),
     });
   const toolCall = { source: "claude", toolName: "Bash", toolInput: { command: "ls" }, cwd: "/w/app", sessionId: "s1" };
@@ -401,7 +401,7 @@ describe("quotas are read-only: no OAuth routes", () => {
 
 describe("permissions: no policy", () => {
   test("every request goes to the phone, risk is display only, scope is ignored; policy endpoints are gone", async () => {
-    const hookReq = (cmd: string) => fetch(`${base}/api/hooks/permission`, { method: "POST", headers: { "x-phonedesk-hook": "test-secret" }, body: JSON.stringify({ source: "claude", toolName: "Bash", toolInput: { command: cmd }, cwd: "/w/app", sessionId: "sx" }) });
+    const hookReq = (cmd: string) => fetch(`${base}/api/hooks/permission`, { method: "POST", headers: { "x-nookdeck-hook": "test-secret" }, body: JSON.stringify({ source: "claude", toolName: "Bash", toolInput: { command: cmd }, cwd: "/w/app", sessionId: "sx" }) });
     await Bun.sleep(500); // let earlier tests' pending requests expire
     const fresh = await (await fetch(`${base}/api/pair`, { method: "POST", body: JSON.stringify({ pin: app.pin, name: "np" }) })).json() as any; // earlier tests may have revoked `token`
     const c = connect(fresh.token);
@@ -854,7 +854,7 @@ describe("soundboard", () => {
 
 
 describe("CSRF / DNS-rebinding guard", () => {
-  const J = { "content-type": "application/json", "x-phonedesk": "1" };
+  const J = { "content-type": "application/json", "x-nookdeck": "1" };
   const put = (headers: Record<string, string>, body: BodyInit = "{}") => rawFetch(`${base}/api/pairing/regenerate`, { method: "POST", body, headers });
   const stat = async (p: Promise<Response>) => (await p).status;
 
@@ -914,15 +914,15 @@ describe("CSRF / DNS-rebinding guard", () => {
     }
   });
 
-  test("state-changing requests need application/json and X-PhoneDesk: 1", async () => {
+  test("state-changing requests need application/json and X-Nookdeck: 1", async () => {
     const layout = await (await rawFetch(`${base}/api/layout`)).json();
     const body = JSON.stringify(layout);
     // the classic CSRF: a simple cross-site form/fetch POST with a text/plain body
     expect(await stat(rawFetch(`${base}/api/layout`, { method: "PUT", body, headers: { "content-type": "text/plain" } }))).toBe(403);
     expect(await stat(rawFetch(`${base}/api/layout`, { method: "PUT", body }))).toBe(403); // default text/plain
     expect(await stat(rawFetch(`${base}/api/layout`, { method: "PUT", body, headers: { "content-type": "application/json" } }))).toBe(403); // no custom header
-    expect(await stat(rawFetch(`${base}/api/layout`, { method: "PUT", body, headers: { "x-phonedesk": "1" } }))).toBe(403); // no JSON type
-    expect(await stat(rawFetch(`${base}/api/layout`, { method: "PUT", body, headers: { "content-type": "application/json", "x-phonedesk": "0" } }))).toBe(403);
+    expect(await stat(rawFetch(`${base}/api/layout`, { method: "PUT", body, headers: { "x-nookdeck": "1" } }))).toBe(403); // no JSON type
+    expect(await stat(rawFetch(`${base}/api/layout`, { method: "PUT", body, headers: { "content-type": "application/json", "x-nookdeck": "0" } }))).toBe(403);
     expect(await stat(rawFetch(`${base}/api/layout`, { method: "PUT", body, headers: J }))).toBe(200);
     expect(await stat(rawFetch(`${base}/api/devices/nope`, { method: "DELETE", headers: { "content-type": "text/plain" } }))).toBe(403);
     expect(await stat(rawFetch(`${base}/api/sounds/snd:0123456789abcdef`, { method: "PATCH", body: "{}", headers: { "content-type": "text/plain" } }))).toBe(403);

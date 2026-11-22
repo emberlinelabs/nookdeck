@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const home = mkdtempSync(join(tmpdir(), "pd-pair-"));
-process.env.PHONEDESK_HOME = home;
+process.env.NOOKDECK_HOME = home;
 
 const { Pairing, hashToken, MAX_FAILURES } = await import("../src/pairing");
 // bun runs all test files in one process: config.ts fixes HOME at its first import, whoever that is

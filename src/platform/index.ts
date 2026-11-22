@@ -14,7 +14,7 @@ export function createPlatform(id: NodeJS.Platform): Platform {
 
 /**
  * The platform this process runs on. This is the only place that reads process.platform: every OS-specific call in
- * PhoneDesk goes through this object. Created lazily so importing a module never loads another OS's code paths.
+ * Nookdeck goes through this object. Created lazily so importing a module never loads another OS's code paths.
  */
 let current: Platform | undefined;
 export const platform: Platform = new Proxy({} as Platform, {

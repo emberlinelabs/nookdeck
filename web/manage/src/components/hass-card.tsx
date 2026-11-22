@@ -9,7 +9,7 @@ import { ApiError, api } from "@/api";
 import { Icon } from "@/components/icon";
 import { refreshHass } from "@/lib/hass";
 import { t } from "@/lib/i18n";
-import type { HassConfig } from "@/types";
+import type { HassConfig, HassStatus } from "@/types";
 
 /** Home Assistant connection: URL + Long-Lived Access Token. The token is write-only here. */
 export function HassCard() {
@@ -19,7 +19,29 @@ export function HassCard() {
   const [urlDirty, setUrlDirty] = useState(false);
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState<"token" | "test" | "delete" | "url" | null>(null);
+  // "Sign in with Home Assistant" exists only on newer agents: probe once, and hide the button when the status call fails.
+  const [login, setLogin] = useState<HassStatus | null | undefined>(undefined);
+  const [waiting, setWaiting] = useState(false);
+  const loadLogin = useCallback(async () => {
+    try { setLogin(await api.getHassStatus()); } catch { setLogin(null); }
+  }, []);
   const [notice, setNotice] = useState<{ tone: "success" | "danger"; text: string } | null>(null);
+
+  const signIn = async () => {
+    setBusy("url");
+    setNotice(null);
+    try {
+      if (urlDirty) { await api.putHassUrl(url.trim()); setUrlDirty(false); }
+      const a = await api.hassLogin(url.trim());
+      window.open(a, "_blank", "noopener");
+      setWaiting(true);
+      setNotice({ tone: "success", text: t("Finish signing in on the Home Assistant page that opened. This page updates by itself.") });
+    } catch (e) {
+      setNotice({ tone: "danger", text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -36,9 +58,12 @@ export function HassCard() {
 
   useEffect(() => {
     void load();
-    const t = setInterval(() => void load(), 10000);
+    void loadLogin();
+    // Quicker while a sign-in is open in another window.
+    const t = setInterval(() => { void load(); void loadLogin(); }, waiting ? 2500 : 10000);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, loadLogin, waiting]);
+  useEffect(() => { if (login?.connected) setWaiting(false); }, [login?.connected]);
 
   const run = async (kind: NonNullable<typeof busy>, fn: () => Promise<string>) => {
     setBusy(kind);
@@ -75,6 +100,12 @@ export function HassCard() {
     await api.deleteHassToken();
     return t("Token deleted.");
   });
+  // Signed in with Home Assistant: logout revokes the sign-in. A pasted token is only deleted.
+  const disconnect = () => run("delete", async () => {
+    if (login?.mode === "oauth") await api.hassLogout();
+    else await api.deleteHassToken();
+    return t("Disconnected.");
+  });
 
   const status = !cfg ? null : cfg.connected ? "ok" : cfg.error ? "error" : cfg.hasToken && cfg.url ? "wait" : "none";
 
@@ -107,6 +138,29 @@ export function HassCard() {
                 <Button variant="secondary" loading={busy === "url"} disabled={!urlDirty || !url.trim()} onClick={() => void saveUrl()}>{t("Save address")}</Button>
               </div>
             </Field>
+            {login && (
+              <div className="flex flex-col gap-2 rounded-xl border p-3">
+                {login.connected ? (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2 text-[13px]">
+                      <span>{t("Connected to {name}", { name: login.haName ?? "Home Assistant" })}{login.haVersion ? ` · ${login.haVersion}` : ""}</span>
+                      {login.mode && <Badge size="sm" tone="neutral">{login.mode === "oauth" ? t("Signed in") : t("Long-lived token")}</Badge>}
+                    </div>
+                    {login.user && <div className="text-xs text-muted-foreground">{t("Signed in as {user}", { user: login.user })}</div>}
+                    <div><Button variant="destructive" loading={busy === "delete"} onClick={() => void disconnect()}>{t("Disconnect")}</Button></div>
+                  </>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button loading={busy === "url" || waiting} disabled={!url.trim()} onClick={() => void signIn()}>{t("Sign in with Home Assistant")}</Button>
+                    <span className="text-xs text-muted-foreground">{t("Enter the address above first.")}</span>
+                  </div>
+                )}
+              </div>
+            )}
+            {login ? (
+              <details className="rounded-lg border px-3 py-2 text-[12.5px]">
+                <summary className="cursor-pointer text-foreground">{t("Use a long-lived token instead")}</summary>
+                <div className="mt-3 flex flex-col gap-3">
             <Field label={t("Long-lived access token")} id="ha-token" hint={cfg?.hasToken ? t("Saved. The token is never shown again; enter a new token to replace it.") : t("Paste the token created in Home Assistant.")}>
               <div className="flex gap-2">
                 <Input id="ha-token" type="password" value={token} autoComplete="new-password" spellCheck={false} placeholder={cfg?.hasToken ? t("•••••••• (Saved)") : "eyJ…"} onChange={(e) => setToken(e.target.value)} />
@@ -118,12 +172,29 @@ export function HassCard() {
               <Button variant="destructive" loading={busy === "delete"} disabled={!cfg?.hasToken} onClick={() => void clear()}>{t("Delete token")}</Button>
               {cfg?.hasToken && <span className="text-xs text-muted-foreground">{t("Saved")}</span>}
             </div>
+                </div>
+              </details>
+            ) : (
+              <>
+            <Field label={t("Long-lived access token")} id="ha-token" hint={cfg?.hasToken ? t("Saved. The token is never shown again; enter a new token to replace it.") : t("Paste the token created in Home Assistant.")}>
+              <div className="flex gap-2">
+                <Input id="ha-token" type="password" value={token} autoComplete="new-password" spellCheck={false} placeholder={cfg?.hasToken ? t("•••••••• (Saved)") : "eyJ…"} onChange={(e) => setToken(e.target.value)} />
+                <Button loading={busy === "token"} disabled={!token.trim()} onClick={() => void saveToken()}>{t("Save token")}</Button>
+              </div>
+            </Field>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="secondary" loading={busy === "test"} disabled={!cfg?.hasToken && !token} onClick={() => void test()}>{t("Test connection")}</Button>
+              <Button variant="destructive" loading={busy === "delete"} disabled={!cfg?.hasToken} onClick={() => void clear()}>{t("Delete token")}</Button>
+              {cfg?.hasToken && <span className="text-xs text-muted-foreground">{t("Saved")}</span>}
+            </div>
+              </>
+            )}
             <details className="rounded-lg border px-3 py-2 text-[12.5px] text-muted-foreground">
               <summary className="cursor-pointer text-foreground">{t("Create a long-lived access token")}</summary>
               <ol className="mt-2 flex list-decimal flex-col gap-1 pl-5">
                 <li>{t("Open Home Assistant and click your name at the bottom of the sidebar (Profile).")}</li>
                 <li>{t("Choose the Security tab and scroll down to “Long-lived access tokens”.")}</li>
-                <li>{t("Click “Create token”, give it a name (e.g. PhoneDesk) and copy the token right away, because Home Assistant shows it only once.")}</li>
+                <li>{t("Click “Create token”, give it a name (e.g. Nookdeck) and copy the token right away, because Home Assistant shows it only once.")}</li>
                 <li>{t("Paste the token into the field above and click “Save token”. The token is stored only on this computer and is not sent to the phone.")}</li>
               </ol>
             </details>

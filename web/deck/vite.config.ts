@@ -30,7 +30,7 @@ function deckBuild(): Plugin {
   }
 }
 
-const AGENT = process.env.PHONEDESK_AGENT ?? 'http://localhost:7420'
+const AGENT = process.env.NOOKDECK_AGENT ?? process.env.PHONEDESK_AGENT ?? 'http://localhost:7420'
 
 export default defineConfig({
   base: '/',

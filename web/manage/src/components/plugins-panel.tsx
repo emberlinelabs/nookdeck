@@ -28,7 +28,7 @@ const needsGrant = (p: PluginInfo) => p.needsApproval;
 
 const hasAny = (p: PluginPermissions) => p.network.length > 0 || p.shell || p.keyboard || p.storage;
 
-export function PluginsPanel({ update }: { update: (fn: (l: Layout) => Layout) => void }) {
+export function PluginsPanel({ update, only }: { update: (fn: (l: Layout) => Layout) => void; only?: string }) {
   useLanguage();
   const [plugins, setPlugins] = useState<PluginInfo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -125,11 +125,11 @@ export function PluginsPanel({ update }: { update: (fn: (l: Layout) => Layout) =
 
   return (
     <div className="flex flex-col gap-4">
-      <Card>
+      {!only && <Card>
         <CardContent className="flex flex-col gap-3 p-4">
           <div>
             <h2 className="text-sm font-semibold">{t("Install a plugin")}</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">{t("Paste a GitHub address, an https link to a phonedesk.json, or the path of a plugin folder on this computer. You choose what it may do before it turns on.")}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t("Paste a GitHub address, an https link to a nookdeck.json, or the path of a plugin folder on this computer. You choose what it may do before it turns on.")}</p>
           </div>
           <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void install(); }}>
             <div className="min-w-0 flex-1">
@@ -137,21 +137,22 @@ export function PluginsPanel({ update }: { update: (fn: (l: Layout) => Layout) =
             </div>
             <Button type="submit" icon={<Plus />} loading={installing} disabled={!source.trim()}>{t("Install")}</Button>
           </form>
-          <p className="text-[11.5px] text-muted-foreground">{t("Plugins from a link or a folder are not reviewed by PhoneDesk. Only install ones you trust.")}</p>
+          <p className="text-[11.5px] text-muted-foreground">{t("Plugins from a link or a folder are not reviewed by Nookdeck. Only install ones you trust.")}</p>
         </CardContent>
-      </Card>
+      </Card>}
 
       {error && <Alert tone="danger" onDismiss={() => setError(null)}>{error}</Alert>}
       {notice && <Alert tone="success" onDismiss={() => setNotice(null)}>{notice}</Alert>}
       {!plugins && !error && <Spinner label={t("Loading")} />}
-      {plugins && plugins.length === 0 && <Empty icon={<Puzzle />} title={t("No plugins yet")} description={t("Plugins add tiles and buttons. Install one above, or see the plugin guide to write your own.")} />}
+      {plugins && only && !plugins.some((p) => p.id === only) && <Empty icon={<Puzzle />} title={t("This plugin is not installed")} description={t("It may have been removed. Go to Plugins to install it again.")} />}
+      {plugins && !only && plugins.length === 0 && <Empty icon={<Puzzle />} title={t("No plugins yet")} description={t("Plugins add tiles and buttons. Install one above, or see the plugin guide to write your own.")} />}
       {plugins && plugins.length > 0 && (
         <>
-          <div className="flex items-center justify-between">
+          {!only && <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">{t("Plugins: {count}", { count: plugins.length })}</span>
             <Button size="xs" variant="secondary" icon={<Refresh />} onClick={() => void load()}>{t("Refresh")}</Button>
-          </div>
-          {plugins.map((p) => (
+          </div>}
+          {plugins.filter((p) => !only || p.id === only).map((p) => (
             <PluginCard key={p.id} plugin={p} busy={busy === p.id} armed={armed === p.id} onToggle={(on) => void toggle(p, on)} onRemove={() => void remove(p)} onSaved={() => { setNotice(t("Settings saved")); void load(); }} onError={fail} onReview={() => setGrant(p)} onApply={(m) => { setNotice(m); }} update={update} />
           ))}
         </>
@@ -184,7 +185,7 @@ export function PluginsPanel({ update }: { update: (fn: (l: Layout) => Layout) =
             ) : (
               <p className="text-muted-foreground">{t("It asks for no special access.")}</p>
             )}
-            {grant.permissions.shell || grant.permissions.keyboard ? <Alert tone="warning" icon={<Warn />}>{t("Plugins with code are trusted code. PhoneDesk limits what they can reach but cannot fully sandbox them.")}</Alert> : null}
+            {grant.permissions.shell || grant.permissions.keyboard ? <Alert tone="warning" icon={<Warn />}>{t("Plugins with code are trusted code. Nookdeck limits what they can reach but cannot fully sandbox them.")}</Alert> : null}
             {grant.source && <div className="break-all text-xs text-muted-foreground">{t("Source")}: <code className="rounded bg-muted px-1.5 py-0.5">{grant.source}</code></div>}
           </div>
         )}

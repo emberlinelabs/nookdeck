@@ -51,32 +51,51 @@ jobs:
       - name: Test
         run: bun run test
 
-      - name: Build and sign (macOS arm64 + x64), cross-compile Windows x64
+      - name: Build (macOS arm64 + x64), cross-compile Windows x64
         run: |
           mkdir -p dist
           # the Now Playing adapter (vendor/mediaremote-adapter): a universal dylib, embedded into every binary below
           bun scripts/build-mediaremote.ts
           bun run gen-assets
           for arch in arm64 x64; do
-            bun build src/index.ts src/platform/mac-worker.ts --compile --target="bun-darwin-$arch" --outfile "dist/phonedesk-darwin-$arch"
-            bun scripts/sign-macos.ts "dist/phonedesk-darwin-$arch"
+            bun build src/index.ts src/platform/mac-worker.ts --compile --target="bun-darwin-$arch" --outfile "dist/nookdeck-darwin-$arch"
           done
-          bun build src/index.ts --compile --target=bun-windows-x64 --outfile dist/phonedesk-windows-x64.exe
+          bun build src/index.ts --compile --target=bun-windows-x64 --outfile dist/nookdeck-windows-x64.exe
+
+      # a stable self-signed identity: the designated requirement is the same for every release, so Accessibility grants survive updates.
+      # The secrets exist only for this step; a release never ships ad hoc (scripts/sign-macos.ts fails when the mode is not "ci").
+      - name: Sign the macOS binaries
+        env:
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_P12_PASSWORD: ${{ secrets.MACOS_SIGN_P12_PASSWORD }}
+          NOOKDECK_REQUIRE_CI_SIGNING: "1"
+        run: |
+          for arch in arm64 x64; do bun scripts/sign-macos.ts "dist/nookdeck-darwin-$arch"; done
+
+      - name: Old-name copies, gzip copies and SHA256SUMS
+        run: |
           cd dist
+          # R2: for the transition the same binaries are also published under the old names, because 0.1.x updaters only look for phonedesk-* (dropped around 0.4)
+          for f in nookdeck-darwin-arm64 nookdeck-darwin-x64 nookdeck-windows-x64.exe; do cp "$f" "${f/nookdeck/phonedesk}"; done
           # gzip copies (about a third of the size): the installers prefer them and unpack + verify the binary too
-          for f in phonedesk-darwin-arm64 phonedesk-darwin-x64 phonedesk-windows-x64.exe; do gzip -9 -n -k "$f"; done
-          shasum -a 256 phonedesk-darwin-arm64 phonedesk-darwin-x64 phonedesk-windows-x64.exe phonedesk-darwin-arm64.gz phonedesk-darwin-x64.gz phonedesk-windows-x64.exe.gz > SHA256SUMS
+          for f in nookdeck-darwin-arm64 nookdeck-darwin-x64 nookdeck-windows-x64.exe phonedesk-darwin-arm64 phonedesk-darwin-x64 phonedesk-windows-x64.exe; do gzip -9 -n -k "$f"; done
+          shasum -a 256 nookdeck-darwin-arm64 nookdeck-darwin-x64 nookdeck-windows-x64.exe nookdeck-darwin-arm64.gz nookdeck-darwin-x64.gz nookdeck-windows-x64.exe.gz phonedesk-darwin-arm64 phonedesk-darwin-x64 phonedesk-windows-x64.exe phonedesk-darwin-arm64.gz phonedesk-darwin-x64.gz phonedesk-windows-x64.exe.gz > SHA256SUMS
           cat SHA256SUMS
-          ls -l phonedesk-*
+          ls -l nookdeck-* phonedesk-*
 
       - name: The arm64 binary reports the tagged version
         run: |
+          got="$(./dist/nookdeck-darwin-arm64 --version)"
+          [ "${got%% (*}" = "nookdeck ${GITHUB_REF_NAME#v}" ] || { echo "::error::binary printed '$got'"; exit 1; }
+
+      - name: The old-name binary answers the way 0.1.x updaters expect
+        run: |
           got="$(./dist/phonedesk-darwin-arm64 --version)"
-          [ "${got%% (*}" = "phonedesk ${GITHUB_REF_NAME#v}" ] || { echo "::error::binary printed '$got'"; exit 1; }
+          [ "${got%% (*}" = "phonedesk ${GITHUB_REF_NAME#v}" ] || { echo "::error::old-name binary printed '$got'"; exit 1; }
 
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/phonedesk-darwin-arm64 dist/phonedesk-darwin-x64 dist/phonedesk-windows-x64.exe dist/phonedesk-darwin-arm64.gz dist/phonedesk-darwin-x64.gz dist/phonedesk-windows-x64.exe.gz dist/SHA256SUMS \
-            --title "PhoneDesk $GITHUB_REF_NAME" --notes-file .github/release-notes.md --generate-notes
+          gh release create "$GITHUB_REF_NAME" dist/nookdeck-darwin-arm64 dist/nookdeck-darwin-x64 dist/nookdeck-windows-x64.exe dist/nookdeck-darwin-arm64.gz dist/nookdeck-darwin-x64.gz dist/nookdeck-windows-x64.exe.gz dist/phonedesk-darwin-arm64 dist/phonedesk-darwin-x64 dist/phonedesk-windows-x64.exe dist/phonedesk-darwin-arm64.gz dist/phonedesk-darwin-x64.gz dist/phonedesk-windows-x64.exe.gz dist/SHA256SUMS \
+            --title "Nookdeck $GITHUB_REF_NAME" --notes-file .github/release-notes.md --generate-notes

@@ -13,7 +13,7 @@ import { projectName, sessionState, MAX_SESSIONS } from "./sessions";
  * OpenCode (anomalyco/opencode). Read-only, from the tool's own local data and service:
  *  - sessions: the SQLite database, opened read-only;
  *  - running state + quota (2.x): the local service described by service.json, Basic auth, never any other endpoint;
- *  - permissions / questions: an opt-in plugin file that PhoneDesk installs and removes (marked).
+ *  - permissions / questions: an opt-in plugin file that Nookdeck installs and removes (marked).
  */
 
 const env = (k: string) => process.env[k];
@@ -26,7 +26,7 @@ export function opencodeStateDir(): string {
   return join(env("XDG_STATE_HOME") || join(safeHome() || homedir(), ".local", "state"), "opencode");
 }
 export function opencodeConfigDir(): string {
-  return env("PHONEDESK_OPENCODE_CONFIG_DIR") || join(env("XDG_CONFIG_HOME") || join(safeHome() || homedir(), ".config"), "opencode");
+  return env("NOOKDECK_OPENCODE_CONFIG_DIR") || join(env("XDG_CONFIG_HOME") || join(safeHome() || homedir(), ".config"), "opencode");
 }
 
 /** OPENCODE_DB (absolute, or relative to the data dir; ":memory:" is ignored) else opencode.db / opencode-<channel>.db. */
@@ -37,8 +37,18 @@ export function opencodeDbPath(): string {
   return join(opencodeDataDir(), channel && !["latest", "beta", "prod"].includes(channel) ? `opencode-${channel}.db` : "opencode.db");
 }
 
-export const serviceJsonPath = () => env("PHONEDESK_OPENCODE_SERVICE") || join(opencodeStateDir(), "service.json");
-export const pluginPath = () => join(opencodeConfigDir(), "plugins", "phonedesk.js");
+export const serviceJsonPath = () => env("NOOKDECK_OPENCODE_SERVICE") || join(opencodeStateDir(), "service.json");
+export const pluginPath = () => join(opencodeConfigDir(), "plugins", "nookdeck.js");
+/** The file 0.1.x wrote. Found by its marker, never by name alone; removed once the new one is written, or both would fire. */
+export const legacyPluginPath = (file = pluginPath()) => join(dirname(file), "phonedesk.js");
+const LEGACY_PLUGIN_MARKER = "phonedesk-plugin";
+async function removeLegacyPlugin(file: string): Promise<boolean> {
+  const old = legacyPluginPath(file);
+  const text = await readFile(old, "utf8").catch(() => null);
+  if (text === null || !text.includes(LEGACY_PLUGIN_MARKER)) return false;
+  await rm(old, { force: true });
+  return true;
+}
 
 // ---------- version ----------
 
@@ -54,11 +64,11 @@ export function parseOpencodeVersion(out: string): OpencodeVersion | null {
 export const SESSION_WINDOW_MS = 7 * 24 * 3600_000;
 
 /**
- * The opencode binary: PHONEDESK_OPENCODE (authoritative, for tests), PATH, then the places its installers use. The agent often
+ * The opencode binary: NOOKDECK_OPENCODE (authoritative, for tests), PATH, then the places its installers use. The agent often
  * runs as a service or background process whose PATH lacks ~/.opencode/bin, so PATH alone misses a working install.
  */
 export function opencodePath(): string | null {
-  const forced = process.env.PHONEDESK_OPENCODE;
+  const forced = process.env.NOOKDECK_OPENCODE;
   if (forced) return existsSync(forced) ? forced : null;
   const onPath = Bun.which("opencode", { PATH: process.env.PATH ?? "" });
   if (onPath) return onPath;
@@ -210,13 +220,13 @@ export async function fetchOpencodeQuota(o: { fetch?: typeof fetch; service?: Se
 
 // ---------- the opt-in plugin ----------
 
-export const PLUGIN_MARKER = "// phonedesk-plugin v1 (installed by PhoneDesk; remove it from the management page)";
+export const PLUGIN_MARKER = "// nookdeck-plugin v1 (installed by Nookdeck; remove it from the management page)";
 
 export interface PluginParams { port: number; home: string; major: 1 | 2 }
 
 /**
- * The plugin forwards permission and question requests to the PhoneDesk agent (localhost only, the hook secret is read
- * from the PhoneDesk home at the time of the request) and answers OpenCode with what the phone chose. It never blocks:
+ * The plugin forwards permission and question requests to the Nookdeck agent (localhost only, the hook secret is read
+ * from the Nookdeck home at the time of the request) and answers OpenCode with what the phone chose. It never blocks:
  * every request has a timeout, and on no answer (no phone, timeout, agent down) the plugin does nothing so the terminal asks.
  */
 export function pluginSource(p: PluginParams): string {
@@ -235,14 +245,14 @@ async function agent(route, body, ms) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), ms);
   try {
-    const res = await fetch("http://127.0.0.1:" + PORT + route, { method: "POST", headers: { "content-type": "application/json", "x-phonedesk-hook": s }, body: JSON.stringify(body), signal: ctl.signal });
+    const res = await fetch("http://127.0.0.1:" + PORT + route, { method: "POST", headers: { "content-type": "application/json", "x-nookdeck-hook": s }, body: JSON.stringify(body), signal: ctl.signal });
     return res.ok ? await res.json() : null;
   } catch { return null; } finally { clearTimeout(timer); }
 }
 `;
   if (p.major === 1) return head + `
 // OpenCode 1.x: events permission.asked / question.asked; replies go to the server the plugin runs against
-module.exports = async function PhoneDesk(ctx) {
+module.exports = async function Nookdeck(ctx) {
   const base = String(ctx.serverUrl || "").replace(/\\/$/, "");
   const reply = (route, body) => fetch(base + route, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => {});
   const state = (sessionId, s) => agent("/api/hooks/state", { source: "opencode", sessionId, cwd: ctx.directory, state: s }, 3000);
@@ -264,7 +274,7 @@ module.exports = async function PhoneDesk(ctx) {
 `;
   return head + `
 // OpenCode 2.x: permission evaluate hook and form.created; form answers go to the local service
-module.exports = async function PhoneDesk(ctx) {
+module.exports = async function Nookdeck(ctx) {
   return {
     permission: { hook: ["evaluate", async (req) => {
       const r = await agent("/api/hooks/permission", { source: "opencode", sessionId: req.sessionID, cwd: ctx.directory, toolName: String(req.permission || req.tool || "permission"), toolInput: { command: Array.isArray(req.patterns) ? req.patterns.join(" ") : undefined } }, 58000);
@@ -287,26 +297,28 @@ module.exports = async function PhoneDesk(ctx) {
 }
 
 export async function isPluginInstalled(file = pluginPath()): Promise<boolean> {
-  try { return (await readFile(file, "utf8")).includes("phonedesk-plugin"); } catch { return false; }
+  try { return (await readFile(file, "utf8")).includes("nookdeck-plugin"); } catch { return (await readFile(legacyPluginPath(file), "utf8").catch(() => "")).includes(LEGACY_PLUGIN_MARKER); }
 }
 
 /** Writes (or refreshes) the plugin. Refuses to overwrite a file we did not write. */
 export async function installPlugin(p: PluginParams, file = pluginPath()): Promise<{ changed: boolean }> {
   let current: string | null = null;
   try { current = await readFile(file, "utf8"); } catch { /* new */ }
-  if (current !== null && !current.includes("phonedesk-plugin")) throw new Error(`${file} exists and was not written by PhoneDesk; refusing to overwrite it`);
+  if (current !== null && !current.includes("nookdeck-plugin")) throw new Error(`${file} exists and was not written by Nookdeck; refusing to overwrite it`);
   const src = pluginSource(p);
-  if (current === src) return { changed: false };
+  if (current === src) return { changed: await removeLegacyPlugin(file) };
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, src);
   await chmod(file, 0o644).catch(() => {});
+  await removeLegacyPlugin(file);
   return { changed: true };
 }
 
 export async function uninstallPlugin(file = pluginPath()): Promise<{ changed: boolean }> {
   let current: string;
-  try { current = await readFile(file, "utf8"); } catch { return { changed: false }; }
-  if (!current.includes("phonedesk-plugin")) return { changed: false }; // not ours
+  try { current = await readFile(file, "utf8"); } catch { return { changed: await removeLegacyPlugin(file) }; }
+  if (!current.includes("nookdeck-plugin")) return { changed: await removeLegacyPlugin(file) }; // not ours
   await rm(file, { force: true });
+  await removeLegacyPlugin(file);
   return { changed: true };
 }

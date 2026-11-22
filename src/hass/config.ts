@@ -5,10 +5,14 @@ import { platform } from "../platform";
 import type { SecretStore } from "../platform/types";
 import { keychainStore } from "../platform/darwin";
 
-export const KEYCHAIN_SERVICE = "PhoneDesk-HASS";
+export const KEYCHAIN_SERVICE = "Nookdeck-HASS";
+/** The Keychain item 0.1.x used: read once, copied to the new name, the old item is left alone. */
+export const LEGACY_KEYCHAIN_SERVICE = "PhoneDesk-HASS";
 export const KEYCHAIN_ACCOUNT = "token";
+/** The OAuth refresh token ("Sign in with Home Assistant") lives in the same Keychain item name, under its own account. */
+export const KEYCHAIN_REFRESH_ACCOUNT = "refresh";
 
-interface FileShape { url?: string; token?: string }
+interface FileShape { url?: string; token?: string; refreshToken?: string; /** the client id origin used at sign-in: a refresh must present the same client_id */ oauthOrigin?: string }
 
 export type Runner = (argv: string[]) => Promise<string>;
 
@@ -26,7 +30,7 @@ export function normalizeHassUrl(raw: unknown): string {
 export const hassWsUrl = (base: string) => `${base.replace(/^http/i, "ws")}/api/websocket`;
 
 /**
- * URL in ~/.phonedesk/hass.json. The token goes to the macOS Keychain (service PhoneDesk-HASS); when that is not
+ * URL in ~/.nookdeck/hass.json. The token goes to the macOS Keychain (service Nookdeck-HASS); when that is not
  * available it falls back to the same file (0600). The token is never returned by any API.
  */
 export class HassConfigStore {
@@ -71,7 +75,11 @@ export class HassConfigStore {
     if (d.token) return d.token;
     const store = this.store();
     if (!d.url || !store) return undefined;
-    return store.get(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
+    const cur = await store.get(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
+    if (cur) return cur;
+    const old = await store.get(LEGACY_KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
+    if (old) await store.set(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, old).catch(() => {});
+    return old;
   }
 
   async hasToken(): Promise<boolean> { return !!(await this.token()); }
@@ -89,9 +97,35 @@ export class HassConfigStore {
     return "file";
   }
 
+  // ---- OAuth refresh token (Sign in with Home Assistant). Same rules as the long-lived token: Keychain, else the 0600 file; never returned by an API. ----
+  async refreshToken(): Promise<string | undefined> {
+    const d = await this.read();
+    if (d.refreshToken) return d.refreshToken;
+    return (await this.store()?.get(KEYCHAIN_SERVICE, KEYCHAIN_REFRESH_ACCOUNT)) || undefined;
+  }
+  async hasRefreshToken(): Promise<boolean> { return !!(await this.refreshToken()); }
+  async setRefreshToken(token: string): Promise<"keychain" | "file"> {
+    const d = await this.read();
+    const store = this.store();
+    if (store && (await store.set(KEYCHAIN_SERVICE, KEYCHAIN_REFRESH_ACCOUNT, token))) {
+      if (d.refreshToken) { delete d.refreshToken; await this.write(d); }
+      return "keychain";
+    }
+    await this.write({ ...d, refreshToken: token });
+    return "file";
+  }
+  async oauthOrigin(): Promise<string | undefined> { return (await this.read()).oauthOrigin; }
+  async setOauthOrigin(origin: string): Promise<void> { await this.write({ ...(await this.read()), oauthOrigin: origin }); }
+  async clearRefreshToken(): Promise<void> {
+    const d = await this.read();
+    if (d.refreshToken || d.oauthOrigin) { delete d.refreshToken; delete d.oauthOrigin; await this.write(d); }
+    await this.store()?.remove(KEYCHAIN_SERVICE, KEYCHAIN_REFRESH_ACCOUNT);
+  }
+
   async clearToken(): Promise<void> {
     const d = await this.read();
     if (d.token) { delete d.token; await this.write(d); }
     await this.store()?.remove(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
+    await this.store()?.remove(LEGACY_KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
   }
 }

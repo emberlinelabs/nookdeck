@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // setup.sh / uninstall.sh against a temp release directory and a temp install home. launchctl is `echo`, and every
-// directory the binary touches is inside the sandbox: never the real ~/.phonedesk, ~/.claude or ~/Library/LaunchAgents.
+// directory the binary touches is inside the sandbox: never the real ~/.nookdeck, ~/.claude or ~/Library/LaunchAgents.
 const root = join(import.meta.dir, "..");
 const mac = process.platform === "darwin";
 const sandbox = mkdtempSync(join(tmpdir(), "pd-inst-"));
@@ -17,20 +17,20 @@ afterAll(() => { for (const pid of spawned) try { process.kill(pid); } catch { /
 const sha = (f: string) => createHash("sha256").update(readFileSync(f)).digest("hex");
 const bunPath = process.execPath;
 
-/** A "release": phonedesk-darwin-arm64/x64 are wrappers that run this checkout's real CLI, plus SHA256SUMS. */
+/** A "release": nookdeck-darwin-arm64/x64 are wrappers that run this checkout's real CLI, plus SHA256SUMS. */
 function makeRelease(opts: { tamper?: boolean; omit?: boolean; gz?: "good" | "bad-sum" | "no-file" | "bad-content"; variant?: string } = {}) {
   const dir = mkdtempSync(join(sandbox, "release-"));
   const lines: string[] = [];
   for (const arch of ["arm64", "x64"]) {
-    const f = join(dir, `phonedesk-darwin-${arch}`);
+    const f = join(dir, `nookdeck-darwin-${arch}`);
     writeFileSync(f, `#!/bin/bash\nexec "${bunPath}" "${join(root, "src", "index.ts")}" "$@"\n${opts.variant ? `# ${opts.variant}\n` : ""}`);
     chmodSync(f, 0o755);
-    lines.push(`${opts.tamper ? "0".repeat(64) : sha(f)}  phonedesk-darwin-${arch}`);
+    lines.push(`${opts.tamper ? "0".repeat(64) : sha(f)}  nookdeck-darwin-${arch}`);
     if (opts.gz) {
       const g = `${f}.gz`;
       // "bad-content": a valid, correctly summed gzip whose content is not the listed binary
-      writeFileSync(g, gzipSync(opts.gz === "bad-content" ? Buffer.from("#!/bin/bash\necho phonedesk 9.9.9\n") : readFileSync(f)));
-      lines.push(`${opts.gz === "bad-sum" ? "0".repeat(64) : sha(g)}  phonedesk-darwin-${arch}.gz`);
+      writeFileSync(g, gzipSync(opts.gz === "bad-content" ? Buffer.from("#!/bin/bash\necho nookdeck 9.9.9\n") : readFileSync(f)));
+      lines.push(`${opts.gz === "bad-sum" ? "0".repeat(64) : sha(g)}  nookdeck-darwin-${arch}.gz`);
       if (opts.gz === "no-file") rmSync(g);
     }
   }
@@ -49,7 +49,7 @@ function env(home: string, release: string, extra: Record<string, string> = {}) 
   return {
     PATH: process.env.PATH!, TMPDIR: sandbox, SHELL: "/bin/zsh", // the PATH step picks the rc file from $SHELL: pin it so CI (bash) matches
     HOME: join(home, "fake-home"), // anything that falls back to $HOME stays in the sandbox too
-    PHONEDESK_INSTALL_HOME: home, PHONEDESK_RELEASE_BASE: release, PHONEDESK_LAUNCHCTL: "echo",
+    NOOKDECK_INSTALL_HOME: home, NOOKDECK_RELEASE_BASE: release, NOOKDECK_LAUNCHCTL: "echo",
     ...extra,
   };
 }
@@ -63,9 +63,9 @@ describe.skipIf(!mac)("setup.sh: compressed assets", () => {
     const { home, r } = run(makeRelease({ gz: "good" }));
     const text = out(r);
     expect(r.exitCode, text).toBe(0);
-    expect(text).toMatch(/Fetching phonedesk-darwin-(arm64|x64)\.gz \(\d+ MB\)/);
+    expect(text).toMatch(/Fetching nookdeck-darwin-(arm64|x64)\.gz \(\d+ MB\)/);
     expect(text.match(/checksum ok/g)?.length).toBe(2); // the .gz, then the unpacked binary
-    expect(existsSync(join(home, ".phonedesk", "bin", "phonedesk"))).toBe(true);
+    expect(existsSync(join(home, ".nookdeck", "bin", "nookdeck"))).toBe(true);
   });
   test("over http: the size comes from HEAD, and a download cut in the middle continues with a Range request", async () => {
     const release = makeRelease({ gz: "good" });
@@ -93,15 +93,15 @@ describe.skipIf(!mac)("setup.sh: compressed assets", () => {
     const port = (server.address() as any).port as number;
     try {
       const home = newHome();
-      // env() carries PHONEDESK_INSTALL_HOME: a temp home
+      // env() carries NOOKDECK_INSTALL_HOME: a temp home
       const r = await Bun.spawn(["bash", join(root, "setup.sh"), "--yes", "--no-autostart", "--no-start", "--no-open"], { env: env(home, `http://127.0.0.1:${port}`), stdout: "pipe", stderr: "pipe", stdin: new Blob([""]) });
       const text = (await new Response(r.stdout).text()) + (await new Response(r.stderr).text());
       expect(await r.exited, text).toBe(0);
-      expect(text).toMatch(/Fetching phonedesk-darwin-(arm64|x64)\.gz \(\d+ MB\)/);
+      expect(text).toMatch(/Fetching nookdeck-darwin-(arm64|x64)\.gz \(\d+ MB\)/);
       expect(text).toContain("resuming from where it stopped");
       expect(hits.some((h) => h.startsWith("HEAD ") && h.includes(".gz"))).toBe(true);
       expect(hits.some((h) => /GET .*\.gz bytes=\d+-/.test(h))).toBe(true);
-      expect(existsSync(join(home, ".phonedesk", "bin", "phonedesk"))).toBe(true);
+      expect(existsSync(join(home, ".nookdeck", "bin", "nookdeck"))).toBe(true);
     } finally { server.close(); }
   });
   test("an older release without gzip assets still installs from the plain binary", () => {
@@ -109,7 +109,7 @@ describe.skipIf(!mac)("setup.sh: compressed assets", () => {
     const text = out(r);
     expect(r.exitCode, text).toBe(0);
     expect(text).not.toContain(".gz");
-    expect(text).toMatch(/Fetching phonedesk-darwin-(arm64|x64) \(\d+ MB\)/);
+    expect(text).toMatch(/Fetching nookdeck-darwin-(arm64|x64) \(\d+ MB\)/);
     expect(text.match(/checksum ok/g)?.length).toBe(1);
   });
   test("the .gz is listed but cannot be downloaded: falls back to the plain binary", () => {
@@ -122,13 +122,13 @@ describe.skipIf(!mac)("setup.sh: compressed assets", () => {
     const { home, r } = run(makeRelease({ gz: "bad-sum" }));
     expect(r.exitCode).not.toBe(0);
     expect(out(r)).toContain("checksum mismatch");
-    expect(existsSync(join(home, ".phonedesk", "bin", "phonedesk"))).toBe(false);
+    expect(existsSync(join(home, ".nookdeck", "bin", "nookdeck"))).toBe(false);
   });
   test("an intact .gz whose content is not the listed binary is refused after unpacking", () => {
     const { home, r } = run(makeRelease({ gz: "bad-content" }));
     expect(r.exitCode).not.toBe(0);
     expect(out(r)).toContain("checksum mismatch");
-    expect(existsSync(join(home, ".phonedesk", "bin", "phonedesk"))).toBe(false);
+    expect(existsSync(join(home, ".nookdeck", "bin", "nookdeck"))).toBe(false);
   });
 });
 
@@ -139,44 +139,44 @@ describe.skipIf(!mac)("setup.sh", () => {
     const port = await freePort();
     // an installed Claude hook that points at an older binary is re-pointed at the new one
     mkdirSync(join(home, ".claude"), { recursive: true });
-    writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify({ hooks: { PermissionRequest: [{ hooks: [{ type: "command", command: `'/old/place/phonedesk' hook claude --port ${port} --home '${join(home, ".phonedesk")}' # phonedesk hook`, timeout: 60 }] }] } }));
+    writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify({ hooks: { PermissionRequest: [{ hooks: [{ type: "command", command: `'/old/place/nookdeck' hook claude --port ${port} --home '${join(home, ".nookdeck")}' # nookdeck hook`, timeout: 60 }] }] } }));
 
     const r = sh("setup.sh", ["--yes", "--no-autostart", "--no-open", "--port", String(port)], env(home, release));
     const text = out(r);
     expect(r.exitCode, text).toBe(0);
-    const bin = join(home, ".phonedesk", "bin", "phonedesk");
+    const bin = join(home, ".nookdeck", "bin", "nookdeck");
     expect(existsSync(bin)).toBe(true);
     expect(statSync(bin).mode & 0o111).not.toBe(0);
     expect(text).toContain("checksum ok");
-    expect(text).toMatch(/phonedesk \d+\.\d+\.\d+/);
+    expect(text).toMatch(/nookdeck \d+\.\d+\.\d+/);
     expect(text).toContain(`http://localhost:${port}/manage/`);
     const pin = /PIN\s+(\d{6})/.exec(text)?.[1];
     expect(pin).toBeDefined();
     expect(text).toMatch(new RegExp(`Phone\\s+http://[^\\s]+:${port}`));
-    const pid = Number(readFileSync(join(home, ".phonedesk", "agent.pid"), "utf8"));
+    const pid = Number(readFileSync(join(home, ".nookdeck", "agent.pid"), "utf8"));
     spawned.push(pid);
 
     // the agent really answers, with that PIN, and its data lives in the sandbox
     const info = await (await fetch(`http://127.0.0.1:${port}/api/pairing`)).json() as any;
     expect(info.pin).toBe(pin);
-    expect(existsSync(join(home, ".phonedesk"))).toBe(true);
+    expect(existsSync(join(home, ".nookdeck"))).toBe(true);
     const hook = JSON.parse(readFileSync(join(home, ".claude", "settings.json"), "utf8")).hooks.PermissionRequest[0].hooks[0].command as string;
     expect(hook).not.toContain("/old/place");
     expect(hook).toContain("hook claude");
-    expect(existsSync(join(home, ".claude", "settings.json.phonedesk.bak"))).toBe(true);
+    expect(existsSync(join(home, ".claude", "settings.json.nookdeck.bak"))).toBe(true);
 
     // update: the same command again stops the running agent, replaces the binary and starts a new one
     const port2 = await freePort();
     const r2 = sh("setup.sh", ["--yes", "--no-autostart", "--no-open", "--force", "--port", String(port2)], env(home, release)); // --force: the same release again
     expect(r2.exitCode, out(r2)).toBe(0);
-    expect(out(r2)).toContain("upgrading from phonedesk");
-    const pid2 = Number(readFileSync(join(home, ".phonedesk", "agent.pid"), "utf8"));
+    expect(out(r2)).toContain("upgrading from nookdeck");
+    const pid2 = Number(readFileSync(join(home, ".nookdeck", "agent.pid"), "utf8"));
     spawned.push(pid2);
     expect(pid2).not.toBe(pid);
     await Bun.sleep(300);
     await expect(fetch(`http://127.0.0.1:${port}/api/pairing`)).rejects.toThrow(); // the old one is gone
     expect((await fetch(`http://127.0.0.1:${port2}/api/pairing`)).status).toBe(200);
-    expect(existsSync(join(home, ".phonedesk", "bin", ".phonedesk.new"))).toBe(false);
+    expect(existsSync(join(home, ".nookdeck", "bin", ".nookdeck.new"))).toBe(false);
   }, 60_000);
 
   test("autostart: the launchd plist is written under the install home (launchctl is echo); --no-start leaves the agent off", () => {
@@ -184,11 +184,11 @@ describe.skipIf(!mac)("setup.sh", () => {
     const release = makeRelease();
     const r = sh("setup.sh", ["--yes", "--no-start", "--no-open", "--port", "7533"], env(home, release));
     expect(r.exitCode, out(r)).toBe(0);
-    const plist = join(home, "Library", "LaunchAgents", "dev.phonedesk.agent.plist");
+    const plist = join(home, "Library", "LaunchAgents", "dev.nookdeck.agent.plist");
     expect(existsSync(plist)).toBe(true);
     expect(readFileSync(plist, "utf8")).toContain("<string>7533</string>");
-    expect(readFileSync(plist, "utf8")).toContain(join(home, ".phonedesk"));
-    expect(existsSync(join(home, ".phonedesk", "agent.pid"))).toBe(false);
+    expect(readFileSync(plist, "utf8")).toContain(join(home, ".nookdeck"));
+    expect(existsSync(join(home, ".nookdeck", "agent.pid"))).toBe(false);
   }, 30_000);
 
   test("a checksum mismatch is refused and nothing is installed", () => {
@@ -196,7 +196,7 @@ describe.skipIf(!mac)("setup.sh", () => {
     const r = sh("setup.sh", ["--yes", "--no-autostart", "--no-open", "--no-start"], env(home, makeRelease({ tamper: true })));
     expect(r.exitCode).not.toBe(0);
     expect(out(r)).toContain("checksum mismatch");
-    expect(existsSync(join(home, ".phonedesk", "bin"))).toBe(false);
+    expect(existsSync(join(home, ".nookdeck", "bin"))).toBe(false);
   });
 
   test("a binary missing from SHA256SUMS is refused", () => {
@@ -204,7 +204,7 @@ describe.skipIf(!mac)("setup.sh", () => {
     const r = sh("setup.sh", ["--yes", "--no-autostart", "--no-open", "--no-start"], env(home, makeRelease({ omit: true })));
     expect(r.exitCode).not.toBe(0);
     expect(out(r)).toContain("has no entry in SHA256SUMS");
-    expect(existsSync(join(home, ".phonedesk", "bin"))).toBe(false);
+    expect(existsSync(join(home, ".nookdeck", "bin"))).toBe(false);
   });
 
   test("a missing download is a clear error", () => {
@@ -219,7 +219,7 @@ describe.skipIf(!mac)("setup.sh", () => {
     const r = sh("setup.sh", ["--dry-run", "--yes"], env(home, makeRelease()));
     expect(r.exitCode, out(r)).toBe(0);
     expect(out(r)).toContain("dry run");
-    expect(existsSync(join(home, ".phonedesk"))).toBe(false);
+    expect(existsSync(join(home, ".nookdeck"))).toBe(false);
     expect(existsSync(join(home, "Library"))).toBe(false);
   });
 
@@ -240,13 +240,13 @@ describe.skipIf(!mac)("uninstall.sh", () => {
     writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify(other));
     const inst = sh("setup.sh", ["--yes", "--no-start", "--no-open"], env(home, release));
     expect(inst.exitCode, out(inst)).toBe(0);
-    const bin = join(home, ".phonedesk", "bin", "phonedesk");
+    const bin = join(home, ".nookdeck", "bin", "nookdeck");
     // install our two hooks through the real code, into the sandbox
     const HI = await import("../src/hooks-install");
     await HI.installHook(join(home, ".claude", "settings.json"), HI.hookCommand("claude", { execPath: bin }));
     await HI.installAskHook(join(home, ".claude", "settings.json"), HI.askHookCommand({ execPath: bin }));
-    writeFileSync(join(home, ".phonedesk", "layout.json"), "{}");
-    const plist = join(home, "Library", "LaunchAgents", "dev.phonedesk.agent.plist");
+    writeFileSync(join(home, ".nookdeck", "layout.json"), "{}");
+    const plist = join(home, "Library", "LaunchAgents", "dev.nookdeck.agent.plist");
     expect(existsSync(plist)).toBe(true);
 
     const dry = sh("uninstall.sh", ["--dry-run"], env(home, release));
@@ -256,17 +256,17 @@ describe.skipIf(!mac)("uninstall.sh", () => {
     const r = sh("uninstall.sh", ["--yes"], env(home, release));
     expect(r.exitCode, out(r)).toBe(0);
     expect(existsSync(plist)).toBe(false);
-    expect(existsSync(join(home, ".phonedesk", "bin"))).toBe(false);
-    expect(existsSync(join(home, ".phonedesk", "layout.json"))).toBe(true); // data stays
+    expect(existsSync(join(home, ".nookdeck", "bin"))).toBe(false);
+    expect(existsSync(join(home, ".nookdeck", "layout.json"))).toBe(true); // data stays
     expect(JSON.parse(readFileSync(join(home, ".claude", "settings.json"), "utf8"))).toEqual(other);
-    expect(existsSync(join(home, ".claude", "settings.json.phonedesk.bak"))).toBe(true);
+    expect(existsSync(join(home, ".claude", "settings.json.nookdeck.bak"))).toBe(true);
 
     // again, with nothing left: still fine; --purge removes the data
     const again = sh("uninstall.sh", ["--yes"], env(home, release));
     expect(again.exitCode, out(again)).toBe(0);
     const purge = sh("uninstall.sh", ["--yes", "--purge"], env(home, release));
     expect(purge.exitCode, out(purge)).toBe(0);
-    expect(existsSync(join(home, ".phonedesk"))).toBe(false);
+    expect(existsSync(join(home, ".nookdeck"))).toBe(false);
   }, 60_000);
 });
 
@@ -280,16 +280,16 @@ describe.skipIf(!mac)("setup.sh: finding the latest release when GitHub misbehav
       const url = req.url ?? "";
       hits.push(`${req.method} ${url}`);
       if (n++ < (opts.failFirst ?? 0)) { res.writeHead(503).end("busy"); return; }
-      if (url === "/howznguyen/phonedesk/releases/latest") {
+      if (url === "/howznguyen/nookdeck/releases/latest") {
         if (opts.redirectWorks === false) { res.writeHead(opts.status ?? 503).end("no"); return; }
-        res.writeHead(302, { location: "/howznguyen/phonedesk/releases/tag/v9.9.9" }).end(); return;
+        res.writeHead(302, { location: "/howznguyen/nookdeck/releases/tag/v9.9.9" }).end(); return;
       }
-      if (url === "/howznguyen/phonedesk/releases/tag/v9.9.9") { res.writeHead(200).end("page"); return; }
-      if (url === "/repos/howznguyen/phonedesk/releases/latest") {
+      if (url === "/howznguyen/nookdeck/releases/tag/v9.9.9") { res.writeHead(200).end("page"); return; }
+      if (url === "/repos/howznguyen/nookdeck/releases/latest") {
         if (opts.apiTag) { res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ tag_name: opts.apiTag, name: "x" })); return; }
         res.writeHead(opts.status ?? 503).end("no"); return;
       }
-      const m = /^\/howznguyen\/phonedesk\/releases\/download\/v9\.9\.9\/(.+)$/.exec(url);
+      const m = /^\/howznguyen\/nookdeck\/releases\/download\/v9\.9\.9\/(.+)$/.exec(url);
       if (m && existsSync(join(release, m[1]!))) { const b = readFileSync(join(release, m[1]!)); res.writeHead(200, { "content-length": b.length }).end(req.method === "HEAD" ? undefined : b); return; }
       res.writeHead(404).end("no");
     });
@@ -297,9 +297,9 @@ describe.skipIf(!mac)("setup.sh: finding the latest release when GitHub misbehav
   }
   const run = async (gh: { base: string }, extra: Record<string, string> = {}, args: string[] = []) => {
     const home = newHome();
-    const e = { ...env(home, "x"), PHONEDESK_GITHUB_URL: gh.base + "/", PHONEDESK_API_URL: gh.base, PHONEDESK_RETRY_SECONDS: "1", ...extra } as Record<string, string>;
-    delete e.PHONEDESK_RELEASE_BASE;
-    const p = Bun.spawn(["bash", join(root, "setup.sh"), "--yes", "--no-autostart", "--no-start", "--no-open", ...args], { env: e, stdout: "pipe", stderr: "pipe", stdin: new Blob([""]) }); // env: PHONEDESK_INSTALL_HOME (via env()) keeps this in the sandbox
+    const e = { ...env(home, "x"), NOOKDECK_GITHUB_URL: gh.base + "/", NOOKDECK_API_URL: gh.base, NOOKDECK_RETRY_SECONDS: "1", ...extra } as Record<string, string>;
+    delete e.NOOKDECK_RELEASE_BASE;
+    const p = Bun.spawn(["bash", join(root, "setup.sh"), "--yes", "--no-autostart", "--no-start", "--no-open", ...args], { env: e, stdout: "pipe", stderr: "pipe", stdin: new Blob([""]) }); // env: NOOKDECK_INSTALL_HOME (via env()) keeps this in the sandbox
     const text = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
     return { code: await p.exited, text, home };
   };
@@ -320,22 +320,22 @@ describe.skipIf(!mac)("setup.sh: finding the latest release when GitHub misbehav
       expect(gh.hits.some((h) => h.includes("/repos/") && h.includes("/releases/latest"))).toBe(true);
     } finally { gh.close(); }
   }, 60_000);
-  test("both fail: the error says what failed and suggests --version / PHONEDESK_VERSION; nothing is installed", async () => {
+  test("both fail: the error says what failed and suggests --version / NOOKDECK_VERSION; nothing is installed", async () => {
     const gh = await githubStandIn({ redirectWorks: false, apiTag: null, status: 404 });
     try {
       const r = await run(gh);
       expect(r.code).not.toBe(0);
       expect(r.text).toContain("look up the latest release");
       expect(r.text).toContain("--version");
-      expect(r.text).toContain("PHONEDESK_VERSION");
+      expect(r.text).toContain("NOOKDECK_VERSION");
       expect(r.text).toContain("retrying"); // it did retry
-      expect(existsSync(join(r.home, ".phonedesk", "bin", "phonedesk"))).toBe(false);
+      expect(existsSync(join(r.home, ".nookdeck", "bin", "nookdeck"))).toBe(false);
     } finally { gh.close(); }
   }, 60_000);
-  test("PHONEDESK_VERSION skips the lookup entirely", async () => {
+  test("NOOKDECK_VERSION skips the lookup entirely", async () => {
     const gh = await githubStandIn({ redirectWorks: false, apiTag: null });
     try {
-      const r = await run(gh, { PHONEDESK_VERSION: "9.9.9" });
+      const r = await run(gh, { NOOKDECK_VERSION: "9.9.9" });
       expect(r.code, r.text).toBe(0);
       expect(gh.hits.some((h) => h.includes("/releases/latest"))).toBe(false);
     } finally { gh.close(); }
@@ -347,21 +347,21 @@ describe.skipIf(!mac)("setup.sh / uninstall.sh: PATH and the port check", () => 
   const base = ["--yes", "--no-autostart", "--no-open"];
   test("PATH: the marked line goes into the shell rc files, once; uninstall removes it and keeps the rest", () => {
     const home = newHome();
-    writeFileSync(join(home, ".zshrc"), "alias ll='ls -l'\n# phonedesk is great\nexport FOO=1");
+    writeFileSync(join(home, ".zshrc"), "alias ll='ls -l'\n# nookdeck is great\nexport FOO=1");
     const rel = makeRelease();
     for (let i = 0; i < 2; i++) {
       const r = sh("setup.sh", [...base, "--no-start"], env(home, rel));
       expect(r.exitCode, out(r)).toBe(0);
-      if (i === 0) expect(out(r)).toMatch(/New terminal windows will find phonedesk[\s\S]*source ~?\/?.*\.zshrc/);
+      if (i === 0) expect(out(r)).toMatch(/New terminal windows will find nookdeck[\s\S]*source ~?\/?.*\.zshrc/);
     }
     const rc = readFileSync(join(home, ".zshrc"), "utf8");
-    expect(rc.match(/\.phonedesk\/bin:\$PATH" # phonedesk/g)?.length).toBe(1); // idempotent
+    expect(rc.match(/\.nookdeck\/bin:\$PATH" # nookdeck/g)?.length).toBe(1); // idempotent
     expect(rc).toContain("export FOO=1\nexport PATH="); // newline added before our line
     const u = sh("uninstall.sh", ["--yes"], env(home, rel));
     expect(u.exitCode, out(u)).toBe(0);
     const after = readFileSync(join(home, ".zshrc"), "utf8");
-    expect(after).toBe("alias ll='ls -l'\n# phonedesk is great\nexport FOO=1\n"); // only our line is gone
-    expect(existsSync(join(home, ".zshrc.phonedesk.bak"))).toBe(true);
+    expect(after).toBe("alias ll='ls -l'\n# nookdeck is great\nexport FOO=1\n"); // only our line is gone
+    expect(existsSync(join(home, ".zshrc.nookdeck.bak"))).toBe(true);
   });
   test("PATH: with ~/.local/bin on PATH a symlink is made (no rc edit); uninstall removes it", () => {
     const home = newHome();
@@ -370,12 +370,12 @@ describe.skipIf(!mac)("setup.sh / uninstall.sh: PATH and the port check", () => 
     const e = env(home, rel, { PATH: `${join(home, ".local", "bin")}:${process.env.PATH}` });
     const r = sh("setup.sh", [...base, "--no-start"], e);
     expect(r.exitCode, out(r)).toBe(0);
-    expect(readlinkSync(join(home, ".local", "bin", "phonedesk"))).toBe(join(home, ".phonedesk", "bin", "phonedesk"));
+    expect(readlinkSync(join(home, ".local", "bin", "nookdeck"))).toBe(join(home, ".nookdeck", "bin", "nookdeck"));
     expect(existsSync(join(home, ".zshrc"))).toBe(false);
-    expect(out(r)).toContain("Try: phonedesk doctor");
+    expect(out(r)).toContain("Try: nookdeck doctor");
     const u = sh("uninstall.sh", ["--yes"], e);
     expect(u.exitCode, out(u)).toBe(0);
-    expect(existsSync(join(home, ".local", "bin", "phonedesk"))).toBe(false);
+    expect(existsSync(join(home, ".local", "bin", "nookdeck"))).toBe(false);
   });
   test("--no-path changes nothing", () => {
     const home = newHome();
@@ -394,7 +394,7 @@ describe.skipIf(!mac)("setup.sh / uninstall.sh: PATH and the port check", () => 
       expect(r.exitCode).not.toBe(0);
       expect(text).toContain(`port ${holder.port} is taken by process ${process.pid}`);
       expect(text).toContain("--port");
-      expect(existsSync(join(home, ".phonedesk", "agent.pid"))).toBe(false);
+      expect(existsSync(join(home, ".nookdeck", "agent.pid"))).toBe(false);
     } finally { holder.stop(true); }
   });
   test("the health check must be answered by the agent just installed", async () => {
@@ -402,7 +402,7 @@ describe.skipIf(!mac)("setup.sh / uninstall.sh: PATH and the port check", () => 
     const port = await freePort();
     const r = sh("setup.sh", [...base, "--port", String(port)], env(home, makeRelease()));
     const text = out(r);
-    const pid = Number(readFileSync(join(home, ".phonedesk", "agent.pid"), "utf8").trim());
+    const pid = Number(readFileSync(join(home, ".nookdeck", "agent.pid"), "utf8").trim());
     if (pid) spawned.push(pid);
     expect(r.exitCode, text).toBe(0);
     expect(text).toContain(`agent is up on port ${port}`);
@@ -419,9 +419,9 @@ describe.skipIf(!mac)("setup.sh: running it again does not redo what is done", (
     const r1 = sh("setup.sh", args, env(home, release));
     expect(r1.exitCode, out(r1)).toBe(0);
     expect(sum(out(r1))).toEqual(["installed", "installed", "skipped"]);
-    const pidfile = join(home, ".phonedesk", "agent.pid");
+    const pidfile = join(home, ".nookdeck", "agent.pid");
     const pid = Number(readFileSync(pidfile, "utf8")); spawned.push(pid);
-    const bin = join(home, ".phonedesk", "bin", "phonedesk");
+    const bin = join(home, ".nookdeck", "bin", "nookdeck");
     const before = statSync(bin).mtimeMs;
     const rc = readFileSync(join(home, ".zshrc"), "utf8");
     const t0 = Date.now();
@@ -429,7 +429,7 @@ describe.skipIf(!mac)("setup.sh: running it again does not redo what is done", (
     const text = out(r2);
     expect(r2.exitCode, text).toBe(0);
     expect(Date.now() - t0).toBeLessThan(15_000);
-    expect(text).toMatch(/PhoneDesk \d+\.\d+\.\d+ is up to date/);
+    expect(text).toMatch(/Nookdeck \d+\.\d+\.\d+ is up to date/);
     expect(text).not.toContain("Fetching");
     expect(text).not.toContain("[Y/n]");
     expect(text).toContain("already on PATH");
@@ -453,7 +453,7 @@ describe.skipIf(!mac)("setup.sh: running it again does not redo what is done", (
     const e = env(home, release);
     const r1 = sh("setup.sh", [...args, "--port", "7541"], e);
     expect(sum(out(r1))?.[2]).toBe("installed");
-    const plist = join(home, "Library", "LaunchAgents", "dev.phonedesk.agent.plist");
+    const plist = join(home, "Library", "LaunchAgents", "dev.nookdeck.agent.plist");
     const same = readFileSync(plist, "utf8");
     const r2 = sh("setup.sh", [...args, "--port", "7541"], e);
     expect(out(r2)).toContain("service already registered");
@@ -467,7 +467,7 @@ describe.skipIf(!mac)("setup.sh: running it again does not redo what is done", (
     const home = newHome();
     const args = ["--yes", "--no-open", "--no-start", "--no-autostart"];
     expect(sh("setup.sh", args, env(home, makeRelease())).exitCode).toBe(0);
-    const bin = join(home, ".phonedesk", "bin", "phonedesk");
+    const bin = join(home, ".nookdeck", "bin", "nookdeck");
     // a different release (another file, another sum): downloaded and replaced
     const up = sh("setup.sh", args, env(home, makeRelease({ variant: "v2" })));
     expect(up.exitCode, out(up)).toBe(0);
@@ -486,8 +486,82 @@ describe.skipIf(!mac)("setup.sh: running it again does not redo what is done", (
     const rel = makeRelease();
     const args = ["--yes", "--no-open", "--no-start", "--no-autostart"];
     expect(sh("setup.sh", args, env(home, rel)).exitCode).toBe(0);
-    rmSync(join(home, ".phonedesk", "bin", ".release"));
+    rmSync(join(home, ".nookdeck", "bin", ".release"));
     expect(out(sh("setup.sh", args, env(home, rel)))).not.toContain("up to date");
     expect(out(sh("setup.sh", args, env(home, rel)))).toContain("up to date");
   }, 90_000);
+});
+
+// main is pushed before the new release has finished building: for a while the latest release is a 0.1.x one with phonedesk-* assets only
+describe.skipIf(!mac)("setup.sh: a release from before the rename (phonedesk-* assets only)", () => {
+  function oldRelease(gz = false) {
+    const dir = mkdtempSync(join(sandbox, "oldrel-"));
+    const calls = join(dir, "calls.log");
+    const lines: string[] = [];
+    for (const arch of ["arm64", "x64"]) {
+      const f = join(dir, `phonedesk-darwin-${arch}`);
+      // a 0.1.4 program: answers --version in the old way and knows no `migrate`; it records what it was asked
+      writeFileSync(f, `#!/bin/bash\necho "$*" >> "${calls}"\ncase "$1" in --version) echo "phonedesk 0.1.4 (abc1234)";; migrate) echo "phonedesk: unknown command" >&2; exit 2;; *) exit 0;; esac\n`);
+      chmodSync(f, 0o755);
+      lines.push(`${sha(f)}  phonedesk-darwin-${arch}`);
+      if (gz) { writeFileSync(`${f}.gz`, gzipSync(readFileSync(f))); lines.push(`${sha(`${f}.gz`)}  phonedesk-darwin-${arch}.gz`); }
+    }
+    writeFileSync(join(dir, "SHA256SUMS"), lines.join("\n") + "\n");
+    return { dir, calls };
+  }
+  const flags = ["--yes", "--no-autostart", "--no-start", "--no-open", "--no-path"];
+
+  test("installs the phonedesk-* binary as nookdeck, says so in one line, and does not call migrate", () => {
+    const { dir, calls } = oldRelease();
+    const home = newHome();
+    const r = sh("setup.sh", flags, env(home, dir));
+    const text = out(r);
+    expect(r.exitCode, text).toBe(0);
+    expect(text).toContain("before the rename");
+    expect(text).toContain("installing it as nookdeck");
+    expect(existsSync(join(home, ".nookdeck", "bin", "nookdeck"))).toBe(true);
+    expect(existsSync(join(home, ".nookdeck", "bin", "phonedesk-darwin-arm64"))).toBe(false);
+    expect(readFileSync(calls, "utf8")).not.toMatch(/^migrate/m);
+    expect(text).toContain("nookdeck 0.1.4"); // the version line is shown under the new name
+  });
+
+  test("the .gz of the old name is used too", () => {
+    const { dir } = oldRelease(true);
+    const r = sh("setup.sh", flags, env(newHome(), dir));
+    expect(r.exitCode, out(r)).toBe(0);
+    expect(out(r)).toMatch(/Fetching phonedesk-darwin-(arm64|x64)\.gz/);
+  });
+
+  test("an existing ~/.phonedesk is copied to ~/.nookdeck by the script itself (the 0.1.x program cannot migrate); the old folder stays", () => {
+    const { dir, calls } = oldRelease();
+    const home = newHome();
+    mkdirSync(join(home, ".phonedesk"), { recursive: true });
+    writeFileSync(join(home, ".phonedesk", "devices.json"), '{"devices":[1]}');
+    const r = sh("setup.sh", flags, env(home, dir));
+    expect(r.exitCode, out(r)).toBe(0);
+    expect(readFileSync(join(home, ".nookdeck", "devices.json"), "utf8")).toBe('{"devices":[1]}');
+    expect(existsSync(join(home, ".phonedesk", "devices.json"))).toBe(true);
+    expect(readFileSync(calls, "utf8")).not.toMatch(/^migrate/m);
+  });
+
+  test("a release that lists nookdeck-* is preferred even when it lists phonedesk-* too", () => {
+    const dir = makeRelease();
+    for (const arch of ["arm64", "x64"]) writeFileSync(join(dir, `phonedesk-darwin-${arch}`), "x");
+    const r = sh("setup.sh", flags, env(newHome(), dir));
+    expect(r.exitCode, out(r)).toBe(0);
+    expect(out(r)).not.toContain("before the rename");
+  });
+});
+
+// no PowerShell on this machine to run setup.ps1: pin the pieces of the same fallback by reading it
+describe("setup.ps1: the pre-rename release fallback (static)", () => {
+  const ps = readFileSync(join(root, "setup.ps1"), "utf8");
+  test("looks for nookdeck-* first, falls back to phonedesk-*, shows it as nookdeck, skips migrate for it", () => {
+    expect(ps).toContain("$asset -replace '^nookdeck-', 'phonedesk-'");
+    expect(ps.indexOf("if (-not (Sum-For $asset))")).toBeLessThan(ps.indexOf("Probe-Installed", ps.indexOf("function Fetch-Binary")));
+    expect(ps).toContain("$v = 'nookdeck ' + ($v -replace '^phonedesk ', '')");
+    expect(ps).toMatch(/if \(\$S\.legacy\) \{[^}]*copying its data[\s\S]*?return\s*\}\s*Say "found an existing PhoneDesk install \(\$oldHome\): moving it/);
+    expect(ps).toContain("PHONEDESK_HOME = $dataDir");
+    expect(ps).toContain("(?:nookdeck|phonedesk) (\\S+)");
+  });
 });

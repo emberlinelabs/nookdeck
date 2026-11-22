@@ -2,11 +2,11 @@
 //
 // 1. A test must never touch the real home of the person running it. Whichever test file first imports src/config.ts
 //    fixes HOME for the whole process, and importing most modules pulls config in, so the sandbox has to exist before
-//    any of them: PHONEDESK_HOME is ALWAYS replaced (an exported PHONEDESK_HOME, even the real one, must not leak in).
-// 2. A hard guard on top: any write under the real ~/.phonedesk, ~/.claude, ~/.codex or ~/Library/LaunchAgents throws,
+//    any of them: NOOKDECK_HOME is ALWAYS replaced (an exported NOOKDECK_HOME, even the real one, must not leak in).
+// 2. A hard guard on top: any write under the real ~/.nookdeck, ~/.claude, ~/.codex or ~/Library/LaunchAgents throws,
 //    whatever the cause (a test that forgot an env var, a module that resolved HOME early, a new code path).
 //    It covers node:fs, node:fs/promises (named, default, namespace and dynamic imports) and Bun.write. A subprocess
-//    started by a test is outside this process: tests must give it its own PHONEDESK_HOME (test/home-guard.test.ts
+//    started by a test is outside this process: tests must give it its own NOOKDECK_HOME (test/home-guard.test.ts
 //    checks the spawn sites).
 import { mock } from "bun:test";
 import { mkdtempSync, realpathSync } from "node:fs";
@@ -17,20 +17,20 @@ const nodeFs = require("node:fs");
 const nodeFsp = require("node:fs/promises");
 
 const sandbox = mkdtempSync(join(tmpdir(), "pd-test-home-"));
-process.env.PHONEDESK_HOME = sandbox;
-process.env.PHONEDESK_TEST_SANDBOX = "1";
+process.env.NOOKDECK_HOME = sandbox;
+process.env.NOOKDECK_TEST_SANDBOX = "1";
 // the OpenCode / Grok readers look at the tools' own data: point them into the sandbox so no test ever reads (or writes) the real ones
 process.env.GROK_HOME = join(sandbox, "grok-home");
 process.env.OPENCODE_DB = join(sandbox, "opencode-data", "opencode.db");
 process.env.XDG_DATA_HOME = join(sandbox, "xdg-data");
 process.env.XDG_STATE_HOME = join(sandbox, "xdg-state");
-process.env.PHONEDESK_OPENCODE_CONFIG_DIR = join(sandbox, "opencode-config");
-process.env.PHONEDESK_OPENCODE = join(sandbox, "no-such-opencode"); // `opencode --version` never runs the real one
-process.env.PHONEDESK_GROK = join(sandbox, "no-such-grok");
+process.env.NOOKDECK_OPENCODE_CONFIG_DIR = join(sandbox, "opencode-config");
+process.env.NOOKDECK_OPENCODE = join(sandbox, "no-such-opencode"); // `opencode --version` never runs the real one
+process.env.NOOKDECK_GROK = join(sandbox, "no-such-grok");
 
 const real = homedir();
 const norm = (p: string): string => (process.platform === "win32" ? p.toLowerCase() : p);
-const protectedDirs = [join(real, ".phonedesk"), join(real, ".claude"), join(real, ".codex"), join(real, "Library", "LaunchAgents"), join(real, ".grok"), join(real, ".config", "opencode"), join(real, ".local", "share", "opencode"), join(real, ".local", "state", "opencode")]
+const protectedDirs = [join(real, ".nookdeck"), join(real, ".claude"), join(real, ".codex"), join(real, "Library", "LaunchAgents"), join(real, ".grok"), join(real, ".config", "opencode"), join(real, ".local", "share", "opencode"), join(real, ".local", "state", "opencode")]
   .flatMap((d) => { try { return [d, realpathSync(d)]; } catch { return [d]; } })
   .map((d) => norm(resolve(d)));
 (globalThis as any).__pdProtectedDirs = protectedDirs;
@@ -48,7 +48,7 @@ export function isProtected(p: unknown): boolean {
   return protectedDirs.some((d) => r === d || r.startsWith(d + sep));
 }
 const deny = (fn: string, p: unknown): never => {
-  throw new Error(`test guard: ${fn}(${String(asPath(p))}) would write under the real home (${real}). Tests must use their own PHONEDESK_HOME / PHONEDESK_CLAUDE_DIR / PHONEDESK_CODEX_DIR.`);
+  throw new Error(`test guard: ${fn}(${String(asPath(p))}) would write under the real home (${real}). Tests must use their own NOOKDECK_HOME / NOOKDECK_CLAUDE_DIR / NOOKDECK_CODEX_DIR.`);
 };
 
 // functions whose FIRST argument is a path that gets written, and the ones that also write a SECOND path

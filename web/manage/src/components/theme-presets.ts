@@ -9,7 +9,7 @@ export interface ThemePreset {
 /** One-click looks. They set every visual field at once (orientation is kept by the panel). */
 export const THEME_PRESETS: ThemePreset[] = [
   { name: "iOS Shortcuts", hint: "Rounded color tiles", theme: { mode: "dark", accent: "#22d3ee", background: "#0b0b0d", tile: "#141417", radius: 14, gap: 10, fontScale: 1, tileStyle: "ios", iconScale: 1, iconStroke: 2.25, showLabels: true } },
-  { name: "PhoneDesk cyan", hint: "Default", theme: { mode: "dark", accent: "#22d3ee", background: "#0b0b0d", tile: "#141417", radius: 14, gap: 10, fontScale: 1, tileStyle: "tint", iconScale: 1, showLabels: true } },
+  { name: "Nookdeck cyan", hint: "Default", theme: { mode: "dark", accent: "#22d3ee", background: "#0b0b0d", tile: "#141417", radius: 14, gap: 10, fontScale: 1, tileStyle: "tint", iconScale: 1, showLabels: true } },
   { name: "Violet", hint: "The former default", theme: { mode: "dark", accent: "#8b5cf6", background: "#0b0b0d", tile: "#141417", radius: 14, gap: 10, fontScale: 1, tileStyle: "tint", iconScale: 1, showLabels: true } },
   { name: "Knowns purple", hint: "Deep purple background", theme: { mode: "dark", accent: "#a78bfa", background: "#0e0a1c", tile: "#191330", radius: 18, gap: 10, fontScale: 1, tileStyle: "tint", iconScale: 1, showLabels: true } },
   { name: "OLED black", hint: "Pure black background", theme: { mode: "dark", accent: "#34d399", background: "#000000", tile: "#0a0a0a", radius: 18, gap: 8, fontScale: 1, tileStyle: "outline", iconScale: 1.1, showLabels: true } },

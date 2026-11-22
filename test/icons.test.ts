@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-process.env.PHONEDESK_HOME ??= mkdtempSync(join(tmpdir(), "pd-icons-"));
+process.env.NOOKDECK_HOME ??= mkdtempSync(join(tmpdir(), "pd-icons-"));
 const { Icons, imageKind, ASSETS_BUDGET } = await import("../src/icons");
 const { QuotaHistory, downsample, HISTORY_SAMPLE_MS, HISTORY_KEEP_MS } = await import("../src/ai/history");
 const { buildCommand } = await import("../src/actions");

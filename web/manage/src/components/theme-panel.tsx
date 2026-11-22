@@ -16,7 +16,7 @@ import { THEME_DEFAULTS, type Layout, type Theme } from "@/types";
 
 /** Fields a preset owns (it replaces them all). */
 const LOOK_FIELDS = new Set(["mode", "accent", "background", "tile", "text", "radius", "gap", "fontScale", "tileStyle", "iconScale", "iconStroke", "showLabels"]);
-const OPEN_KEY = "phonedesk.manage.themeAdvancedOpen";
+const OPEN_KEY = "nookdeck.manage.themeAdvancedOpen";
 
 function readOpen(): boolean {
   try { return localStorage.getItem(OPEN_KEY) === "1"; } catch { return false; }
@@ -154,7 +154,7 @@ export function ThemePanel({ layout, pageId, onChange, orientation, onOrientatio
                 options={[{ value: "c", label: "°C" }, { value: "f", label: "°F" }]}
               />
             </Field>
-            <Field label={t("Updates")} id="t-update" hint={t("Looks for a newer PhoneDesk release on GitHub. Nothing is installed automatically.")}>
+            <Field label={t("Updates")} id="t-update" hint={t("Looks for a newer Nookdeck release on GitHub. Nothing is installed automatically.")}>
               <div className="flex items-center gap-3">
                 <Switch id="t-update" checked={th.updateCheck !== false} onCheckedChange={(v) => set({ updateCheck: v ? undefined : false })} aria-label={t("Check for updates daily")} />
                 <label htmlFor="t-update" className="text-[13px]">{t("Check for updates daily")}</label>

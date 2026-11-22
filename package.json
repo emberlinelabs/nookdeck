@@ -1,11 +1,11 @@
 {
-  "name": "phonedesk",
+  "name": "nookdeck",
   "version": "0.1.4",
   "description": "Turn any phone into a Stream Deck-style control panel for your computer. Web-based, no app install.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "phonedesk": "src/index.ts"
+    "nookdeck": "src/index.ts"
   },
   "scripts": {
     "dev": "bun scripts/ensure-icons.ts && bun scripts/ensure-web.ts && bun scripts/gen-assets.ts && bun --watch src/index.ts",
@@ -14,9 +14,9 @@
     "typecheck": "bun scripts/ensure-icons.ts && bun scripts/ensure-web.ts && bun scripts/gen-assets.ts && tsc --noEmit",
     "build:web": "cd web/deck && bun install && bunx --bun vite build && cd ../manage && bun install && bunx --bun vite build",
     "gen-assets": "bun scripts/gen-assets.ts",
-    "build": "bun scripts/ensure-icons.ts && bun run build:web && bun scripts/build-mediaremote.ts && bun run gen-assets && bun build src/index.ts src/platform/mac-worker.ts --compile --outfile dist/phonedesk && bun scripts/sign-macos.ts dist/phonedesk",
+    "build": "bun scripts/ensure-icons.ts && bun run build:web && bun scripts/build-mediaremote.ts && bun run gen-assets && bun build src/index.ts src/platform/mac-worker.ts --compile --outfile dist/nookdeck && bun scripts/sign-macos.ts dist/nookdeck",
     "gen-icons": "bun scripts/gen-icons.ts",
-    "build:win": "bun scripts/ensure-icons.ts && bun run build:web && bun run gen-assets && bun build src/index.ts --compile --target=bun-windows-x64 --outfile dist/phonedesk-windows-x64.exe"
+    "build:win": "bun scripts/ensure-icons.ts && bun run build:web && bun run gen-assets && bun build src/index.ts --compile --target=bun-windows-x64 --outfile dist/nookdeck-windows-x64.exe"
   },
   "devDependencies": {
     "@lobehub/icons-static-svg": "1.103.0",

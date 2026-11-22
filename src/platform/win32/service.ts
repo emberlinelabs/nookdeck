@@ -2,17 +2,17 @@ import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join, win32 } from "node:path";
 
 /**
- * The Windows background service: a per-user Task Scheduler task "PhoneDesk" that runs at logon (no admin),
+ * The Windows background service: a per-user Task Scheduler task "Nookdeck" that runs at logon (no admin),
  * through a tiny hidden VBScript launcher (the compiled exe is a console program, so starting it directly would
  * flash a console window). Fallback: an HKCU Run value with the same launcher.
  */
-export const TASK_NAME = "PhoneDesk";
+export const TASK_NAME = "Nookdeck";
 export const RUN_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 
 export interface WinServiceCtx {
   /** Runs a program and returns its exit code and stdout+stderr (schtasks, reg, powershell). Never throws. */
   run: (argv: string[]) => Promise<{ code: number; out: string }>;
-  /** Where launch.vbs lives (%LOCALAPPDATA%\PhoneDesk). */
+  /** Where launch.vbs lives (%LOCALAPPDATA%\Nookdeck). */
   dir: string;
   /** The agent's log dir (HOME\logs). */
   logDir: string;
@@ -33,8 +33,8 @@ export function buildLauncher(o: { program: string[]; env?: Record<string, strin
   const args = [...o.program];
   if (o.port !== undefined && o.port !== 7420) args.push("--port", String(o.port));
   const line = `${args.map(cmdArg).join(" ")} >> ${cmdArg(join(o.logDir, "agent.out.log"))} 2>> ${cmdArg(join(o.logDir, "agent.err.log"))}`;
-  const lines = ["' Starts PhoneDesk without a console window. Written by `phonedesk service install`.", 'Set sh = CreateObject("WScript.Shell")'];
-  for (const [k, v] of Object.entries({ PHONEDESK_SERVICE: "1", ...(o.env ?? {}) })) lines.push(`sh.Environment("Process")(${q(k)}) = ${q(v)}`);
+  const lines = ["' Starts Nookdeck without a console window. Written by `nookdeck service install`.", 'Set sh = CreateObject("WScript.Shell")'];
+  for (const [k, v] of Object.entries({ NOOKDECK_SERVICE: "1", ...(o.env ?? {}) })) lines.push(`sh.Environment("Process")(${q(k)}) = ${q(v)}`);
   lines.push(`sh.Run ${q(`cmd /s /c "${line}"`)}, 0, False`);
   return lines.join("\r\n") + "\r\n";
 }
@@ -46,7 +46,7 @@ export function buildTaskXml(o: { user: string; launcher: string }): string {
   const x = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <RegistrationInfo><Description>PhoneDesk agent (turns a phone into a control panel for this PC)</Description></RegistrationInfo>
+  <RegistrationInfo><Description>Nookdeck agent (turns a phone into a control panel for this PC)</Description></RegistrationInfo>
   <Triggers><LogonTrigger><Enabled>true</Enabled><UserId>${x(o.user)}</UserId></LogonTrigger></Triggers>
   <Principals><Principal id="Author"><UserId>${x(o.user)}</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>
   <Settings>
@@ -72,7 +72,7 @@ export const regAddRun = (launcher: string) => ["reg", "add", RUN_KEY, "/v", TAS
 export const regDeleteRun = () => ["reg", "delete", RUN_KEY, "/v", TASK_NAME, "/f"];
 export const regQueryRun = () => ["reg", "query", RUN_KEY, "/v", TASK_NAME];
 
-/** Stops our agent: every process running exactly this exe except the one asking (`phonedesk service ...` itself). */
+/** Stops our agent: every process running exactly this exe except the one asking (`nookdeck service ...` itself). */
 export const stopAgentArgv = (exe: string, selfPid: number) => [
   "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
   `Get-Process | Where-Object { $_.Path -eq '${exe.replace(/'/g, "''")}' -and $_.Id -ne ${selfPid} } | Stop-Process -Force`,
@@ -131,7 +131,7 @@ export async function winUninstall(c: WinServiceCtx): Promise<{ removed: boolean
 }
 
 export async function winRestart(c: WinServiceCtx): Promise<void> {
-  if (!(await stat(launcherPath(c.dir)).then(() => true, () => false))) throw new Error("The service is not installed. Run `phonedesk service install`.");
+  if (!(await stat(launcherPath(c.dir)).then(() => true, () => false))) throw new Error("The service is not installed. Run `nookdeck service install`.");
   await winStop(c);
   const r = await c.run(schtasksRun());
   if (r.code !== 0) await c.run(["wscript.exe", "//B", "//Nologo", launcherPath(c.dir)]); // the Run-key variant

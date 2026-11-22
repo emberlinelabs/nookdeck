@@ -1,4 +1,4 @@
-# PhoneDesk Windows helper: one long-lived PowerShell (5.1) process. Reads one JSON request per line on stdin,
+# Nookdeck Windows helper: one long-lived PowerShell (5.1) process. Reads one JSON request per line on stdin,
 # writes one JSON reply per line on stdout: {"id":N,"ok":true,"result":...} or {"id":N,"ok":false,"error":"..."}.
 # Requests only ever carry plain data (never code); every command below is fixed.
 $ErrorActionPreference = 'Stop'

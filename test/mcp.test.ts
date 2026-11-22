@@ -5,7 +5,7 @@ import { mkdtempSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-process.env.PHONEDESK_HOME = mkdtempSync(join(tmpdir(), "pd-mcp-"));
+process.env.NOOKDECK_HOME = mkdtempSync(join(tmpdir(), "pd-mcp-"));
 const { startServer } = await import("../src/server");
 const { LayoutHistory } = await import("../src/layout-history");
 const { validateLayout } = await import("../src/config");
@@ -133,7 +133,7 @@ describe("protocol", () => {
     p.end();
     await done;
     const by = (id: any) => p.lines.find((l) => l.id === id);
-    expect(by(1).result).toMatchObject({ protocolVersion: "2025-03-26", capabilities: { tools: { listChanged: false } }, serverInfo: { name: "phonedesk" } });
+    expect(by(1).result).toMatchObject({ protocolVersion: "2025-03-26", capabilities: { tools: { listChanged: false } }, serverInfo: { name: "nookdeck" } });
     expect(by(2).result).toEqual({});
     expect(by(3).result.tools.map((t: any) => t.name)).toEqual(TOOLS.map((t) => t.name));
     expect(by(3).result.tools.every((t: any) => t.inputSchema.type === "object")).toBe(true);

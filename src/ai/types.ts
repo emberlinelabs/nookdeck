@@ -71,7 +71,7 @@ export interface WaitingHint {
 }
 
 /**
- * Grok Build also runs the hooks it finds in ~/.claude/settings.json (compat.claude.hooks), so `phonedesk hook claude`
+ * Grok Build also runs the hooks it finds in ~/.claude/settings.json (compat.claude.hooks), so `nookdeck hook claude`
  * and `claude-ask` can be fed a Grok payload. Grok's stdin uses camelCase names (hookEventName, notificationType,
  * toolName, sessionId) and snake_case event NAMES ("pre_tool_use"); Claude Code's is snake_case keys (hook_event_name,
  * tool_name, session_id) with CamelCase event names ("PreToolUse"). Such a payload must never reach the phone as a Claude request.

@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "phonedesk-deck",
+      "name": "nookdeck-deck",
       "dependencies": {
         "jsqr": "1.4.0",
         "preact": "^11.2.0",

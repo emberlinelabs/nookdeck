@@ -1,5 +1,5 @@
 /**
- * Installed plugins on disk: ~/.phonedesk/plugins/<id>/<version>/ (the files) and ~/.phonedesk/plugins.json (state: enabled,
+ * Installed plugins on disk: ~/.nookdeck/plugins/<id>/<version>/ (the files) and ~/.nookdeck/plugins.json (state: enabled,
  * pinned version and sha256, granted permissions, settings). Install from a local folder or manifest file, or from an https URL.
  */
 import { createHash } from "node:crypto";
@@ -14,7 +14,7 @@ import type { Manifest, Permissions, PluginState, SettingField, Settings, StateF
 export const MAX_FILES = 200;
 export const MAX_BYTES = 5 * 1024 * 1024;
 const SKIP_DIRS = new Set([".git", "node_modules", ".DS_Store"]);
-export const MANIFEST_FILE = "phonedesk.json";
+export const MANIFEST_FILE = "nookdeck.json";
 
 export type Files = Map<string, Uint8Array>;
 
@@ -61,11 +61,11 @@ export function manifestUrls(url: string): string[] {
 }
 
 export interface StoreOptions {
-  /** Where installs live (default ~/.phonedesk/plugins). */
+  /** Where installs live (default ~/.nookdeck/plugins). */
   dir?: string;
-  /** Where state lives (default ~/.phonedesk/plugins.json). */
+  /** Where state lives (default ~/.nookdeck/plugins.json). */
   stateFile?: string;
-  /** The running PhoneDesk version, checked against a manifest's `phonedesk` range. */
+  /** The running Nookdeck version, checked against a manifest's `nookdeck` range. */
   agentVersion?: string;
   fetch?: typeof fetch;
   now?: () => number;
@@ -74,7 +74,7 @@ export interface StoreOptions {
 export interface PluginSummary {
   id: string; name: string; version: string; author?: string; description?: string; icon?: string;
   source: string; sha256: string; installedAt: number;
-  /** Not reviewed by the PhoneDesk registry (every P1 install is). */
+  /** Not reviewed by the Nookdeck registry (every P1 install is). */
   unreviewed: boolean;
   enabled: boolean;
   permissions: Permissions;

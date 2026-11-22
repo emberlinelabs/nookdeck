@@ -22,7 +22,7 @@ export function downsample(points: HistoryPoint[], max = HISTORY_MAX_POINTS): Hi
 
 /**
  * usedPercent per provider/account/window, one sample every 5 minutes for 24 hours, in memory and in
- * ~/.phonedesk/quota-history.json (0600). Only fresh readings are sampled.
+ * ~/.nookdeck/quota-history.json (0600). Only fresh readings are sampled.
  */
 export class QuotaHistory {
   private series = new Map<string, HistoryPoint[]>();

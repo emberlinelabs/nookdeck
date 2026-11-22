@@ -12,17 +12,17 @@ import { withToolState, type ToolStates } from "./states";
 /*
  * Grok Build (`grok`, xAI). Read-only from its own files:
  *  - ~/.grok/sessions/<url-encoded cwd>/<id>/summary.json and ~/.grok/active_sessions.json (GROK_HOME overrides the base);
- *  - busy / idle / waiting come from an opt-in hook file, ~/.grok/hooks/phonedesk.json, that PhoneDesk installs and removes.
+ *  - busy / idle / waiting come from an opt-in hook file, ~/.grok/hooks/nookdeck.json, that Nookdeck installs and removes.
  * Quota: asked of the grok CLI itself (`grok agent stdio`, ACP JSON-RPC `_x.ai/billing`), never from tokens or cookies we read.
  * A Grok hook can only deny, never approve, and cannot answer questions:
  * the phone only learns "Grok is waiting for you".
  */
 
 export const grokDir = (): string => process.env.GROK_HOME || join(safeHome() || homedir(), ".grok");
-export const grokHookFile = (): string => join(grokDir(), "hooks", "phonedesk.json");
-/** The grok binary: PHONEDESK_GROK (authoritative, for tests), PATH, then ~/.grok/bin and the usual places (a service's PATH is short). */
+export const grokHookFile = (): string => join(grokDir(), "hooks", "nookdeck.json");
+/** The grok binary: NOOKDECK_GROK (authoritative, for tests), PATH, then ~/.grok/bin and the usual places (a service's PATH is short). */
 export function grokPath(): string | null {
-  const forced = process.env.PHONEDESK_GROK;
+  const forced = process.env.NOOKDECK_GROK;
   if (forced) return existsSync(forced) ? forced : null;
   const onPath = Bun.which("grok", { PATH: process.env.PATH ?? "" });
   if (onPath) return onPath;
@@ -211,10 +211,20 @@ export const GROK_STATES = [
   { event: "Notification", state: "waiting", matcher: "idle_prompt|permission_prompt" },
 ] as const;
 export const GROK_HOOK_TIMEOUT_S = 5;
-export const GROK_MARKER = "phonedesk hook grok";
+export const GROK_MARKER = "nookdeck hook grok";
+const LEGACY_GROK_MARKER = "phonedesk hook grok";
+/** The file 0.1.x wrote; removed (by marker) once the new one is written, or both hooks would fire. */
+export const legacyGrokHookFile = (file = grokHookFile()) => join(dirname(file), "phonedesk.json");
+async function removeLegacyGrokHook(file: string): Promise<boolean> {
+  const old = legacyGrokHookFile(file);
+  const text = await readFile(old, "utf8").catch(() => null);
+  if (text === null || !text.includes(LEGACY_GROK_MARKER)) return false;
+  await rm(old, { force: true });
+  return true;
+}
 
 /** The command text for one state, built from the usual `<exe> hook claude ...` command (same --port/--home conventions). */
-export const grokCommandFor = (base: string, state: string) => base.replace(/ hook claude/, ` hook grok ${state}`).replace(/# phonedesk hook$/, `# ${GROK_MARKER}`);
+export const grokCommandFor = (base: string, state: string) => base.replace(/ hook claude/, ` hook grok ${state}`).replace(/# nookdeck hook$/, `# ${GROK_MARKER}`);
 
 export function grokHookContent(base: string): string {
   const hooks: Record<string, unknown[]> = {};
@@ -225,31 +235,33 @@ export function grokHookContent(base: string): string {
 }
 
 export async function isGrokHookInstalled(file = grokHookFile()): Promise<boolean> {
-  try { return (await readFile(file, "utf8")).includes(GROK_MARKER); } catch { return false; }
+  try { return (await readFile(file, "utf8")).includes(GROK_MARKER); } catch { return (await readFile(legacyGrokHookFile(file), "utf8").catch(() => "")).includes(LEGACY_GROK_MARKER); }
 }
 
-/** Writes ~/.grok/hooks/phonedesk.json (a file of our own). Refuses to overwrite a file that is not ours. */
+/** Writes ~/.grok/hooks/nookdeck.json (a file of our own). Refuses to overwrite a file that is not ours. */
 export async function installGrokHook(baseCommand: string, file = grokHookFile()): Promise<{ changed: boolean }> {
   let cur: string | null = null;
   try { cur = await readFile(file, "utf8"); } catch { /* new */ }
-  if (cur !== null && !cur.includes(GROK_MARKER)) throw new Error(`${file} exists and was not written by PhoneDesk; refusing to overwrite it`);
+  if (cur !== null && !cur.includes(GROK_MARKER)) throw new Error(`${file} exists and was not written by Nookdeck; refusing to overwrite it`);
   const next = grokHookContent(baseCommand);
-  if (cur === next) return { changed: false };
+  if (cur === next) return { changed: await removeLegacyGrokHook(file) };
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, next);
   await chmod(file, 0o644).catch(() => {});
+  await removeLegacyGrokHook(file);
   return { changed: true };
 }
 
 export async function uninstallGrokHook(file = grokHookFile()): Promise<{ changed: boolean }> {
   let cur: string;
-  try { cur = await readFile(file, "utf8"); } catch { return { changed: false }; }
-  if (!cur.includes(GROK_MARKER)) return { changed: false };
+  try { cur = await readFile(file, "utf8"); } catch { return { changed: await removeLegacyGrokHook(file) }; }
+  if (!cur.includes(GROK_MARKER)) return { changed: await removeLegacyGrokHook(file) };
   await rm(file, { force: true });
+  await removeLegacyGrokHook(file);
   return { changed: true };
 }
 
-/** `phonedesk hook grok <state>` stdin -> the fields the agent needs (Grok sends camelCase; snake_case tolerated). */
+/** `nookdeck hook grok <state>` stdin -> the fields the agent needs (Grok sends camelCase; snake_case tolerated). */
 export function grokStateFromStdin(stdin: string): { sessionId?: string; cwd?: string } {
   try {
     const o = JSON.parse(stdin);

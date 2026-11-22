@@ -1,7 +1,9 @@
 import { hostname, networkInterfaces } from "node:os";
 
 /** Header the management page (and every other localhost client) must send on state-changing requests. */
-export const CSRF_HEADER = "x-phonedesk";
+export const CSRF_HEADER = "x-nookdeck";
+/** Pre-rename clients (0.1.x management page, scripts) send this one; both are accepted. */
+export const LEGACY_CSRF_HEADER = "x-phonedesk";
 export const CSRF_VALUE = "1";
 
 const LOCAL_NAMES = ["localhost", "127.0.0.1", "[::1]"];
@@ -48,7 +50,7 @@ export function localRequestError(c: LocalCheck): string | null {
   if (!hostAllowed(c.headers.get("host"), c.port, LOCAL_NAMES)) return "forbidden: bad Host";
   if (!originAllowed(c.headers.get("origin"), c.port, LOCAL_NAMES)) return "forbidden: cross-site Origin";
   if (c.hook || !MUTATING.has(c.method)) return null;
-  if (c.headers.get(CSRF_HEADER) !== CSRF_VALUE) return `forbidden: missing ${CSRF_HEADER}: ${CSRF_VALUE} header`;
+  if (c.headers.get(CSRF_HEADER) !== CSRF_VALUE && c.headers.get(LEGACY_CSRF_HEADER) !== CSRF_VALUE) return `forbidden: missing ${CSRF_HEADER}: ${CSRF_VALUE} header`;
   if (!c.upload && !/^application\/json\s*(;|$)/i.test(c.headers.get("content-type") ?? "")) return "forbidden: content-type must be application/json";
   return null;
 }

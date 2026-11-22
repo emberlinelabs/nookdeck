@@ -1,26 +1,30 @@
 <p align="center">
-  <img src="docs/brand/phonedesk-mark.svg" alt="PhoneDesk logo" width="112" height="112">
+  <img src="docs/brand/nookdeck-mark.svg" alt="Nookdeck logo" width="112" height="112">
 </p>
 
-<h1 align="center">PhoneDesk</h1>
+<h1 align="center">Nookdeck</h1>
 
 <p align="center"><b>Your old phone, a control panel for your computer.</b></p>
 
+<p align="center"><sub>Formerly PhoneDesk. Existing installs migrate automatically on update.</sub></p>
+
 <p align="center">
-  <a href="https://github.com/howznguyen/phonedesk/releases"><img alt="Release" src="https://img.shields.io/github/v/release/howznguyen/phonedesk?color=22d3ee&label=release"></a>
+  <a href="https://github.com/howznguyen/nookdeck/releases"><img alt="Release" src="https://img.shields.io/github/v/release/howznguyen/nookdeck?color=22d3ee&label=release"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-22d3ee"></a>
   <img alt="macOS and Windows" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows-0b0d10">
 </p>
 
 <p align="center"><b>English</b> · <a href="README.vi.md">Tiếng Việt</a> · <a href="README.zh.md">中文</a></p>
 
-Turn an old phone or tablet into a Stream Deck-style control panel and dashboard for your Mac or Windows PC. PhoneDesk is a small
+<p align="center"><a href="https://nookdeck.app">nookdeck.app</a></p>
+
+Turn an old phone or tablet into a Stream Deck-style control panel and dashboard for your Mac or Windows PC. Nookdeck is a small
 agent that runs on your computer and serves a touch overlay to any browser on the same Wi-Fi. There is no app to
 install on the phone and no account or cloud service.
 
 > **Status:** early (0.x). macOS is the main target, Windows is experimental. Builds are not signed with a Developer ID or notarized: see [Install](#install).
 
-<p align="center"><img src="docs/images/promo-hero.png" alt="PhoneDesk: your old phone, a control panel for your computer"></p>
+<p align="center"><img src="docs/images/promo-hero.png" alt="Nookdeck: your old phone, a control panel for your computer"></p>
 
 ## What you can do
 
@@ -74,7 +78,7 @@ is installed on the phone. It takes about 2 minutes.
 2. Copy this line, paste it into Terminal, press <kbd>Return</kbd>:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/howznguyen/phonedesk/main/setup.sh | bash
+curl -fsSL https://nookdeck.app/scripts/install | bash
 ```
 
 **On Windows** (experimental)
@@ -83,13 +87,15 @@ curl -fsSL https://raw.githubusercontent.com/howznguyen/phonedesk/main/setup.sh 
 2. Copy this line, paste it into PowerShell, press <kbd>Enter</kbd>:
 
 ```powershell
-irm https://raw.githubusercontent.com/howznguyen/phonedesk/main/setup.ps1 | iex
+irm https://nookdeck.app/scripts/install.ps1 | iex
 ```
 
-You will see a download bar, then a few `OK` lines. At the end PhoneDesk prints a **QR code**, a **phone address**
+Direct link, if `nookdeck.app` is blocked on your network: replace `https://nookdeck.app/scripts/install` with `https://raw.githubusercontent.com/howznguyen/nookdeck/main/setup.sh` (Windows: `https://raw.githubusercontent.com/howznguyen/nookdeck/main/setup.ps1`).
+
+You will see a download bar, then a few `OK` lines. At the end Nookdeck prints a **QR code**, a **phone address**
 (for example `http://your-mac.local:7420`) and a **6-digit PIN**. Keep that window open for the next step.
 
-PhoneDesk now starts by itself every time you sign in, and the `phonedesk` command works in any new terminal window.
+Nookdeck now starts by itself every time you sign in, and the `nookdeck` command works in any new terminal window.
 
 ### 2. Open it on your phone
 
@@ -121,39 +127,39 @@ phone preview, then press **Save**. The phone updates right away.
 </table>
 
 The first time a key sends a shortcut, macOS asks for **Accessibility** permission: allow it (System Settings →
-Privacy & Security → Accessibility). Windows asks once to allow PhoneDesk on the network: allow it.
+Privacy & Security → Accessibility). Windows asks once to allow Nookdeck on the network: allow it.
 
 ### Something not working?
 
 | Problem | What to do |
 |---|---|
-| The phone cannot open the address | Make sure the phone and the computer are on the **same Wi-Fi**. On Windows, allow PhoneDesk in the firewall prompt. Try the number address the installer printed (`http://192.168…:7420`). |
+| The phone cannot open the address | Make sure the phone and the computer are on the **same Wi-Fi**. On Windows, allow Nookdeck in the firewall prompt. Try the number address the installer printed (`http://192.168…:7420`). |
 | `could not reach GitHub` or `error: 503` | GitHub had a hiccup. Wait a few seconds and run the same line again. |
 | The download is slow | It is about 20 MB (Windows 40 MB). Leave it running; the bar shows the progress. |
-| `phonedesk: command not found` | Open a **new** terminal window. |
-| A key does nothing on the Mac | Allow **Accessibility** for PhoneDesk, then run `phonedesk doctor` to see what else is missing. |
-| Keys stopped working after an update | macOS ties Accessibility to each build. In the management page, **Permissions** tab, press **Reset and ask again** (or run `phonedesk doctor --request accessibility --reset`) and turn phonedesk on. |
+| `nookdeck: command not found` | Open a **new** terminal window. |
+| A key does nothing on the Mac | Allow **Accessibility** for Nookdeck, then run `nookdeck doctor` to see what else is missing. |
+| Keys stopped working after an update | macOS ties Accessibility to each build. In the management page, **Permissions** tab, press **Reset and ask again** (or run `nookdeck doctor --request accessibility --reset`) and turn nookdeck on. |
 | `.local` address does not open on an old phone | Use the IP address the installer printed, and give the computer a fixed IP in your router so it does not change. |
 | `port 7420 is in use` | Another program uses that port. Run the installer again with `--port 7421` (Mac: `… \| bash -s -- --port 7421`). |
 
 ### Update or remove
 
 - **Update:** run the same install line again. Your layout and paired phones are kept.
-- **Remove (Mac):** `curl -fsSL https://raw.githubusercontent.com/howznguyen/phonedesk/main/uninstall.sh | bash`. Your data is kept; add `-s -- --purge` after `bash` to delete it too.
-- **Remove (Windows):** `irm https://raw.githubusercontent.com/howznguyen/phonedesk/main/uninstall.ps1 | iex`.
+- **Remove (Mac):** `curl -fsSL https://nookdeck.app/scripts/uninstall | bash`. Your data is kept; add `-s -- --purge` after `bash` to delete it too.
+- **Remove (Windows):** `irm https://nookdeck.app/scripts/uninstall.ps1 | iex`.
 
 <details>
 <summary>More installer options and details</summary>
 
-- The installer downloads the right file from the [latest release](https://github.com/howznguyen/phonedesk/releases/latest), checks
+- The installer downloads the right file from the [latest release](https://github.com/howznguyen/nookdeck/releases/latest), checks
   its SHA-256 against `SHA256SUMS` and refuses on a mismatch, installs it for your user only (no `sudo`, no
   administrator), starts it at sign-in (a launchd agent on macOS, a Task Scheduler task on Windows) and adds it to your PATH.
 - Mac options go after `bash -s --`: `--yes` (no questions), `--version 0.1.1`, `--port 7421`, `--no-autostart`,
   `--no-open`, `--no-path`, `--dry-run`. On Windows set environment variables before the line, for example
-  `$env:PHONEDESK_PORT=7421; irm … | iex` (see the top of [setup.ps1](setup.ps1)).
-- Files: the program is `~/.phonedesk/bin/phonedesk` on macOS and `%LOCALAPPDATA%\PhoneDesk\bin\phonedesk.exe` on
-  Windows; your data is in `~/.phonedesk`; logs are in `~/.phonedesk/logs`.
-- Background service: `phonedesk service install|uninstall|status|restart`.
+  `$env:NOOKDECK_PORT=7421; irm … | iex` (see the top of [setup.ps1](setup.ps1)).
+- Files: the program is `~/.nookdeck/bin/nookdeck` on macOS and `%LOCALAPPDATA%\Nookdeck\bin\nookdeck.exe` on
+  Windows; your data is in `~/.nookdeck`; logs are in `~/.nookdeck/logs`.
+- Background service: `nookdeck service install|uninstall|status|restart`.
 - Signing: the binaries are signed ad hoc, not with an Apple Developer ID or a Windows certificate. The installers handle
   this; a file downloaded in a browser may need `xattr -d com.apple.quarantine <file>` on macOS or "More info → Run
   anyway" in Windows SmartScreen.
@@ -168,13 +174,13 @@ Requirements: macOS 13+ (Apple silicon or Intel), or Windows 10/11 x64 (experime
 From source (needs [Bun](https://bun.sh) 1.3+):
 
 ```sh
-git clone https://github.com/howznguyen/phonedesk && cd phonedesk
+git clone https://github.com/howznguyen/nookdeck && cd nookdeck
 bun install
-bun run build          # builds the web apps and dist/phonedesk
-./dist/phonedesk       # prints the phone URL and a pairing PIN
+bun run build          # builds the web apps and dist/nookdeck
+./dist/nookdeck       # prints the phone URL and a pairing PIN
 ```
 
-On Windows, `bun run build:win` produces `dist/phonedesk-windows-x64.exe`.
+On Windows, `bun run build:win` produces `dist/nookdeck-windows-x64.exe`.
 
 Open the printed URL on your phone (same Wi-Fi), enter the PIN, and add the page to the home screen for a
 full-screen panel. The management page is at `http://localhost:7420/manage/` on the Mac.
@@ -192,12 +198,12 @@ In **Manage › AI**, two separate switches install hooks into `~/.claude/settin
 If no phone answers in time, Claude Code asks in the terminal as usual. For Codex, the permission hook goes into
 `~/.codex/hooks.json`.
 
-Quotas are read-only: PhoneDesk reads the sign-in Claude Code already stored (never refreshes it), Codex's local
+Quotas are read-only: Nookdeck reads the sign-in Claude Code already stored (never refreshes it), Codex's local
 session files and Antigravity's local server. See [PRIVACY.md](PRIVACY.md) for every outbound connection.
 
 ## Permissions
 
-macOS ties each permission to the program that asks. Under the background service that is the `phonedesk` binary; started from a terminal it is the terminal app. Run `phonedesk doctor` to see what is granted (it asks the running agent, never shows a prompt by itself):
+macOS ties each permission to the program that asks. Under the background service that is the `nookdeck` binary; started from a terminal it is the terminal app. Run `nookdeck doctor` to see what is granted (it asks the running agent, never shows a prompt by itself):
 
 | Permission | Needed for | Where |
 |---|---|---|
@@ -208,38 +214,38 @@ macOS ties each permission to the program that asks. Under the background servic
 | Firewall | phones connecting to the agent | Network > Firewall > Options |
 
 ```bash
-phonedesk doctor                          # ✓ / ✗ for each item, with the fix
-phonedesk doctor --open accessibility     # open the right Settings pane
-phonedesk doctor --request accessibility  # make macOS list phonedesk (shows its prompt)
+nookdeck doctor                          # ✓ / ✗ for each item, with the fix
+nookdeck doctor --open accessibility     # open the right Settings pane
+nookdeck doctor --request accessibility  # make macOS list nookdeck (shows its prompt)
 ```
 
-Updates are ad-hoc signed, so macOS may ask again after an update: remove the old `phonedesk` entry from the Privacy list and add it again. This goes away once releases are signed with a Developer ID.
+Updates are ad-hoc signed, so macOS may ask again after an update: remove the old `nookdeck` entry from the Privacy list and add it again. This goes away once releases are signed with a Developer ID.
 
-**On Windows** `phonedesk doctor` checks different things (same commands, `phonedesk doctor --open firewall` opens Windows Security):
+**On Windows** `nookdeck doctor` checks different things (same commands, `nookdeck doctor --open firewall` opens Windows Security):
 
 | Check | Why it matters |
 |---|---|
-| Firewall | Windows blocks incoming connections unless a rule allows `phonedesk.exe`; the installer offers one rule, for your local subnet only (one UAC prompt, removed by `uninstall.ps1`). Manually, as administrator: `netsh advfirewall firewall add rule name="PhoneDesk" dir=in action=allow program="<path>\phonedesk.exe" profile=any remoteip=localsubnet` |
+| Firewall | Windows blocks incoming connections unless a rule allows `nookdeck.exe`; the installer offers one rule, for your local subnet only (one UAC prompt, removed by `uninstall.ps1`). Manually, as administrator: `netsh advfirewall firewall add rule name="Nookdeck" dir=in action=allow program="<path>\nookdeck.exe" profile=any remoteip=localsubnet` |
 | Network profile | Your Wi-Fi or Ethernet should be a Private network (Settings > Network & internet) |
-| Desktop session | Key presses, typing, Now Playing and volume only work when PhoneDesk runs in your signed-in desktop session (the scheduled task does; an SSH session or a Windows service does not) |
+| Desktop session | Key presses, typing, Now Playing and volume only work when Nookdeck runs in your signed-in desktop session (the scheduled task does; an SSH session or a Windows service does not) |
 | PowerShell helper | Now Playing, volume, app icons and the process list use a small Windows PowerShell 5.1 helper |
-| SmartScreen | A downloaded `phonedesk.exe` carrying the internet mark triggers warnings; the installer removes it |
+| SmartScreen | A downloaded `nookdeck.exe` carrying the internet mark triggers warnings; the installer removes it |
 
 ## AI layout assistant (MCP)
 
-PhoneDesk ships an MCP server, so Claude Code (or any MCP client) can arrange your deck in plain language: "add a page with my dev tools", "put Spotify next to the clock". It talks to the running agent, so start PhoneDesk first.
+Nookdeck ships an MCP server, so Claude Code (or any MCP client) can arrange your deck in plain language: "add a page with my dev tools", "put Spotify next to the clock". It talks to the running agent, so start Nookdeck first.
 
 Register it once, with the path the installer used:
 
 | Installed with | Command |
 |---|---|
-| `setup.sh` (macOS) | `claude mcp add phonedesk -- ~/.phonedesk/bin/phonedesk mcp` |
-| `setup.ps1` (Windows) | `claude mcp add phonedesk -- "%LOCALAPPDATA%\PhoneDesk\bin\phonedesk.exe" mcp` |
-| Built from source | `claude mcp add phonedesk -- /full/path/to/dist/phonedesk mcp` |
+| `setup.sh` (macOS) | `claude mcp add nookdeck -- ~/.nookdeck/bin/nookdeck mcp` |
+| `setup.ps1` (Windows) | `claude mcp add nookdeck -- "%LOCALAPPDATA%\Nookdeck\bin\nookdeck.exe" mcp` |
+| Built from source | `claude mcp add nookdeck -- /full/path/to/dist/nookdeck mcp` |
 
-Add `--port N` after `mcp` if the agent does not use port 7420, and `--scope user` before `phonedesk` to make it available in every project. Check it with `claude mcp list`.
+Add `--port N` after `mcp` if the agent does not use port 7420, and `--scope user` before `nookdeck` to make it available in every project. Check it with `claude mcp list`.
 
-Tools: `get_layout`, `add_page`, `add_item`, `update_item`, `move_item`, `resize_item`, `remove_item`, `update_page`, `remove_page`, `set_theme`, `list_apps`, `list_widgets`, `search_icons`, `preview_changes`, `undo`. Every change goes through the same validation as the management page and can be undone. The [layout skill](docs/skills/phonedesk-layout/SKILL.md) describes the schema to the assistant.
+Tools: `get_layout`, `add_page`, `add_item`, `update_item`, `move_item`, `resize_item`, `remove_item`, `update_page`, `remove_page`, `set_theme`, `list_apps`, `list_widgets`, `search_icons`, `preview_changes`, `undo`. Every change goes through the same validation as the management page and can be undone. The [layout skill](docs/skills/nookdeck-layout/SKILL.md) describes the schema to the assistant.
 
 ## Security
 
@@ -259,27 +265,19 @@ Layout: `src/` agent (Bun + TypeScript), `web/deck` phone overlay (Preact, Safar
 
 ## Contributing
 
-Pull requests are welcome. Build and test from a clone (needs [Bun](https://bun.sh) 1.3+):
+Pull requests, bug reports and translations are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the dev setup, the project layout and the rules a pull request must follow.
 
 ```sh
 bun install
-bun run dev      # agent with watch mode
-bun run test     # unit tests
-bun run build    # web apps and dist/phonedesk
+bun test
+bun run build
 ```
 
-Rules a pull request must follow:
-
-- **Small, focused PRs.** One change per PR, with tests where it makes sense. `bun run test` must pass.
-- **The deck stays Safari 12 safe.** In `web/deck` there is no optional chaining (`?.`) and no nullish coalescing (`??`), and the built bundle is checked for them.
-- **Every UI string exists in English and Vietnamese.** Chinese is welcome too. English is the key.
-- **Only `src/platform` reads `process.platform`.** Platform differences live there.
-
-Translation PRs are welcome. The files are `web/manage/src/i18n/<lang>` (management page), `web/deck/src/i18n-<lang>.ts` (phone) and `src/i18n.ts` (agent messages). Bugs and ideas go to [GitHub issues](https://github.com/howznguyen/phonedesk/issues).
+Bugs and ideas go to [GitHub issues](https://github.com/howznguyen/nookdeck/issues). Vulnerabilities: please report them privately, see [Security](CONTRIBUTING.md#security).
 
 ### Contributors
 
-<a href="https://github.com/howznguyen/phonedesk/graphs/contributors"><img src="https://contrib.rocks/image?repo=howznguyen/phonedesk" alt="PhoneDesk contributors"></a>
+<a href="https://github.com/howznguyen/nookdeck/graphs/contributors"><img src="https://contrib.rocks/image?repo=howznguyen/nookdeck" alt="Nookdeck contributors"></a>
 
 Thanks to:
 

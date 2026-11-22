@@ -28,21 +28,21 @@ export async function portHolder(port: number): Promise<{ pid: number; name: str
 }
 
 /**
- * The agent could not listen on `port`. What to tell the user, without a stack trace: another PhoneDesk (most likely the
+ * The agent could not listen on `port`. What to tell the user, without a stack trace: another Nookdeck (most likely the
  * background service) answers there, or some other program holds the port.
  */
 export async function explainBusyPort(port: number, o: { fetch?: typeof fetch; service?: () => Promise<boolean>; holder?: typeof portHolder } = {}): Promise<string> {
   const f = o.fetch ?? fetch;
   let about: any = null;
   try {
-    const r = await f(`http://127.0.0.1:${port}/api/about`, { headers: { "x-phonedesk": "1" }, signal: AbortSignal.timeout(2500) });
+    const r = await f(`http://127.0.0.1:${port}/api/about`, { headers: { "x-nookdeck": "1" }, signal: AbortSignal.timeout(2500) });
     if (r.ok) about = await r.json();
-  } catch { /* not PhoneDesk, or not answering */ }
-  if (about?.name === "PhoneDesk") {
+  } catch { /* not Nookdeck, or not answering */ }
+  if (about?.name === "Nookdeck") {
     let svc = false;
     try { svc = (await o.service?.()) ?? false; } catch { /* unknown */ }
-    return `PhoneDesk ${about.version ?? ""} is already running on port ${port}${svc ? " (background service)" : ""}. Open http://localhost:${port}/manage/ or run: phonedesk service restart`.replace("PhoneDesk  ", "PhoneDesk ");
+    return `Nookdeck ${about.version ?? ""} is already running on port ${port}${svc ? " (background service)" : ""}. Open http://localhost:${port}/manage/ or run: nookdeck service restart`.replace("Nookdeck  ", "Nookdeck ");
   }
   const h = await (o.holder ?? portHolder)(port);
-  return `port ${port} is already in use${h ? ` by ${h.name} (pid ${h.pid})` : ""}. Stop it, or start PhoneDesk on another port: phonedesk --port ${port + 1}`;
+  return `port ${port} is already in use${h ? ` by ${h.name} (pid ${h.pid})` : ""}. Stop it, or start Nookdeck on another port: nookdeck --port ${port + 1}`;
 }

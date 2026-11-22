@@ -1,6 +1,6 @@
 import { t } from "./lib/i18n";
 import { asPlatform, type Platform } from "./lib/platform";
-import { AI_PROVIDERS, type IconCatalog, type MacApp, type Sound, type HassConfig, type HassEntity, type HassService, type GeoPlace, type WebhookInfo, type AiProvider, type DeviceInfo, type About, type UpdateInfo, type DoctorItem, type DoctorStatus, type Integration, type Layout, type Pairing, type PluginInfo, type PluginField, type PluginPermissions, type Theme } from "./types";
+import { AI_PROVIDERS, type IconCatalog, type MacApp, type Sound, type HassConfig, type HassEntity, type HassService, type GeoPlace, type WebhookInfo, type AiProvider, type DeviceInfo, type About, type UpdateInfo, type DoctorItem, type DoctorStatus, type Integration, type Layout, type Pairing, type PluginInfo, type PluginField, type PluginPermissions, type Theme, type HassStatus } from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -12,18 +12,18 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
-  // Every mutating call carries X-PhoneDesk (the agent refuses cross-site requests without it) and, unless it uploads a file, a JSON content type.
+  // Every mutating call carries X-Nookdeck (the agent refuses cross-site requests without it) and, unless it uploads a file, a JSON content type.
   const method = (init?.method ?? "GET").toUpperCase();
   if (method !== "GET" && method !== "HEAD") {
     const headers = new Headers(init?.headers);
-    headers.set("X-PhoneDesk", "1");
+    headers.set("X-Nookdeck", "1");
     if (!headers.has("content-type") && !(init?.body instanceof Blob)) headers.set("Content-Type", "application/json");
     init = { ...init, headers };
   }
   try {
     res = await fetch(path, init);
   } catch {
-    throw new ApiError(t("Cannot reach the PhoneDesk agent"), 0);
+    throw new ApiError(t("Cannot reach the Nookdeck agent"), 0);
   }
   let data: unknown = null;
   try {
@@ -263,6 +263,21 @@ export const api = {
   },
   renameSound: (id: string, name: string) => request<unknown>(`/api/sounds/${id.replace(/^snd:/, "")}`, json("PATCH", { name })),
   deleteSound: (id: string) => request<unknown>(`/api/sounds/${id.replace(/^snd:/, "")}`, { method: "DELETE" }),
+  /** Rejects (404) on an agent without the sign-in flow: the page then hides the button. */
+  getHassStatus: async (): Promise<HassStatus> => {
+    const o = rec(await request<unknown>("/api/hass/status"));
+    const mode = o.mode === "oauth" ? "oauth" : o.mode === "token" ? "token" : undefined;
+    // A null mode means nothing is set up, whatever "connected" says.
+    return { connected: o.connected === true && !!mode, mode, haName: str(o.haName), haVersion: str(o.haVersion), user: str(o.user) ?? str(rec(o.user).name), error: str(o.error) };
+  },
+  /** Starts the sign-in: the agent returns the Home Assistant page to open, and handles the callback itself. */
+  hassLogin: async (url: string): Promise<string> => {
+    const a = str(rec(await request<unknown>("/api/hass/login", json("POST", { url }))).authorizeUrl);
+    if (!a) throw new ApiError(t("The agent did not return a sign-in address"), 0);
+    return a;
+  },
+  /** Revokes the sign-in and clears it. */
+  hassLogout: () => request<unknown>("/api/hass/logout", json("POST")),
   getHass: () => request<HassConfig>("/api/hass/config"),
   putHassUrl: (url: string) => request<HassConfig>("/api/hass/config", json("PUT", { url })),
   /** The token is only ever sent, never read back. */
@@ -305,7 +320,7 @@ export const api = {
     const o = rec(await request<unknown>("/api/about"));
     const version = str(o.version);
     if (!version) throw new ApiError(t("The agent did not report a version"), 0);
-    const repo = (str(o.repo) ?? str(o.repository) ?? str(o.homepage) ?? "https://github.com/howznguyen/phonedesk").replace(/(\.git)?\/*$/, "");
+    const repo = (str(o.repo) ?? str(o.repository) ?? str(o.homepage) ?? "https://github.com/howznguyen/nookdeck").replace(/(\.git)?\/*$/, "");
     const d = o.buildDate ?? o.builtAt ?? o.built;
     return { version: version.replace(/^v/, ""), commit: str(o.commit)?.replace(/-dirty$/, "").slice(0, 7), dirty: o.dirty === true || /dirty/.test(str(o.commit) ?? "") || undefined, buildDate: typeof d === "number" ? new Date(d < 1e12 ? d * 1000 : d).toISOString() : str(d), platform: str(o.platform), arch: str(o.arch), repo };
   },

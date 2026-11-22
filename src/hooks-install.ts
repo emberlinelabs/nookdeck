@@ -6,7 +6,10 @@ import { claudeDir } from "./ai/claude";
 import { codexDir } from "./ai/codex";
 
 export type HookTool = "claude" | "codex";
-export const HOOK_MARKER = "phonedesk hook";
+export const HOOK_MARKER = "nookdeck hook";
+/** The markers 0.1.x wrote. Entries carrying them are still ours: they are found, re-pointed, replaced and removed. */
+export const LEGACY_HOOK_MARKER = "phonedesk hook";
+export const LEGACY_ASK_MARKER = "phonedesk hook claude-ask";
 export const HOOK_EVENT = "PermissionRequest";
 export const HOOK_TIMEOUT_S = 60;
 
@@ -18,7 +21,7 @@ const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
 /**
  * Absolute command for the hook. Compiled binary: `'<exe>' hook <tool>`; source mode: `'<bun>' '<abs>/src/index.ts' hook <tool>`.
- * A trailing shell comment carries the "phonedesk hook" marker used to find our entry again.
+ * A trailing shell comment carries the "nookdeck hook" marker used to find our entry again.
  */
 export function hookCommand(
   tool: HookTool,
@@ -29,14 +32,14 @@ export function hookCommand(
   const index = platform.hookPath(opts.indexPath ?? join(import.meta.dir, "index.ts"));
   const base = isBun ? `${shq(exe)} ${shq(index)}` : shq(exe);
   // Point the hook at the agent that installed it: without these it would call the default port with the
-  // default secret, and an agent on another port or PHONEDESK_HOME would never see the request.
+  // default secret, and an agent on another port or NOOKDECK_HOME would never see the request.
   let args = "";
   if (opts.port !== undefined && opts.port !== 7420) args += ` --port ${opts.port}`;
-  if (opts.home && opts.home !== (opts.defaultHome ?? join(homedir(), ".phonedesk"))) args += ` --home ${shq(platform.hookPath(opts.home))}`;
+  if (opts.home && opts.home !== (opts.defaultHome ?? join(homedir(), ".nookdeck"))) args += ` --home ${shq(platform.hookPath(opts.home))}`;
   return `${base} hook ${tool}${args} # ${HOOK_MARKER}`;
 }
 
-const isOurs = (h: any) => typeof h?.command === "string" && h.command.includes(HOOK_MARKER);
+const isOurs = (h: any) => typeof h?.command === "string" && (h.command.includes(HOOK_MARKER) || h.command.includes(LEGACY_HOOK_MARKER));
 
 async function readConfig(file: string): Promise<{ data: any; existed: boolean }> {
   let text: string;
@@ -58,7 +61,7 @@ async function readConfig(file: string): Promise<{ data: any; existed: boolean }
 }
 
 async function writeConfig(file: string, data: any, existed: boolean) {
-  if (existed) await copyFile(file, `${file}.phonedesk.bak`);
+  if (existed) await copyFile(file, `${file}.nookdeck.bak`);
   else await mkdir(dirname(file), { recursive: true });
   await writeFile(file, JSON.stringify(data, null, 2) + "\n");
 }
@@ -72,7 +75,7 @@ export async function isHookInstalled(file: string): Promise<boolean> {
   }
 }
 
-/** Merges our PermissionRequest hook into `file`, keeping everything else. Idempotent; backs up to `<file>.phonedesk.bak` before a change. */
+/** Merges our PermissionRequest hook into `file`, keeping everything else. Idempotent; backs up to `<file>.nookdeck.bak` before a change. */
 export async function installHook(file: string, command: string): Promise<{ changed: boolean }> {
   const { data, existed } = await readConfig(file);
   const hooks = (data.hooks ??= {});
@@ -124,17 +127,17 @@ export async function uninstallHook(file: string): Promise<{ changed: boolean }>
 
 // ---------- the AskUserQuestion hook: its own PreToolUse entry, separate from the permission hook ----------
 
-export const ASK_MARKER = "phonedesk hook claude-ask";
+export const ASK_MARKER = "nookdeck hook claude-ask";
 export const ASK_EVENT = "PreToolUse";
 export const ASK_MATCHER = "AskUserQuestion";
 export const ASK_TIMEOUT_S = 600;
 
-/** `<exe> hook claude-ask [--port N] [--home DIR] # phonedesk hook claude-ask` (same conventions as hookCommand). */
+/** `<exe> hook claude-ask [--port N] [--home DIR] # nookdeck hook claude-ask` (same conventions as hookCommand). */
 export function askHookCommand(opts: { execPath?: string; indexPath?: string; port?: number; home?: string; defaultHome?: string } = {}): string {
   return hookCommand("claude", opts).replace(/ hook claude/, " hook claude-ask").replace(`# ${HOOK_MARKER}`, `# ${ASK_MARKER}`);
 }
 
-const isAsk = (h: any) => typeof h?.command === "string" && h.command.includes(ASK_MARKER);
+const isAsk = (h: any) => typeof h?.command === "string" && (h.command.includes(ASK_MARKER) || h.command.includes(LEGACY_ASK_MARKER));
 
 export async function isAskHookInstalled(file: string): Promise<boolean> {
   try {

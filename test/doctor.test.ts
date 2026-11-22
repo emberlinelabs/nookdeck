@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // Fake probes only: nothing here asks macOS for a prompt, reads the real Keychain secret, or touches ~/.claude.
-process.env.PHONEDESK_HOME ??= mkdtempSync(join(tmpdir(), "pd-doc-"));
+process.env.NOOKDECK_HOME ??= mkdtempSync(join(tmpdir(), "pd-doc-"));
 const D = await import("../src/doctor");
 const I = await import("../src/i18n");
 const HI = await import("../src/hooks-install");
@@ -16,12 +16,12 @@ const { defaultLayout } = await import("../src/config");
 afterAll(() => I.setLanguage("en"));
 
 type P = import("../src/doctor").Probes;
-const EXE = "/h/.phonedesk/bin/phonedesk";
+const EXE = "/h/.nookdeck/bin/nookdeck";
 function probes(over: Partial<P> & { outputs?: Record<string, { code: number; out: string }>; auto?: Record<string, import("../src/doctor").AutomationState>; apps?: string[] } = {}) {
   const calls: string[][] = [];
   const asked = { ax: 0, auto: [] as string[] };
   const p: P = {
-    platform: "darwin", exe: EXE, program: [EXE], version: "phonedesk 1.2.3", asService: true,
+    platform: "darwin", exe: EXE, program: [EXE], version: "nookdeck 1.2.3", asService: true,
     run: async (argv) => { calls.push(argv); const key = argv[0]!.split("/").pop() + (argv[1] ? ` ${argv[1]}` : ""); return over.outputs?.[key] ?? over.outputs?.[argv[0]!.split("/").pop()!] ?? { code: 0, out: "" }; },
     axTrusted: () => true,
     nowPlaying: async () => ({ ok: true }),
@@ -34,7 +34,7 @@ function probes(over: Partial<P> & { outputs?: Record<string, { code: number; ou
   };
   return { p, calls, asked };
 }
-const INST = { port: 7420, home: join(require("node:os").homedir(), ".phonedesk") };
+const INST = { port: 7420, home: join(require("node:os").homedir(), ".nookdeck") };
 const run = async (o: Parameters<typeof probes>[0] = {}, ctx: Partial<import("../src/doctor").DoctorCtx> = {}) => {
   const k = probes(o);
   const r = await D.runDoctor(k.p, { instance: INST, ...ctx });
@@ -54,7 +54,7 @@ describe("item shape", () => {
       expect(i.detail.length).toBeGreaterThan(0);
       if (i.status === "missing" || i.status === "denied") expect(i.fix?.text.length).toBeGreaterThan(0);
     }
-    expect(r).toMatchObject({ version: "phonedesk 1.2.3", exe: EXE, asService: true, platform: "darwin" });
+    expect(r).toMatchObject({ version: "nookdeck 1.2.3", exe: EXE, asService: true, platform: "darwin" });
   });
   test("Now Playing (all apps): ok when the adapter reads, missing with the reason otherwise, n/a off macOS", async () => {
     const ok = (await run()).by("now-playing");
@@ -74,7 +74,7 @@ describe("item shape", () => {
 
 describe("Accessibility and Automation", () => {
   test("accessibility: granted / not granted (pane link) / cannot ask; says who owns it", async () => {
-    expect((await run()).by("accessibility")).toMatchObject({ status: "ok", detail: "granted to the phonedesk program" });
+    expect((await run()).by("accessibility")).toMatchObject({ status: "ok", detail: "granted to the nookdeck program" });
     const miss = (await run({ axTrusted: () => false, asService: false })).by("accessibility");
     expect(miss).toMatchObject({ status: "missing", fix: { settingsUrl: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" } });
     expect(miss.detail).toContain("terminal app");
@@ -131,8 +131,8 @@ describe("Keychain, Local Network, Firewall, signature", () => {
     const fw = (global: string, app: string) => ({ "socketfilterfw --getglobalstate": { code: 0, out: global }, "socketfilterfw --getappblocked": { code: 0, out: app } });
     expect((await run({ outputs: fw("Firewall is disabled. (State = 0)", "") })).by("firewall").status).toBe("ok");
     const on = "Firewall is enabled. (State = 1)";
-    expect((await run({ outputs: fw(on, "Incoming connections to phonedesk are permitted") })).by("firewall").status).toBe("ok");
-    expect((await run({ outputs: fw(on, "Incoming connections to phonedesk are blocked") })).by("firewall")).toMatchObject({ status: "denied", fix: { settingsUrl: expect.any(String) } });
+    expect((await run({ outputs: fw(on, "Incoming connections to nookdeck are permitted") })).by("firewall").status).toBe("ok");
+    expect((await run({ outputs: fw(on, "Incoming connections to nookdeck are blocked") })).by("firewall")).toMatchObject({ status: "denied", fix: { settingsUrl: expect.any(String) } });
     const nl = await run({ outputs: fw(on, "The application is not part of the application firewall.") });
     expect(nl.by("firewall").status).toBe("unknown");
     expect(nl.calls.find((c) => c[1] === "--getappblocked")![2]).toBe(EXE);
@@ -142,7 +142,7 @@ describe("Keychain, Local Network, Firewall, signature", () => {
     const a = (await run({ outputs: SIG_ADHOC })).by("signature");
     expect(a).toMatchObject({ status: "ok" });
     expect(a.detail).toContain("ad-hoc");
-    expect(a.fix!.text).toContain("remove the old phonedesk entries");
+    expect(a.fix!.text).toContain("remove the old nookdeck entries");
     const dev = (await run({ outputs: { codesign: { code: 0, out: "Authority=Developer ID Application: Someone (ABCDE12345)\nAuthority=Apple" } } })).by("signature");
     expect(dev.detail).toContain("Developer ID Application: Someone (ABCDE12345)");
   });
@@ -157,7 +157,7 @@ describe("Keychain, Local Network, Firewall, signature", () => {
     const k = probes({ automation: () => "granted" });
     const r = await D.runDoctor(k.p, { instance: INST });
     expect(r.items.some((i) => i.id === "automation-system-events")).toBe(false);
-    expect(r.items.find((i) => i.id === "automation-music")!.detail).toBe("allowed: phonedesk itself reads Music for Now Playing");
+    expect(r.items.find((i) => i.id === "automation-music")!.detail).toBe("allowed: nookdeck itself reads Music for Now Playing");
     expect(k.calls.filter((c) => c[0] === "open")).toEqual([]);
   });
   test("service, and nowplaying-cli is no longer checked", async () => {
@@ -181,13 +181,13 @@ describe("hooks", () => {
 
     const g = settings();
     writeFileSync(g, "{}");
-    await HI.installHook(g, HI.hookCommand("claude", { execPath: "/somewhere/else/phonedesk" }));
+    await HI.installHook(g, HI.hookCommand("claude", { execPath: "/somewhere/else/nookdeck" }));
     const stale = await run({ hookFiles: () => ({ claude: g }) });
     expect(stale.by("hooks-claude")).toMatchObject({ status: "missing", fix: { text: expect.stringContaining("hooks repoint") } });
 
     const h = settings();
     writeFileSync(h, "{}");
-    await HI.installHook(h, HI.hookCommand("claude", { execPath: "/old/phonedesk", port: 7460, home: "/other" }));
+    await HI.installHook(h, HI.hookCommand("claude", { execPath: "/old/nookdeck", port: 7460, home: "/other" }));
     expect((await run({ hookFiles: () => ({ claude: h }) })).by("hooks-claude").status).toBe("n/a"); // someone else's instance
 
     expect((await run({ hookFiles: () => ({ claude: join(tmpdir(), "no-such-file.json") }) })).by("hooks-claude").status).toBe("n/a");
@@ -199,10 +199,10 @@ describe("text output and language", () => {
   test("✓ ✗ ? - marks, the fix under each problem, the pane command, a summary", async () => {
     const { r } = await run({ axTrusted: () => false, auto: { "com.apple.Music": "denied", "com.spotify.client": "not-running" }, apps: ["com.apple.Music", "com.spotify.client"], outputs: SIG_ADHOC });
     const text = D.formatReport(r);
-    expect(text).toContain("✓ PhoneDesk - phonedesk 1.2.3");
+    expect(text).toContain("✓ Nookdeck - nookdeck 1.2.3");
     expect(text).toMatch(/✗ Accessibility - not granted/);
     expect(text).toContain("    Fix: Open System Settings > Privacy & Security > Accessibility");
-    expect(text).toContain("phonedesk doctor --open accessibility");
+    expect(text).toContain("nookdeck doctor --open accessibility");
     expect(text).toMatch(/\? Automation: Spotify/);
     expect(text).toMatch(/- Keychain: Home Assistant token - Home Assistant is not set up/);
     expect(text).toMatch(/\d+ thing\(s\) need attention\./);
@@ -287,7 +287,7 @@ describe("the bounded Automation probe", () => {
     } finally { app.stop(); }
   }, 30_000);
   test.skipIf(process.platform !== "darwin")("the internal __ae command answers with one state word and exits", () => {
-    const r = Bun.spawnSync(["bun", join(import.meta.dir, "..", "src", "index.ts"), "__ae", "com.apple.systemevents"], { env: { PATH: process.env.PATH!, PHONEDESK_HOME: mkdtempSync(join(tmpdir(), "pd-ae-")) }, stdout: "pipe", stderr: "pipe", timeout: 15_000 }); // PHONEDESK_HOME is set
+    const r = Bun.spawnSync(["bun", join(import.meta.dir, "..", "src", "index.ts"), "__ae", "com.apple.systemevents"], { env: { PATH: process.env.PATH!, NOOKDECK_HOME: mkdtempSync(join(tmpdir(), "pd-ae-")) }, stdout: "pipe", stderr: "pipe", timeout: 15_000 }); // NOOKDECK_HOME is set
     expect(["granted", "denied", "not-asked", "not-running", "unknown"]).toContain(r.stdout.toString().trim());
   });
 });
@@ -317,14 +317,14 @@ describe("GET /api/doctor and the CLI", () => {
   test("localhost only: a foreign Host is refused; the report is the agent's own", async () => {
     expect((await rawFetch(`${base}/api/doctor`, { headers: { host: "evil.example" } })).status).toBe(403);
     const r = await (await fetch(`${base}/api/doctor`)).json() as any;
-    expect(r.version).toBe("phonedesk 1.2.3");
+    expect(r.version).toBe("nookdeck 1.2.3");
     expect(r.items.find((i: any) => i.id === "accessibility").status).toBe("missing");
     expect(r.items.find((i: any) => i.id === "keychain-hass").status).toBe("n/a");
     expect(k.asked).toEqual({ ax: 0, auto: [] });
   });
 
   test("POST /api/doctor/request asks through the fake probes only; other ids are refused; needs the CSRF header", async () => {
-    const post = (body: any, headers: Record<string, string> = { "x-phonedesk": "1", "content-type": "application/json" }) => rawFetch(`${base}/api/doctor/request`, { method: "POST", body: JSON.stringify(body), headers });
+    const post = (body: any, headers: Record<string, string> = { "x-nookdeck": "1", "content-type": "application/json" }) => rawFetch(`${base}/api/doctor/request`, { method: "POST", body: JSON.stringify(body), headers });
     expect((await post({ id: "firewall" })).status).toBe(400);
     expect((await post({ id: "accessibility" }, { "content-type": "text/plain" })).status).toBe(403);
     const ok = await (await post({ id: "accessibility" })).json() as any;
@@ -334,7 +334,7 @@ describe("GET /api/doctor and the CLI", () => {
   });
 
   test("the CLI prints the agent's report, --json, --request, and refuses --open without a pane", async () => {
-    const env = { PATH: process.env.PATH!, PHONEDESK_HOME: join(dir, "cli-home") };
+    const env = { PATH: process.env.PATH!, NOOKDECK_HOME: join(dir, "cli-home") };
     // async: the agent runs in THIS process, so a sync spawn would block it
     const cli = async (args: string[]) => {
       const p = Bun.spawn(["bun", join(import.meta.dir, "..", "src", "index.ts"), "doctor", "--port", String(app.port), ...args], { env, stdout: "pipe", stderr: "pipe" });
@@ -343,7 +343,7 @@ describe("GET /api/doctor and the CLI", () => {
     };
     const text = await cli([]);
     expect(text.stdout.toString()).toContain("✗ Accessibility");
-    expect(text.stdout.toString()).not.toContain("No PhoneDesk agent answered");
+    expect(text.stdout.toString()).not.toContain("No Nookdeck agent answered");
     expect(text.exitCode).toBe(1); // something needs attention
     const json = JSON.parse((await cli(["--json"])).stdout.toString());
     expect(json.source).toBe("agent");
@@ -362,16 +362,29 @@ describe("GET /api/doctor and the CLI", () => {
     const free = Bun.listen({ hostname: "127.0.0.1", port: 0, socket: { data() {} } });
     const port = free.port;
     free.stop(true);
-    const env = { PATH: process.env.PATH!, PHONEDESK_HOME: join(dir, "cli-home2"), HOME: join(dir, "fake-home") };
+    const env = { PATH: process.env.PATH!, NOOKDECK_HOME: join(dir, "cli-home2"), HOME: join(dir, "fake-home") };
     const run = (args: string[]) => Bun.spawnSync(["bun", join(import.meta.dir, "..", "src", "index.ts"), "doctor", "--port", String(port), ...args], { env, stdout: "pipe", stderr: "pipe" });
     const r = run([]);
-    expect(r.stdout.toString()).toContain(`No PhoneDesk agent answered on port ${port}`);
+    expect(r.stdout.toString()).toContain(`No Nookdeck agent answered on port ${port}`);
     expect(r.stdout.toString()).toContain("THIS terminal app");
-    expect(r.stdout.toString()).toContain("PhoneDesk doctor");
+    expect(r.stdout.toString()).toContain("Nookdeck doctor");
     const req = run(["--request", "accessibility"]);
     expect(req.exitCode).toBe(1);
-    expect(req.stderr.toString()).toContain("No PhoneDesk agent answered");
+    expect(req.stderr.toString()).toContain("No Nookdeck agent answered");
     const j = JSON.parse(run(["--json"]).stdout.toString());
     expect(j.source).toBe("terminal");
   }, 90_000);
+});
+
+describe("accessibility hint for ad-hoc builds", () => {
+  const AD = { codesign: { code: 0, out: 'designated => cdhash H"abcdef"' } };
+  const ID = { codesign: { code: 0, out: 'designated => identifier "dev.nookdeck.agent" and certificate leaf = H"abc123"' } };
+  test("an ad-hoc service build says Accessibility resets on every update; a stable identity does not", async () => {
+    const a = (await run({ asService: true, axTrusted: () => false, outputs: AD })).by("accessibility");
+    expect(a.fix!.text).toContain("ad-hoc build: Accessibility resets on every update");
+    const b = (await run({ asService: true, axTrusted: () => false, outputs: ID })).by("accessibility");
+    expect(b.fix!.text).not.toContain("ad-hoc build");
+    const c = (await run({ asService: true, axTrusted: () => false, outputs: { codesign: { code: 0, out: 'designated => identifier "dev.nookdeck.agent" and certificate root = H"abc"' } } })).by("accessibility");
+    expect(c.fix!.text).not.toContain("ad-hoc build"); // a self-signed identity is its own root
+  });
 });

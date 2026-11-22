@@ -143,7 +143,7 @@ export class PermissionBroker {
 
 export const hookSecretPath = () => join(HOME, "hook-secret");
 
-/** Creates ~/.phonedesk/hook-secret (0600) on first use and returns it. */
+/** Creates ~/.nookdeck/hook-secret (0600) on first use and returns it. */
 export async function ensureHookSecret(file = hookSecretPath()): Promise<string> {
   try {
     const s = (await readFile(file, "utf8")).trim();
@@ -165,7 +165,7 @@ export function secretMatches(given: string | null | undefined, secret: string):
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Validates the body posted by `phonedesk hook`. */
+/** Validates the body posted by `nookdeck hook`. */
 export function parseHookInput(body: any): HookInput | { error: string } {
   if (!body || typeof body !== "object") return { error: "body must be an object" };
   if (body.source !== "claude" && body.source !== "codex" && body.source !== "opencode") return { error: "source must be claude, codex or opencode" };
@@ -179,7 +179,7 @@ export function parseHookInput(body: any): HookInput | { error: string } {
   };
 }
 
-// ---------- hook process side (`phonedesk hook claude|codex`) ----------
+// ---------- hook process side (`nookdeck hook claude|codex`) ----------
 
 /** The JSON a tool expects on stdout for a decision, or null to print nothing (the tool then asks in the terminal). */
 export function formatHookOutput(decision: Decision | null | undefined): string | null {
@@ -187,7 +187,7 @@ export function formatHookOutput(decision: Decision | null | undefined): string 
   return JSON.stringify({
     hookSpecificOutput: {
       hookEventName: "PermissionRequest",
-      decision: decision === "allow" ? { behavior: "allow" } : { behavior: "deny", message: t("Denied from PhoneDesk") },
+      decision: decision === "allow" ? { behavior: "allow" } : { behavior: "deny", message: t("Denied from Nookdeck") },
     },
   });
 }
@@ -223,7 +223,7 @@ export async function runHook(
   try {
     const res = await (io.fetch ?? fetch)(`http://127.0.0.1:${io.port}/api/hooks/permission`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-phonedesk-hook": io.secret },
+      headers: { "content-type": "application/json", "x-nookdeck-hook": io.secret },
       body: JSON.stringify(input),
       signal: ctl.signal,
     });

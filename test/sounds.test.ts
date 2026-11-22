@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-process.env.PHONEDESK_HOME ??= mkdtempSync(join(tmpdir(), "pd-snd-"));
+process.env.NOOKDECK_HOME ??= mkdtempSync(join(tmpdir(), "pd-snd-"));
 const { SoundLibrary, SoundPlayer, soundKind, parseAfinfo, playCommand, MAX_CONCURRENT, SOUND_MAX } = await import("../src/sounds");
 
 const bytes = (...parts: (string | number[])[]) => new Uint8Array(parts.flatMap((p) => (typeof p === "string" ? [...p].map((c) => c.charCodeAt(0)) : p)));

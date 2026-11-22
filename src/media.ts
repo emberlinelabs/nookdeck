@@ -307,7 +307,7 @@ const isLast = (v: any): v is LastMedia =>
   v && typeof v === "object" && typeof v.app === "string" && typeof v.title === "string" && typeof v.artist === "string" &&
   typeof v.duration === "number" && typeof v.position === "number" && typeof v.at === "number";
 
-/** Remembers the last non-null media in memory and ~/.phonedesk/last-media.json (0600; artwork only under 200 KB). */
+/** Remembers the last non-null media in memory and ~/.nookdeck/last-media.json (0600; artwork only under 200 KB). */
 export class LastMediaStore {
   last: LastMedia | null = null;
   private dirty = false;
@@ -369,7 +369,7 @@ export function resumeScript(running: Record<MediaApp, boolean>, lastApp?: strin
 }
 
 /**
- * The one place PhoneDesk may launch a player, and only because the user asked: plays Spotify/Music when one is running,
+ * The one place Nookdeck may launch a player, and only because the user asked: plays Spotify/Music when one is running,
  * otherwise launches the app of the last track and plays. Polling never launches.
  */
 export const resumeMedia = (lastApp?: string): Promise<void> => platform.resumeMedia(lastApp);

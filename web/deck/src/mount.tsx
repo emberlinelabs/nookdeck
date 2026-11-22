@@ -5,9 +5,9 @@ export { Deck }
 export type { DeckProps } from './Deck'
 
 export interface MountOptions {
-  /** Agent origin when embedded in another site, e.g. "http://phonedesk.local:7420". Default: same origin. */
+  /** Agent origin when embedded in another site, e.g. "http://nookdeck.local:7420". Default: same origin. */
   baseUrl?: string
-  /** Always open, no close button (the PhoneDesk page itself). Otherwise the deck starts closed. */
+  /** Always open, no close button (the Nookdeck page itself). Otherwise the deck starts closed. */
   standalone?: boolean
   /** Prefill for the pairing PIN. In standalone mode it is read from ?pin and stripped from the URL. */
   pin?: string

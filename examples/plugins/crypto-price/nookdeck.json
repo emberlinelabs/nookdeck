@@ -2,7 +2,7 @@
   "id": "dev.alice.crypto",
   "name": "Crypto price",
   "version": "1.0.0",
-  "phonedesk": ">=0.2.0",
+  "nookdeck": ">=0.2.0",
   "author": "alice",
   "description": "Live price of a coin",
   "icon": "icon.svg",

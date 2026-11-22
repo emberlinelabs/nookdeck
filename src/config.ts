@@ -1,3 +1,4 @@
+import "./compat";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
@@ -13,7 +14,7 @@ export type Action =
   | { type: "media"; command: "playpause" | "next" | "previous" }
   | { type: "volume"; command: "up" | "down" | "mute" }
   | { type: "page"; page: string }
-  /** Soundboard: play an uploaded clip (~/.phonedesk/sounds/<id>.<ext>) on the Mac (afplay), the phone, or both. */
+  /** Soundboard: play an uploaded clip (~/.nookdeck/sounds/<id>.<ext>) on the Mac (afplay), the phone, or both. */
   | { type: "sound"; sound: string; on?: SoundTarget; volume?: number; mode?: SoundMode }
   | { type: "sound-stop" }
   /** Home Assistant service call through the agent's HA connection, e.g. {service:"scene.turn_on", entityId:"scene.movie"}. */
@@ -23,7 +24,7 @@ export type Action =
   /** A no-code action of an installed plugin (src/plugins). `settings` override the plugin's own for this button. */
   | { type: "plugin"; plugin: string; action: string; settings?: Record<string, string | number | boolean> };
 
-/** Plugin ids are reverse-DNS style ("dev.author.name"); "core.*" is reserved for plugins that ship with PhoneDesk. */
+/** Plugin ids are reverse-DNS style ("dev.author.name"); "core.*" is reserved for plugins that ship with Nookdeck. */
 export const PLUGIN_ID_RE = /^[a-z0-9][a-z0-9_-]{0,31}(\.[a-z0-9][a-z0-9_-]{0,47}){1,4}$/;
 export const PLUGIN_PART_RE = /^[a-z0-9][a-z0-9_-]{0,47}$/;
 /** A plugin widget on a tile: which plugin and widget, and the tile's own settings. */
@@ -51,7 +52,7 @@ export const SOUND_ID_RE = /^snd:[a-f0-9]{16}$/;
 /** nowplaying = current track + transport + volume (agent sends {type:"media"}); network = rx/tx rates. */
 export type WidgetKind = "clock" | "cpu" | "gpu" | "memory" | "uptime" | "load" | "network" | "nowplaying" | "quota" | "sessions" | "entity" | "weather" | "value" | "notifications" | "plugin";
 
-/** AI coding tools PhoneDesk reads quotas/sessions from. A "quota" widget shows one provider (item.provider). */
+/** AI coding tools Nookdeck reads quotas/sessions from. A "quota" widget shows one provider (item.provider). */
 export type AiProvider = "claude" | "codex" | "antigravity" | "opencode" | "grok";
 export const AI_PROVIDERS: AiProvider[] = ["claude", "codex", "antigravity", "opencode", "grok"];
 
@@ -161,7 +162,7 @@ export interface Theme {
   language?: Language;
   /** Temperature unit for every widget (weather, climate, sensors); missing = "c". A widget-level weather.units still wins. */
   temperatureUnit?: "c" | "f";
-  /** false = never ask GitHub whether a newer PhoneDesk exists (GET /api/update then reports enabled:false). Missing = on. */
+  /** false = never ask GitHub whether a newer Nookdeck exists (GET /api/update then reports enabled:false). Missing = on. */
   updateCheck?: boolean;
   /** Phone screen behaviour: lite mode, keep awake, standby clock, dim. Missing = every default below. */
   screen?: ScreenSettings;
@@ -255,7 +256,7 @@ export interface Device {
   expiresAt?: string;
 }
 
-export const HOME = process.env.PHONEDESK_HOME ?? join(homedir(), ".phonedesk");
+export const HOME = process.env.NOOKDECK_HOME ?? join(homedir(), ".nookdeck");
 const LAYOUT_FILE = join(HOME, "layout.json");
 const DEVICES_FILE = join(HOME, "devices.json");
 
@@ -660,7 +661,7 @@ function itemStyle(it: any, w: string): ItemStyle {
  *   - a brand mark name (BRANDS), an old Lucide name (ICON_ALIASES, renamed here),
  *   - "app:<bundleId>"   the icon of an installed Mac app (the agent extracts it),
  *   - "lobe:<name>"      any LobeHub brand mark (web/shared/icon-catalog.json brands),
- *   - "img:<16 hex id>"  an image the owner uploaded (~/.phonedesk/icons/<id>.png),
+ *   - "img:<16 hex id>"  an image the owner uploaded (~/.nookdeck/icons/<id>.png),
  *   - any short text or emoji (max 8 characters / 4 graphemes is the UI's limit; the schema allows 64).
  */
 export const APP_ICON_RE = /^app:[A-Za-z0-9][A-Za-z0-9.\-]{0,127}$/;

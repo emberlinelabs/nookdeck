@@ -4,7 +4,7 @@ import { mkdtempSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-process.env.PHONEDESK_HOME ??= mkdtempSync(join(tmpdir(), "pd-perm-"));
+process.env.NOOKDECK_HOME ??= mkdtempSync(join(tmpdir(), "pd-perm-"));
 const { PermissionBroker, summarizeTool, formatHookOutput, hookInputFromStdin, runHook, parseHookInput, ensureHookSecret, secretMatches } = await import("../src/permissions");
 
 function make(phones = true, timeoutMs = 60) {
@@ -77,7 +77,7 @@ describe("broker", () => {
 describe("hook plumbing", () => {
   test("formatHookOutput", () => {
     expect(JSON.parse(formatHookOutput("allow")!)).toEqual({ hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior: "allow" } } });
-    expect(JSON.parse(formatHookOutput("deny")!).hookSpecificOutput.decision).toEqual({ behavior: "deny", message: "Denied from PhoneDesk" });
+    expect(JSON.parse(formatHookOutput("deny")!).hookSpecificOutput.decision).toEqual({ behavior: "deny", message: "Denied from Nookdeck" });
     expect(formatHookOutput(null)).toBeNull();
     expect(formatHookOutput("maybe" as any)).toBeNull();
   });
@@ -96,7 +96,7 @@ describe("hook plumbing", () => {
       fetch: (async (url: string, init: any) => { call = { url, init }; return Response.json({ decision: "allow" }); }) as any,
     });
     expect(call.url).toBe("http://127.0.0.1:1234/api/hooks/permission");
-    expect(call.init.headers["x-phonedesk-hook"]).toBe("sek");
+    expect(call.init.headers["x-nookdeck-hook"]).toBe("sek");
     expect(JSON.parse(ok!).hookSpecificOutput.decision.behavior).toBe("allow");
     const none = await runHook("claude", { stdin: JSON.stringify({ tool_name: "Bash" }), port: 1, secret: "s", fetch: (async () => Response.json({ decision: null })) as any });
     expect(none).toBeNull();

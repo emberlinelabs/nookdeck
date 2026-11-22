@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, statSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-process.env.PHONEDESK_HOME ??= mkdtempSync(join(tmpdir(), "pd-hass-"));
+process.env.NOOKDECK_HOME ??= mkdtempSync(join(tmpdir(), "pd-hass-"));
 const { HassClient, AUTH_ERR } = await import("../src/hass/client");
 const { HassConfigStore, normalizeHassUrl, hassWsUrl } = await import("../src/hass/config");
 const { entityPress } = await import("../src/hass/press");
@@ -101,7 +101,7 @@ describe("config", () => {
     expect(hassWsUrl("http://a.b:8123")).toBe("ws://a.b:8123/api/websocket");
   });
 
-  test("macOS: token goes to the Keychain (service PhoneDesk-HASS), not to the file; read, replace and delete", async () => {
+  test("macOS: token goes to the Keychain (service Nookdeck-HASS), not to the file; read, replace and delete", async () => {
     const home = tmpHome();
     const calls: string[][] = [];
     let stored: string | undefined;
@@ -117,7 +117,7 @@ describe("config", () => {
     expect(calls.length).toBe(0); // no url yet: the Keychain is not touched at all
     await s.setUrl("http://ha.local:8123");
     expect(await s.setToken(TOKEN)).toBe("keychain");
-    expect(calls[0]!.slice(0, 7)).toEqual(["security", "add-generic-password", "-U", "-s", "PhoneDesk-HASS", "-a", "token"]);
+    expect(calls[0]!.slice(0, 7)).toEqual(["security", "add-generic-password", "-U", "-s", "Nookdeck-HASS", "-a", "token"]);
     expect(readFileSync(join(home, "hass.json"), "utf8")).not.toContain(TOKEN);
     expect(await s.token()).toBe(TOKEN);
     expect(await s.hasToken()).toBe(true);
@@ -126,7 +126,7 @@ describe("config", () => {
     expect(calls.some((c) => c[1] === "delete-generic-password")).toBe(true);
   });
 
-  test("fallback to ~/.phonedesk/hass.json at 0600 when there is no Keychain or it fails", async () => {
+  test("fallback to ~/.nookdeck/hass.json at 0600 when there is no Keychain or it fails", async () => {
     const home = tmpHome();
     const s = new HassConfigStore({ home, platform: "linux" });
     await s.setUrl("http://x:8123");

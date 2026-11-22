@@ -1,11 +1,11 @@
 ---
-name: phonedesk-layout
-description: Arrange the PhoneDesk phone deck (pages, buttons, widgets, icons, theme) through the phonedesk MCP server. Use when the user asks to organise, design, rearrange or restyle their PhoneDesk screen.
+name: nookdeck-layout
+description: Arrange the Nookdeck phone deck (pages, buttons, widgets, icons, theme) through the nookdeck MCP server. Use when the user asks to organise, design, rearrange or restyle their Nookdeck screen.
 ---
 
-# Arranging a PhoneDesk deck
+# Arranging a Nookdeck deck
 
-The `phonedesk` MCP server edits the layout of the running agent. Changes reach connected phones at once, and `undo` reverts the last 50 saves.
+The `nookdeck` MCP server edits the layout of the running agent. Changes reach connected phones at once, and `undo` reverts the last 50 saves.
 
 ## Workflow
 

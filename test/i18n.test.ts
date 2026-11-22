@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-process.env.PHONEDESK_HOME ??= mkdtempSync(join(tmpdir(), "pd-i18n-"));
+process.env.NOOKDECK_HOME ??= mkdtempSync(join(tmpdir(), "pd-i18n-"));
 const I = await import("../src/i18n");
 const { defaultLayout } = await import("../src/config");
 const { startServer } = await import("../src/server");

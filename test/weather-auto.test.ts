@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-process.env.PHONEDESK_HOME = mkdtempSync(join(tmpdir(), "pd-wxauto-"));
+process.env.NOOKDECK_HOME = mkdtempSync(join(tmpdir(), "pd-wxauto-"));
 const { startServer } = await import("../src/server");
 const { HassClient } = await import("../src/hass/client");
 const { HassConfigStore } = await import("../src/hass/config");
@@ -27,7 +27,7 @@ beforeAll(async () => {
   const q = (id: string) => ({ id, name: id, windows: [], updatedAt: 1 });
   app = await startServer({
     port: 0, pin: "555555", hostName: async () => "my-mac", hass,
-    webhookKeyFile: join(process.env.PHONEDESK_HOME!, "webhook-key"),
+    webhookKeyFile: join(process.env.NOOKDECK_HOME!, "webhook-key"),
     layoutHistoryDir: mkdtempSync(join(tmpdir(), "pd-wxauto-hist-")),
     weatherFetch: async () => { throw new Error("no network in this test"); },
     deps: { runAction: async () => {}, startStats: () => () => {}, setVolume: async () => {}, readVolume: async () => null },

@@ -11,6 +11,7 @@ import { SOUND_MAX, SOUND_TYPES, SoundLibrary, SoundPlayer, bareId, SOUND_ID_HEX
 import type { HassLike } from "./automation-types";
 import { HassClient } from "./hass/client";
 import { HassConfigStore } from "./hass/config";
+import { HassOAuth } from "./hass/oauth";
 import { wantedEntities } from "./hass/entities";
 import { entityPress } from "./hass/press";
 import { planControl } from "./hass/control";
@@ -93,6 +94,10 @@ export interface StartOptions {
   icons?: Icons;
   /** Home Assistant client (built separately); weather, hass actions, macros and rules use it when present. */
   hass?: HassLike;
+  /** Where the Home Assistant url and tokens are kept (tests use a temp dir and no Keychain). */
+  hassStore?: HassConfigStore;
+  /** fetch for the Home Assistant sign-in calls (tests). */
+  hassFetch?: typeof fetch;
   /** Webhook key file (tests). */
   webhookKeyFile?: string;
   /** fetch for Open-Meteo (tests). */
@@ -196,7 +201,7 @@ export async function startServer(opts: StartOptions = {}) {
     installed: bin !== null || grokDataFound(), ...(bin ? { binary: bin } : {}), sessions: recent.length, total: all.length, running: recent.filter((s) => s.running).length,
     ...(all[0] ? { lastSessionAt: all[0].updatedAt } : {}), sessionsRule: "sessions updated in the last 7 days, newest first; idle unless active_sessions.json lists them (running) or a hook reports busy/waiting",
     quota: await grokQuota().then((q) => (q.windows.length || q.plan ? q : null)).catch(() => null),
-    quotaReason: "Usage comes from the Grok CLI itself (grok agent stdio, an internal and undocumented method); PhoneDesk never reads your Grok login or cookies",
+    quotaReason: "Usage comes from the Grok CLI itself (grok agent stdio, an internal and undocumented method); Nookdeck never reads your Grok login or cookies",
     hook: { installed: await isGrokHookInstalled(opts.grokHookFile ?? grokHookFile()), path: opts.grokHookFile ?? grokHookFile() },
     };
   };
@@ -227,7 +232,8 @@ export async function startServer(opts: StartOptions = {}) {
 
   // ----- automation: pushed values, notifications, macros, rules, weather -----
   // Home Assistant: the real client stays idle until a url and token are configured (then it connects and reconnects by itself)
-  const hassClient: HassClient | undefined = opts.hass ? (opts.hass instanceof HassClient ? opts.hass : undefined) : new HassClient({ store: new HassConfigStore() });
+  const hassStore = opts.hassStore ?? new HassConfigStore();
+  const hassClient: HassClient | undefined = opts.hass ? (opts.hass instanceof HassClient ? opts.hass : undefined) : new HassClient({ store: hassStore, oauth: new HassOAuth({ store: hassStore, fetch: opts.hassFetch }) });
   const hass: HassLike = opts.hass ?? hassClient!;
   const syncHass = () => hassClient?.setWanted(wantedEntities(layout));
   syncHass();
@@ -506,7 +512,7 @@ export async function startServer(opts: StartOptions = {}) {
   }
 
   // Localhost-only routes: peer must be this machine AND the request must come from our own pages (Host, Origin,
-  // JSON content type, X-PhoneDesk header), so a web page open in a browser here cannot drive the API.
+  // JSON content type, X-Nookdeck header), so a web page open in a browser here cannot drive the API.
   const guardLocal = (server: Server<WsData>, req: Request, kind: { upload?: boolean; hook?: boolean } = {}): Response | null => {
     // a browser opening a page here from another machine gets a readable HTML page; the JSON API keeps JSON
     const refuse = (error: string): Response => {
@@ -793,7 +799,7 @@ export async function startServer(opts: StartOptions = {}) {
       if (path === "/api/hooks/permission" && req.method === "POST") {
         const denied = guardLocal(server, req, { hook: true });
         if (denied) return denied;
-        if (!secretMatches(req.headers.get("x-phonedesk-hook"), hookSecret)) return json({ error: "bad hook secret" }, 401);
+        if (!secretMatches((req.headers.get("x-nookdeck-hook") ?? req.headers.get("x-phonedesk-hook")), hookSecret)) return json({ error: "bad hook secret" }, 401);
         const input = parseHookInput(await readBody(req));
         if ("error" in input) return json({ error: input.error }, 400);
         // risk is shown next to the request, it never decides anything
@@ -804,7 +810,7 @@ export async function startServer(opts: StartOptions = {}) {
       if (path === "/api/hooks/question" && req.method === "POST") {
         const denied = guardLocal(server, req, { hook: true });
         if (denied) return denied;
-        if (!secretMatches(req.headers.get("x-phonedesk-hook"), hookSecret)) return json({ error: "bad hook secret" }, 401);
+        if (!secretMatches((req.headers.get("x-nookdeck-hook") ?? req.headers.get("x-phonedesk-hook")), hookSecret)) return json({ error: "bad hook secret" }, 401);
         const input = parseQuestionInput(await readBody(req));
         if ("error" in input) return json({ error: input.error }, 400);
         // "only when I am away": while the user is typing at this computer, Claude asks in the terminal
@@ -819,7 +825,7 @@ export async function startServer(opts: StartOptions = {}) {
       if (path === "/api/hooks/state" && req.method === "POST") {
         const denied = guardLocal(server, req, { hook: true });
         if (denied) return denied;
-        if (!secretMatches(req.headers.get("x-phonedesk-hook"), hookSecret)) return json({ error: "bad hook secret" }, 401);
+        if (!secretMatches((req.headers.get("x-nookdeck-hook") ?? req.headers.get("x-phonedesk-hook")), hookSecret)) return json({ error: "bad hook secret" }, 401);
         const b = await readBody(req);
         if (b?.source !== "grok" && b?.source !== "opencode") return json({ error: "source must be grok or opencode" }, 400);
         if (!["busy", "idle", "waiting"].includes(b?.state)) return json({ error: "state must be busy, idle or waiting" }, 400);
@@ -894,7 +900,7 @@ export async function startServer(opts: StartOptions = {}) {
           const ident = svc ? macIdentifier() : null;
           if (svc && ident) Bun.spawnSync(["tccutil", "reset", svc, ident], { stdout: "ignore", stderr: "ignore" });
         }
-        // shows macOS's own prompt for THIS process (the phonedesk binary under the LaunchAgent)
+        // shows macOS's own prompt for THIS process (the nookdeck binary under the LaunchAgent)
         if (what.kind === "accessibility") await probes.requestAccessibility();
         else if (what.kind === "local-network") {
           // macOS shows the Local Network prompt when this process first reaches the LAN: an mDNS query plus a Home Assistant test
@@ -1065,6 +1071,19 @@ export async function startServer(opts: StartOptions = {}) {
         if (denied) return denied;
         if (!hassClient) return json({ error: "Home Assistant client is not available" }, 501);
         const sub = path.slice("/api/hass/".length);
+        if (["login", "logout", "callback"].includes(sub) && !hassClient.oauth) return json({ error: "Sign in with Home Assistant is not available" }, 501);
+        if (sub === "callback" && req.method === "GET") {
+          // the browser comes back from Home Assistant (a plain navigation: no CSRF header, but Host must be local)
+          const u = new URL(req.url);
+          const back = (q: string) => new Response(null, { status: 302, headers: { location: `/manage/#plugins/core.hass?${q}` } });
+          const haError = u.searchParams.get("error");
+          if (haError) return back(`hass=error&reason=${encodeURIComponent(haError.slice(0, 100))}`);
+          try {
+            await hassClient.oauth!.callback(u.searchParams.get("code"), u.searchParams.get("state"));
+            await hassClient.reconfigure();
+            return back("hass=ok");
+          } catch (err: any) { return back(`hass=error&reason=${encodeURIComponent(String(err?.message ?? err).slice(0, 120))}`); }
+        }
         try {
           if (sub === "config" && req.method === "GET") return json(await hassClient.status());
           if (sub === "config" && req.method === "PUT") {
@@ -1085,6 +1104,18 @@ export async function startServer(opts: StartOptions = {}) {
             return json(await hassClient.status());
           }
           if (sub === "test" && req.method === "POST") return json(await hassClient.test());
+          // Sign in with Home Assistant (OAuth): the token itself is never in any answer
+          if (sub === "login" && req.method === "POST") {
+            const b = await readBody(req);
+            const origin = `http://127.0.0.1:${server.port}`;
+            return json(hassClient.oauth!.login(b?.url, origin));
+          }
+          if (sub === "status" && req.method === "GET") return json(await hassClient.oauthStatus());
+          if (sub === "logout" && req.method === "POST") {
+            await hassClient.oauth!.logout();
+            await hassClient.reconfigure();
+            return json(await hassClient.oauthStatus());
+          }
           if (req.method === "GET" && (sub === "entities" || sub === "areas" || sub === "services")) {
             if (!hassClient.connected()) return json({ error: t("Home Assistant is not connected") }, 503);
             return json(await (sub === "entities" ? hassClient.entities() : sub === "areas" ? hassClient.areas() : hassClient.services()));

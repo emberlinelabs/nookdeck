@@ -48,11 +48,11 @@ describe("latestTag: retries and the API fallback", () => {
   });
 });
 
-describe.skipIf(win)("phonedesk update against a fake release folder", () => {
+describe.skipIf(win)("nookdeck update against a fake release folder", () => {
   /** A release folder with the .gz + SHA256SUMS for THIS computer's asset; the "binary" is a script that prints its version. */
   function release(version: string, o: { badSum?: boolean; noGz?: boolean } = {}) {
     const dir = tmp();
-    const body = `#!/bin/sh\necho "phonedesk ${version} (fake)"\n`;
+    const body = `#!/bin/sh\necho "nookdeck ${version} (fake)"\n`;
     const asset = assetName();
     const lines = [`${o.badSum ? "0".repeat(64) : sha(body)}  ${asset}`];
     writeFileSync(join(dir, asset), body);
@@ -62,14 +62,14 @@ describe.skipIf(win)("phonedesk update against a fake release folder", () => {
   }
   function installed(version = "0.1.1") {
     const dir = tmp();
-    const f = join(dir, "phonedesk");
-    writeFileSync(f, `#!/bin/sh\necho "phonedesk ${version} (old)"\n`);
+    const f = join(dir, "nookdeck");
+    writeFileSync(f, `#!/bin/sh\necho "nookdeck ${version} (old)"\n`);
     chmodSync(f, 0o755);
     return { dir, f };
   }
   const withBase = async <T>(base: string, fn: () => Promise<T>): Promise<T> => {
-    const keep = process.env.PHONEDESK_RELEASE_BASE; process.env.PHONEDESK_RELEASE_BASE = base;
-    try { return await fn(); } finally { if (keep === undefined) delete process.env.PHONEDESK_RELEASE_BASE; else process.env.PHONEDESK_RELEASE_BASE = keep; }
+    const keep = process.env.NOOKDECK_RELEASE_BASE; process.env.NOOKDECK_RELEASE_BASE = base;
+    try { return await fn(); } finally { if (keep === undefined) delete process.env.NOOKDECK_RELEASE_BASE; else process.env.NOOKDECK_RELEASE_BASE = keep; }
   };
 
   test("replaces its own program, writes .release, restarts the service and checks the agent; prints 'Updated a -> b'", async () => {
@@ -86,7 +86,7 @@ describe.skipIf(win)("phonedesk update against a fake release folder", () => {
     expect(restarted).toBe(1);
     expect(readFileSync(f, "utf8")).toContain("9.9.9");
     expect(statOk(f)).toBe(true);
-    expect(existsSync(join(dir, ".phonedesk.update"))).toBe(false);
+    expect(existsSync(join(dir, ".nookdeck.update"))).toBe(false);
     const marker = readFileSync(join(dir, ".release"), "utf8");
     expect(marker).toMatch(/^raw=[0-9a-f]{64} installed=[0-9a-f]{64}/);
   });
@@ -103,7 +103,7 @@ describe.skipIf(win)("phonedesk update against a fake release folder", () => {
     const e = await withBase(release("9.9.9", { badSum: true }), () => runUpdate({ version: "9.9.9", current: "0.1.1", target: f, out: () => {} })).catch((x) => x);
     expect(String(e.message)).toContain("does not match");
     expect(readFileSync(f, "utf8")).toBe(before);
-    expect(existsSync(join(dir, ".phonedesk.update"))).toBe(false);
+    expect(existsSync(join(dir, ".nookdeck.update"))).toBe(false);
   });
   test("the agent keeps reporting the old version after the restart: an error, not a success message", async () => {
     const { f } = installed();
@@ -122,7 +122,7 @@ describe.skipIf(win)("phonedesk update against a fake release folder", () => {
     const t = lines.join("\n");
     expect(t).toContain("version 9.9.9 is available");
     expect(t).toContain("Already up to date (0.1.1)");
-    expect(t).toContain("Restart PhoneDesk");
+    expect(t).toContain("Restart Nookdeck");
   });
   test("a copy that runs from source refuses", async () => {
     const e = await withBase(release("9.9.9"), () => runUpdate({ version: "9.9.9", current: "0.1.1", target: "/x/bun", out: () => {} })).catch((x) => x);
@@ -131,15 +131,15 @@ describe.skipIf(win)("phonedesk update against a fake release folder", () => {
   test("the latest release is looked up when no --version is given", async () => {
     const { f } = installed();
     const gh = createServer((req, res) => {
-      if (req.url === "/howznguyen/phonedesk/releases/latest") { res.writeHead(302, { location: "/howznguyen/phonedesk/releases/tag/v9.9.7" }).end(); return; }
+      if (req.url === "/howznguyen/nookdeck/releases/latest") { res.writeHead(302, { location: "/howznguyen/nookdeck/releases/tag/v9.9.7" }).end(); return; }
       res.writeHead(200).end("page");
     });
     await new Promise<void>((ok) => gh.listen(0, "127.0.0.1", ok));
-    const keep = process.env.PHONEDESK_GITHUB_URL; process.env.PHONEDESK_GITHUB_URL = `http://127.0.0.1:${(gh.address() as any).port}`;
+    const keep = process.env.NOOKDECK_GITHUB_URL; process.env.NOOKDECK_GITHUB_URL = `http://127.0.0.1:${(gh.address() as any).port}`;
     try {
       const r = await withBase(release("9.9.7"), () => runUpdate({ current: "0.1.1", target: f, out: () => {} }));
       expect(r).toMatchObject({ status: "updated", latest: "9.9.7" });
-    } finally { gh.close(); if (keep === undefined) delete process.env.PHONEDESK_GITHUB_URL; else process.env.PHONEDESK_GITHUB_URL = keep; }
+    } finally { gh.close(); if (keep === undefined) delete process.env.NOOKDECK_GITHUB_URL; else process.env.NOOKDECK_GITHUB_URL = keep; }
   });
 });
 const statOk = (f: string) => (require("node:fs").statSync(f).mode & 0o111) !== 0;
@@ -193,8 +193,8 @@ describe("GET /api/update", () => {
 });
 
 describe("a busy port and unknown commands", () => {
-  const e = (extra: Record<string, string> = {}) => ({ PATH: process.env.PATH!, PHONEDESK_HOME: join(tmp(), "home"), HOME: tmp(), ...extra });
-  const cli = (args: string[], env: Record<string, string>) => Bun.spawnSync([process.execPath, join(root, "src", "index.ts"), ...args], { env, stdout: "pipe", stderr: "pipe" }); // PHONEDESK_HOME is in env
+  const e = (extra: Record<string, string> = {}) => ({ PATH: process.env.PATH!, NOOKDECK_HOME: join(tmp(), "home"), HOME: tmp(), ...extra });
+  const cli = (args: string[], env: Record<string, string>) => Bun.spawnSync([process.execPath, join(root, "src", "index.ts"), ...args], { env, stdout: "pipe", stderr: "pipe" }); // NOOKDECK_HOME is in env
   test("an unknown command exits 2 and never starts the agent", () => {
     const r = cli(["update-now"], e());
     expect(r.exitCode).toBe(2);
@@ -214,7 +214,7 @@ describe("a busy port and unknown commands", () => {
       expect(err).not.toContain("EADDRINUSE");
     } finally { holder.stop(true); }
   });
-  test("the port is held by PhoneDesk: says so, with the version and what to do", async () => {
+  test("the port is held by Nookdeck: says so, with the version and what to do", async () => {
     const { startServer } = await import("../src/server");
     const dir = tmp();
     const q = (id: string) => ({ id, name: id, windows: [], updatedAt: 1 });
@@ -225,11 +225,11 @@ describe("a busy port and unknown commands", () => {
     } as any);
     try {
       const msg = await explainBusyPort(app.port, { service: async () => true });
-      expect(msg).toMatch(new RegExp(`^PhoneDesk \\S+ is already running on port ${app.port} \\(background service\\)`));
+      expect(msg).toMatch(new RegExp(`^Nookdeck \\S+ is already running on port ${app.port} \\(background service\\)`));
       expect(msg).toContain(`http://localhost:${app.port}/manage/`);
-      expect(msg).toContain("phonedesk service restart");
+      expect(msg).toContain("nookdeck service restart");
       // async spawn: the agent lives in this process and must keep answering while the CLI asks it
-      const p = Bun.spawn([process.execPath, join(root, "src", "index.ts"), "--port", String(app.port)], { env: e(), stdout: "pipe", stderr: "pipe" }); // PHONEDESK_HOME is in e()
+      const p = Bun.spawn([process.execPath, join(root, "src", "index.ts"), "--port", String(app.port)], { env: e(), stdout: "pipe", stderr: "pipe" }); // NOOKDECK_HOME is in e()
       const err = await new Response(p.stderr).text();
       expect(await p.exited).toBe(1);
       expect(err).toContain("is already running on port");

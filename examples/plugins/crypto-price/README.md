@@ -1,6 +1,6 @@
 # Crypto price
 
-A no-code PhoneDesk plugin: one tile that shows the live USD price of a coin. It is the smallest useful plugin and the best one to copy.
+A no-code Nookdeck plugin: one tile that shows the live USD price of a coin. It is the smallest useful plugin and the best one to copy.
 
 - The tile uses the built-in `stat` renderer.
 - The only access it asks for is `api.coingecko.com` (network). No shell, no keyboard.

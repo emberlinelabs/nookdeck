@@ -14,7 +14,7 @@ import { swapPreview } from './swap'
 import { samplePlugin } from './plugin-logic'
 import type { PluginSlot } from './plugin-logic'
 import { headerMode, keepAwakeOn, liteOn, onLocalScreen } from './screen-logic'
-import type { QuestionRequest, WeatherData, PushedValue, Notice, GotoReq, HassEntity, HassState, IconAssets, AiData, Item, Layout, Media, MediaCommand, Orientation, Page, Stats, TileStyle } from './types'
+import type { PermissionRequest, QuestionRequest, WeatherData, PushedValue, Notice, GotoReq, HassEntity, HassState, IconAssets, AiData, Item, Layout, Media, MediaCommand, Orientation, Page, Stats, TileStyle } from './types'
 
 export { Icon }
 import './deck.css'
@@ -25,7 +25,7 @@ export interface DeckProps {
   onClose?: () => void
   /** Always open, no close button. */
   standalone?: boolean
-  /** Agent origin when embedded in another site, e.g. "http://phonedesk.local:7420". Default: same origin. */
+  /** Agent origin when embedded in another site, e.g. "http://nookdeck.local:7420". Default: same origin. */
   baseUrl?: string
   /** Prefill for the pairing PIN. */
   pin?: string
@@ -142,7 +142,7 @@ const sampleHass = (l: Layout | null, off: boolean): HassState => {
 }
 const SAMPLE_QUESTION: QuestionRequest = {
   id: 'q1',
-  project: 'PhoneDesk',
+  project: 'Nookdeck',
   sessionId: '3f9a1c27-0000',
   createdAt: Date.now(),
   expiresAt: Date.now() + 9 * 60000,
@@ -150,6 +150,19 @@ const SAMPLE_QUESTION: QuestionRequest = {
     { header: 'Approach', question: 'How should the config be stored?', options: [{ label: 'JSON file', description: 'Simple, easy to edit by hand' }, { label: 'SQLite', description: 'Queryable, heavier' }] },
     { header: 'Features', question: 'Which features should be enabled?', multiSelect: true, options: [{ label: 'Weather', description: 'Open-Meteo' }, { label: 'Webhook' }, { label: 'Rules', description: 'Switch pages automatically' }] },
   ],
+}
+/** preview np=permission: a harmless Claude Code Bash request (demo data only) */
+const SAMPLE_PERM: PermissionRequest = {
+  id: 'p1',
+  source: 'claude',
+  project: 'web-app',
+  tool: 'Bash',
+  summary: 'bun run build',
+  detail: 'bun run build',
+  risk: 'low',
+  sessionId: '3f9a1c27-0000',
+  createdAt: Date.now(),
+  expiresAt: Date.now() + 9 * 60000,
 }
 /** OpenCode question: several options at once are allowed (multiple) and the user may type their own (custom) */
 const SAMPLE_QUESTION_OC: QuestionRequest = {
@@ -216,7 +229,7 @@ const SAMPLE_AI: AiData = {
     { id: 'antigravity', name: 'Antigravity', windows: [{ id: 'gemini-5h', label: 'Gemini 5 hours', usedPercent: 5, resetsAt: Date.now() + 3 * 3600000 }, { id: 'gemini-weekly', label: 'Gemini weekly', usedPercent: 22, resetsAt: Date.now() + 4 * 86400000 }, { id: '3p-5h', label: '3rd-party 5 hours', usedPercent: 48, resetsAt: Date.now() + 2 * 3600000 }, { id: '3p-weekly', label: '3rd-party weekly', usedPercent: 63, resetsAt: Date.now() + 5 * 86400000 }] },
   ],
   sessions: [
-    { id: 's1', tool: 'claude', project: 'PhoneDesk', model: 'Opus 5.5', state: 'working', updatedAt: Date.now() - 20000 },
+    { id: 's1', tool: 'claude', project: 'Nookdeck', model: 'Opus 5.5', state: 'working', updatedAt: Date.now() - 20000 },
     { id: 's2', tool: 'codex', project: 'api-server', model: 'gpt-5', state: 'waiting', updatedAt: Date.now() - 4 * 60000 },
     { id: 's3', tool: 'claude', project: 'web-app', model: 'Sonnet 5.5', state: 'idle', updatedAt: Date.now() - 52 * 60000 },
     { id: 's4', tool: 'opencode', project: 'phone-api', model: 'Kimi K2', state: 'working', updatedAt: Date.now() - 45000 },
@@ -726,7 +739,7 @@ function PinInput(props: { value: string; onChange: (v: string) => void }) {
   )
 }
 
-/** Pulls the PIN out of a scanned QR: a PhoneDesk pair URL (?pin=123456) or a bare 6-digit PIN. */
+/** Pulls the PIN out of a scanned QR: a Nookdeck pair URL (?pin=123456) or a bare 6-digit PIN. */
 const pinFromQr = (text: string): string => {
   const s = (text || '').replace(/^\s+|\s+$/g, '')
   if (/^\d{6}$/.test(s)) return s
@@ -827,7 +840,7 @@ function PairForm(props: { client: DeckClient; notice: string; pin?: string }) {
       <form class="pd-card" onSubmit={submit} autocomplete="off">
         <div class="pd-card__brand">
           <Mark size={52} />
-          <h1>PhoneDesk</h1>
+          <h1>Nookdeck</h1>
         </div>
         <p class="pd-muted">{t('Enter the 6-digit PIN shown on your computer.')}</p>
         <PinInput value={pin} onChange={setPin} />
@@ -887,7 +900,7 @@ export function Deck(props: DeckProps) {
     const n = splitNp(q.get('np') || '')
     return { layout: null, selectedId: null, np: n.np, clean: n.clean || q.get('clean') === '1' }
   })
-  const st: ClientState = preview ? { status: 'online', layout: pv.layout, stats: SAMPLE_STATS, media: pv.np === 'last' || pv.np === 'empty' ? null : pv.np === 'next' ? SAMPLE_MEDIA2 : SAMPLE_MEDIA, lastMedia: pv.np === 'last' ? Object.assign({}, SAMPLE_MEDIA, { playing: false, at: Date.now() - 12 * 60000 }) : null, ai: SAMPLE_AI, perms: [], questions: pv.np === 'question' ? [SAMPLE_QUESTION] : pv.np === 'question-oc' ? [SAMPLE_QUESTION_OC] : [], notice: '', sounds: pv.np === 'sound' ? sampleSounds(pv.layout) : undefined, hass: sampleHass(pv.layout, pv.np === 'ha-off'), weather: sampleWeather(pv.layout), pushed: sampleValues(pv.layout), notes: SAMPLE_NOTES, goto: pv.np === 'goto' ? { id: 'g', pageId: ((pv.layout && pv.layout.pages[1]) || { id: '' }).id, countdown: 3, reason: 'Claude needs you', at: Date.now() } : null, modeOverride: null } : live
+  const st: ClientState = preview ? { status: 'online', layout: pv.layout, stats: SAMPLE_STATS, media: pv.np === 'last' || pv.np === 'empty' ? null : pv.np === 'next' ? SAMPLE_MEDIA2 : SAMPLE_MEDIA, lastMedia: pv.np === 'last' ? Object.assign({}, SAMPLE_MEDIA, { playing: false, at: Date.now() - 12 * 60000 }) : null, ai: SAMPLE_AI, perms: pv.np === 'permission' ? [SAMPLE_PERM] : [], questions: pv.np === 'question' ? [SAMPLE_QUESTION] : pv.np === 'question-oc' ? [SAMPLE_QUESTION_OC] : [], notice: '', sounds: pv.np === 'sound' ? sampleSounds(pv.layout) : undefined, hass: sampleHass(pv.layout, pv.np === 'ha-off'), weather: sampleWeather(pv.layout), pushed: sampleValues(pv.layout), notes: SAMPLE_NOTES, goto: pv.np === 'goto' ? { id: 'g', pageId: ((pv.layout && pv.layout.pages[1]) || { id: '' }).id, countdown: 3, reason: 'Claude needs you', at: Date.now() } : null, modeOverride: null } : live
   const hass: HassState | undefined = st.hass
   // a real state update replaces the optimistic one
   useEffect(() => {
@@ -1771,7 +1784,7 @@ export function Deck(props: DeckProps) {
     <div class={'pd-root' + (preview ? ' pd-root--preview' : '') + (rotated ? ' pd-root--rot' : '') + (Math.min(vp.w, vp.h) <= 340 ? ' pd-root--sm' : '') + (lite ? ' pd-lite' : '') + (hmode !== 'full' ? ' pd-hdr--' + hmode : '')} ref={rootRef} data-pd-theme="dark" style={rootStyle}>
       {st.reloading ? <div class="pd-veil">{t('Reloading…')}</div> : null}
       <div class={'pd-sheet' + (closing ? ' pd-sheet--closing' : '')}>
-        <div class="pd-panel" role="dialog" aria-label="PhoneDesk">
+        <div class="pd-panel" role="dialog" aria-label="Nookdeck">
           {hmode === 'hidden' ? (
             <div class="pd-fabwrap">
               {st.status !== 'online' && st.status !== 'pair' ? <span class="pd-fab__pill"><i class={dotCls} />{statusText}</span> : null}
@@ -1792,7 +1805,7 @@ export function Deck(props: DeckProps) {
               <span class="pd-dotbtn" onTouchStart={holdStart} onTouchEnd={holdEnd} onTouchCancel={holdEnd} onTouchMove={holdEnd} onMouseDown={holdStart} onMouseUp={holdEnd} onMouseLeave={holdEnd} onContextMenu={(e) => e.preventDefault()}>
                 <i class={dotCls} />
               </span>
-              <b>{st.status === 'pair' ? 'PhoneDesk' : (st.stats && st.stats.host) || 'PhoneDesk'}</b>
+              <b>{st.status === 'pair' ? 'Nookdeck' : (st.stats && st.stats.host) || 'Nookdeck'}</b>
               {st.status !== 'pair' && st.status !== 'online' && !preview ? <em>{statusText}</em> : null}
               {st.status === 'online' && st.stats ? (
                 <span class="pd-conn__m">
@@ -1972,7 +1985,7 @@ export function Deck(props: DeckProps) {
             />
           ) : null}
           {!preview && proc && st.status === 'online' ? <ProcessSheet client={client} initial={proc} onClose={() => setProc(null)} /> : null}
-          {!preview && st.perms.length ? <PermissionSheet client={client} perms={st.perms} /> : null}
+          {(!preview || pv.np === 'permission') && st.perms.length ? <PermissionSheet client={client} perms={st.perms} /> : null}
           {st.questions && st.questions.length && (!preview || pv.np === 'question' || pv.np === 'question-oc') ? <QuestionSheet client={client} qs={st.questions} preview={preview} /> : null}
           {gt ? (
             <div class="pd-goto" role="alertdialog" aria-label={t('Change page')}>

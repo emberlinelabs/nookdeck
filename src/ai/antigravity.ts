@@ -5,7 +5,7 @@ import { t as tr } from "../i18n";
 export const AGY_TIMEOUT_MS = 20_000;
 
 export function agyPath(): string | null {
-  return process.env.PHONEDESK_AGY ?? Bun.which("agy");
+  return process.env.NOOKDECK_AGY ?? Bun.which("agy");
 }
 
 const GROUP_SHORT = (name: string): string =>

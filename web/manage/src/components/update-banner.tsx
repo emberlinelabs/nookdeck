@@ -4,7 +4,7 @@ import { api } from "@/api";
 import { t, useLanguage } from "@/lib/i18n";
 import type { UpdateInfo } from "@/types";
 
-const COMMAND = "phonedesk update";
+const COMMAND = "nookdeck update";
 const KEY = "pd.manage.updateDismissed";
 
 const read = (): string | null => { try { return localStorage.getItem(KEY); } catch { return null; } };
@@ -32,7 +32,7 @@ export function UpdateBanner({ repo, enabled }: { repo: string; enabled: boolean
   };
   return (
     <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-primary/40 bg-primary/10 px-3.5 py-2.5 text-[13px]">
-      <span className="font-medium">{t("PhoneDesk {v} is available", { v: latest })}</span>
+      <span className="font-medium">{t("Nookdeck {v} is available", { v: latest })}</span>
       <span className="text-muted-foreground">{t("You have {v}.", { v: info.current })}</span>
       <button type="button" onClick={() => void copy()} title={t("Copy the update command")} className="inline-flex items-center gap-1.5 rounded-md border bg-card px-2 py-1 font-mono text-[12px] transition-colors hover:bg-muted">
         {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}

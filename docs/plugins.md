@@ -1,12 +1,12 @@
-# Writing PhoneDesk plugins
+# Writing Nookdeck plugins
 
-A plugin adds tiles and buttons to PhoneDesk. It is a folder (usually a GitHub repo) with a `phonedesk.json` file. This guide covers the first phase: **no-code plugins**, which need no JavaScript. Code plugins come in a later release.
+A plugin adds tiles and buttons to Nookdeck. It is a folder (usually a GitHub repo) with a `nookdeck.json` file. This guide covers the first phase: **no-code plugins**, which need no JavaScript. Code plugins come in a later release.
 
 ## Quick start
 
 1. Copy [`examples/plugins/crypto-price`](../examples/plugins/crypto-price).
 2. Change `id`, `name` and the widget.
-3. In the manage page open **Plugins**, paste the folder path (or a GitHub address, or an https link to the `phonedesk.json`), read the access list and press **Allow and turn on**.
+3. In the manage page open **Plugins**, paste the folder path (or a GitHub address, or an https link to the `nookdeck.json`), read the access list and press **Allow and turn on**.
 4. Add your tile to a screen.
 
 ## The manifest
@@ -16,7 +16,7 @@ A plugin adds tiles and buttons to PhoneDesk. It is a folder (usually a GitHub r
   "id": "dev.alice.crypto",
   "name": "Crypto price",
   "version": "1.0.0",
-  "phonedesk": ">=0.2.0",
+  "nookdeck": ">=0.2.0",
   "author": "alice",
   "description": "Live price of a coin",
   "icon": "icon.svg",
@@ -28,9 +28,9 @@ A plugin adds tiles and buttons to PhoneDesk. It is a folder (usually a GitHub r
 
 | Field | Notes |
 |---|---|
-| `id` | Reverse-DNS style, `dev.<author>.<name>`. `core.*` is reserved for PhoneDesk. |
+| `id` | Reverse-DNS style, `dev.<author>.<name>`. `core.*` is reserved for Nookdeck. |
 | `version` | Exact version. Each install is pinned to a version and a hash of the package. |
-| `phonedesk` | The PhoneDesk versions the plugin works with. |
+| `nookdeck` | The Nookdeck versions the plugin works with. |
 | `permissions` | Everything the plugin may touch. See below. |
 | `widgets`, `actions` | What the plugin adds. |
 
@@ -122,3 +122,5 @@ A plugin can also ship `themes` and `layouts`. Each shows an **Apply** or **Add 
 ## Share it
 
 Put the folder in a GitHub repo. Others install it from the link. Say what it needs access to in the README, since that is the first thing people ask.
+
+To be listed in the Store, open a PR to [howznguyen/nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins) that adds your entry to `plugins.json`. The registry comes with the Store; until then, sharing your GitHub URL is enough, because it installs directly.

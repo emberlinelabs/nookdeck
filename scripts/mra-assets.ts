@@ -1,5 +1,5 @@
 // Writes src/platform/mra-embed.gen.ts: the MediaRemote adapter (see vendor/mediaremote-adapter) as files `bun build --compile`
-// embeds. Without a built framework (other OS, no clang yet) it writes a stub exporting null, and PhoneDesk then reads Now Playing
+// embeds. Without a built framework (other OS, no clang yet) it writes a stub exporting null, and Nookdeck then reads Now Playing
 // from Spotify and Music only.
 import { existsSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";

@@ -53,13 +53,13 @@ describe("finding the binaries outside PATH (the agent runs as a service)", () =
     writeFileSync(join(home, ".opencode", "bin", "opencode"), "#!/bin/sh\necho 1.18.35\n"); chmodSync(join(home, ".opencode", "bin", "opencode"), 0o755);
     mkdirSync(join(home, ".grok", "bin"), { recursive: true });
     writeFileSync(join(home, ".grok", "bin", "grok"), "#!/bin/sh\n"); chmodSync(join(home, ".grok", "bin", "grok"), 0o755);
-    await withEnv({ HOME: home, PATH: "/nonexistent", PHONEDESK_OPENCODE: undefined, PHONEDESK_GROK: undefined, GROK_HOME: join(home, ".grok") }, async () => {
+    await withEnv({ HOME: home, PATH: "/nonexistent", NOOKDECK_OPENCODE: undefined, NOOKDECK_GROK: undefined, GROK_HOME: join(home, ".grok") }, async () => {
       expect(OC.opencodePath()).toBe(join(home, ".opencode", "bin", "opencode"));
       expect(GK.grokPath()).toBe(join(home, ".grok", "bin", "grok"));
       expect(await OC.detectOpencode(undefined, OC.opencodePath())).toEqual({ version: "1.18.35", major: 1 }); // runs it by absolute path
     });
     const empty = tmp();
-    await withEnv({ HOME: empty, PATH: "/nonexistent", PHONEDESK_OPENCODE: undefined, PHONEDESK_GROK: undefined, GROK_HOME: join(empty, ".grok") }, () => {
+    await withEnv({ HOME: empty, PATH: "/nonexistent", NOOKDECK_OPENCODE: undefined, NOOKDECK_GROK: undefined, GROK_HOME: join(empty, ".grok") }, () => {
       if (!existsSync("/opt/homebrew/bin/opencode") && !existsSync("/usr/local/bin/opencode")) expect(OC.opencodePath()).toBeNull();
     });
   });
@@ -147,14 +147,14 @@ describe("OpenCode 2.x local service", () => {
 });
 
 describe("OpenCode plugin (opt-in)", () => {
-  const params = (major: 1 | 2) => ({ port: 7420, home: "/h/.phonedesk", major });
+  const params = (major: 1 | 2) => ({ port: 7420, home: "/h/.nookdeck", major });
   test("install writes a marked file for the right line, again is a no-op, uninstall removes only ours", async () => {
-    const d = tmp(); const f = join(d, "plugins", "phonedesk.js");
+    const d = tmp(); const f = join(d, "plugins", "nookdeck.js");
     expect(await OC.isPluginInstalled(f)).toBe(false);
     expect(await OC.installPlugin(params(1), f)).toEqual({ changed: true });
     expect(await OC.isPluginInstalled(f)).toBe(true);
     const v1 = readFileSync(f, "utf8");
-    expect(v1).toContain("phonedesk-plugin"); expect(v1).toContain("permission.asked"); expect(v1).toContain("question.asked"); expect(v1).toContain("7420");
+    expect(v1).toContain("nookdeck-plugin"); expect(v1).toContain("permission.asked"); expect(v1).toContain("question.asked"); expect(v1).toContain("7420");
     expect(await OC.installPlugin(params(1), f)).toEqual({ changed: false });
     expect(await OC.installPlugin(params(2), f)).toEqual({ changed: true }); // the line changed
     const v2 = readFileSync(f, "utf8");
@@ -166,7 +166,7 @@ describe("OpenCode plugin (opt-in)", () => {
     expect(await OC.uninstallPlugin(f)).toEqual({ changed: false });
     // a file that is not ours is never overwritten or removed
     writeFileSync(f, "// my own plugin\n");
-    await expect(OC.installPlugin(params(1), f)).rejects.toThrow("not written by PhoneDesk");
+    await expect(OC.installPlugin(params(1), f)).rejects.toThrow("not written by Nookdeck");
     expect(await OC.uninstallPlugin(f)).toEqual({ changed: false });
     expect(readFileSync(f, "utf8")).toBe("// my own plugin\n");
   });
@@ -197,7 +197,7 @@ describe("OpenCode plugin (opt-in)", () => {
     const ev = (id: string) => ({ type: "permission.asked", properties: { id, sessionID: "ses1", permission: "bash", patterns: ["rm -rf build"] } });
     const allow = await runPlugin(1, { "/api/hooks/permission": { decision: "allow" } }, [ev("p1")]);
     const agentCall = allow.calls.find((c) => c.url.includes("/api/hooks/permission"))!;
-    expect(agentCall.headers["x-phonedesk-hook"]).toBe("sec");
+    expect(agentCall.headers["x-nookdeck-hook"]).toBe("sec");
     expect(agentCall.body).toMatchObject({ source: "opencode", sessionId: "ses1", cwd: "/work/app", toolName: "bash" });
     expect(allow.calls.find((c) => c.url === "http://localhost:4096/permission/p1/reply")!.body).toEqual({ reply: "once" });
     const deny = await runPlugin(1, { "/api/hooks/permission": { decision: "deny" } }, [ev("p2")]);
@@ -295,15 +295,15 @@ describe("Grok sessions, state and hook file", () => {
     expect(await GK.grokQuota({ now: NOW, bin: null })).toMatchObject({ id: "grok", windows: [], error: "Grok was not found" });
   });
   test("hook file: the five events with explicit timeouts and the right states; refuses a foreign file; uninstall removes only ours", async () => {
-    const d = tmp(); const f = join(d, "hooks", "phonedesk.json");
-    const base = "'/bin/phonedesk' hook claude --port 7500 # phonedesk hook";
+    const d = tmp(); const f = join(d, "hooks", "nookdeck.json");
+    const base = "'/bin/nookdeck' hook claude --port 7500 # nookdeck hook";
     expect(await GK.isGrokHookInstalled(f)).toBe(false);
     expect(await GK.installGrokHook(base, f)).toEqual({ changed: true });
     expect(await GK.installGrokHook(base, f)).toEqual({ changed: false });
     const j = JSON.parse(readFileSync(f, "utf8"));
     expect(Object.keys(j.hooks)).toEqual(["UserPromptSubmit", "Stop", "StopFailure", "StopCancelled", "Notification"]);
     const cmd = (e: string) => j.hooks[e][0].hooks[0];
-    expect(cmd("UserPromptSubmit").command).toBe("'/bin/phonedesk' hook grok busy --port 7500 # phonedesk hook grok");
+    expect(cmd("UserPromptSubmit").command).toBe("'/bin/nookdeck' hook grok busy --port 7500 # nookdeck hook grok");
     for (const e of ["Stop", "StopFailure", "StopCancelled"]) expect(cmd(e).command).toContain("hook grok idle");
     expect(cmd("Notification").command).toContain("hook grok waiting");
     expect(j.hooks.Notification[0].matcher).toBe("idle_prompt|permission_prompt");
@@ -312,7 +312,7 @@ describe("Grok sessions, state and hook file", () => {
     expect(await GK.uninstallGrokHook(f)).toEqual({ changed: true });
     expect(existsSync(f)).toBe(false);
     writeFileSync(f, '{"hooks":{}}');
-    await expect(GK.installGrokHook(base, f)).rejects.toThrow("not written by PhoneDesk");
+    await expect(GK.installGrokHook(base, f)).rejects.toThrow("not written by Nookdeck");
     expect(await GK.uninstallGrokHook(f)).toEqual({ changed: false });
   });
   test("the hook's stdin: camelCase and snake_case", () => {
@@ -335,8 +335,8 @@ describe("rules accept the new providers", () => {
 describe("agent: /api/hooks/state, /api/integrations and the install endpoints", () => {
   let app: any, base = "";
   const dir = tmp();
-  const pluginFile = join(dir, "oc-config", "plugins", "phonedesk.js");
-  const hookFile = join(dir, "grok", "hooks", "phonedesk.json");
+  const pluginFile = join(dir, "oc-config", "plugins", "nookdeck.js");
+  const hookFile = join(dir, "grok", "hooks", "nookdeck.json");
   beforeAll(async () => {
     const { startServer } = await import("../src/server");
     const grokHome = process.env.GROK_HOME!;
@@ -354,7 +354,7 @@ describe("agent: /api/hooks/state, /api/integrations and the install endpoints",
     base = `http://localhost:${app.port}`;
   });
   afterAll(() => app?.stop());
-  const post = (p: string, body: any, headers: any = {}) => fetch(base + p, { method: "POST", headers: { "x-phonedesk-hook": "sec", ...headers }, body: JSON.stringify(body) });
+  const post = (p: string, body: any, headers: any = {}) => fetch(base + p, { method: "POST", headers: { "x-nookdeck-hook": "sec", ...headers }, body: JSON.stringify(body) });
 
   test("/api/hooks/state: secret, shape and states are checked", async () => {
     expect((await fetch(base + "/api/hooks/state", { method: "POST", body: "{}" })).status).toBe(401);
@@ -389,7 +389,7 @@ describe("agent: /api/hooks/state, /api/integrations and the install endpoints",
     const bin = join(dir, "bin"); mkdirSync(bin, { recursive: true });
     const fake = join(bin, process.platform === "win32" ? "opencode.cmd" : "opencode");
     writeFileSync(fake, process.platform === "win32" ? "@echo 2.3.2\r\n" : "#!/bin/sh\necho 2.3.2\n"); chmodSync(fake, 0o755);
-    const keep = process.env.PHONEDESK_OPENCODE; process.env.PHONEDESK_OPENCODE = fake;
+    const keep = process.env.NOOKDECK_OPENCODE; process.env.NOOKDECK_OPENCODE = fake;
     try {
       const j = (await (await fetch(base + "/api/integrations")).json()) as any;
       expect(j.opencode).toMatchObject({ installed: true, version: "2.3.2", line: 2 });
@@ -397,7 +397,7 @@ describe("agent: /api/hooks/state, /api/integrations and the install endpoints",
       expect(r.line).toBe(2);
       expect(readFileSync(pluginFile, "utf8")).toContain("form.created");
       await fetch(base + "/api/integrations/opencode/plugin", { method: "DELETE" });
-    } finally { if (keep === undefined) delete process.env.PHONEDESK_OPENCODE; else process.env.PHONEDESK_OPENCODE = keep; }
+    } finally { if (keep === undefined) delete process.env.NOOKDECK_OPENCODE; else process.env.NOOKDECK_OPENCODE = keep; }
   });
   test("a permission request from the opencode plugin is accepted (source opencode) and shown to phones", async () => {
     const ws = new WebSocket(`ws://localhost:${app.port}/ws?token=${((await (await fetch(base + "/api/pair", { method: "POST", body: JSON.stringify({ pin: "777777", name: "t" }) })).json()) as any).token}`);

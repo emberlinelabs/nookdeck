@@ -7,7 +7,7 @@ import { gunzipSync } from "node:zlib";
 import { platform } from "./platform";
 import pkg from "../package.json" with { type: "json" };
 
-export const REPO = "howznguyen/phonedesk";
+export const REPO = "howznguyen/nookdeck";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** "v0.1.2" -> "0.1.2" */
@@ -33,34 +33,34 @@ export interface LookupOptions { fetch?: typeof fetch; githubUrl?: string; apiUr
  */
 export async function latestTag(o: LookupOptions = {}): Promise<string> {
   const f = o.fetch ?? fetch;
-  const gh = (o.githubUrl ?? process.env.PHONEDESK_GITHUB_URL ?? "https://github.com").replace(/\/+$/, "");
-  const api = (o.apiUrl ?? process.env.PHONEDESK_API_URL ?? "https://api.github.com").replace(/\/+$/, "");
-  const pause = o.retrySeconds ?? (process.env.PHONEDESK_RETRY_SECONDS ? Number(process.env.PHONEDESK_RETRY_SECONDS) : 2);
+  const gh = (o.githubUrl ?? process.env.NOOKDECK_GITHUB_URL ?? "https://github.com").replace(/\/+$/, "");
+  const api = (o.apiUrl ?? process.env.NOOKDECK_API_URL ?? "https://api.github.com").replace(/\/+$/, "");
+  const pause = o.retrySeconds ?? (process.env.NOOKDECK_RETRY_SECONDS ? Number(process.env.NOOKDECK_RETRY_SECONDS) : 2);
   const wait = o.sleep ?? sleep;
   let why = "";
   for (let attempt = 1; attempt <= 4; attempt++) {
     try {
-      const r = await f(`${gh}/${REPO}/releases/latest`, { method: "HEAD", redirect: "follow", headers: { "user-agent": "phonedesk-update" }, signal: AbortSignal.timeout(15_000) });
+      const r = await f(`${gh}/${REPO}/releases/latest`, { method: "HEAD", redirect: "follow", headers: { "user-agent": "nookdeck-update" }, signal: AbortSignal.timeout(15_000) });
       const tag = /\/tag\/([^/?#]+)/.exec(r.url)?.[1];
       if (r.ok && tag) return decodeURIComponent(tag);
       why = `github.com answered ${r.status}`;
     } catch (e: any) { why = `github.com: ${String(e?.message ?? e).slice(0, 80)}`; }
     try {
-      const r = await f(`${api}/repos/${REPO}/releases/latest`, { headers: { accept: "application/vnd.github+json", "user-agent": "phonedesk-update" }, signal: AbortSignal.timeout(15_000) });
+      const r = await f(`${api}/repos/${REPO}/releases/latest`, { headers: { accept: "application/vnd.github+json", "user-agent": "nookdeck-update" }, signal: AbortSignal.timeout(15_000) });
       if (r.ok) { const tag = (await r.json() as any)?.tag_name; if (typeof tag === "string" && tag) return tag; why += "; the API had no tag_name"; }
       else why += `; api.github.com answered ${r.status}`;
     } catch (e: any) { why += `; api.github.com: ${String(e?.message ?? e).slice(0, 80)}`; }
     if (attempt < 4) { o.log?.(`GitHub did not answer (${why}), trying again...`); await wait(attempt * pause * 1000); }
   }
-  throw new Error(`could not reach GitHub to find the latest release (${why}). Check your connection, or pick one with: phonedesk update --version <x.y.z>`);
+  throw new Error(`could not reach GitHub to find the latest release (${why}). Check your connection, or pick one with: nookdeck update --version <x.y.z>`);
 }
 
 /** The release asset for this computer. */
 export function assetName(): string {
   const a = arch();
-  if (platform.id === "darwin") return `phonedesk-darwin-${a === "arm64" ? "arm64" : "x64"}`;
-  if (platform.id === "win32") return "phonedesk-windows-x64.exe";
-  throw new Error(`there is no PhoneDesk release for ${platform.id} yet`);
+  if (platform.id === "darwin") return `nookdeck-darwin-${a === "arm64" ? "arm64" : "x64"}`;
+  if (platform.id === "win32") return "nookdeck-windows-x64.exe";
+  throw new Error(`there is no Nookdeck release for ${platform.id} yet`);
 }
 
 export function sumFor(sums: string, name: string): string | null {
@@ -84,7 +84,7 @@ async function readRelease(base: string, name: string, o: { fetch?: typeof fetch
   let last = "";
   for (let i = 1; i <= 3; i++) {
     try {
-      const r = await f(`${base}/${name}`, { headers: { "user-agent": "phonedesk-update" }, redirect: "follow" });
+      const r = await f(`${base}/${name}`, { headers: { "user-agent": "nookdeck-update" }, redirect: "follow" });
       if (r.status === 404) throw new Error(`not found: ${base}/${name}`);
       if (!r.ok || !r.body) throw new Error(`HTTP ${r.status}`);
       const total = Number(r.headers.get("content-length")) || 0;
@@ -131,7 +131,7 @@ export interface UpdateOptions extends LookupOptions {
 }
 
 /**
- * `phonedesk update [--version X] [--check]`: finds the release, downloads the .gz for this computer (the plain binary for
+ * `nookdeck update [--version X] [--check]`: finds the release, downloads the .gz for this computer (the plain binary for
  * older releases), checks SHA256SUMS for both files, replaces its own program atomically, restarts the service if there is
  * one and checks that the agent now reports the new version.
  */
@@ -142,14 +142,14 @@ export async function runUpdate(o: UpdateOptions = {}): Promise<UpdateResult> {
   const latest = bare(tag);
   const cmp = cmpVersions(latest, current);
   if (o.check) {
-    out(cmp > 0 ? `PhoneDesk ${current}: version ${latest} is available. Run: phonedesk update` : `PhoneDesk ${current} is up to date (latest release: ${latest})`);
+    out(cmp > 0 ? `Nookdeck ${current}: version ${latest} is available. Run: nookdeck update` : `Nookdeck ${current} is up to date (latest release: ${latest})`);
     return { status: cmp > 0 ? "available" : "up-to-date", current, latest };
   }
   if (cmp === 0 || (cmp < 0 && !o.version)) { out(`Already up to date (${current})`); return { status: "up-to-date", current, latest }; }
 
   const target = o.target ?? process.execPath;
-  if (/^bun(\.exe)?$/i.test(basename(target))) throw new Error("this copy of PhoneDesk runs from source, so there is no installed program to replace (use git pull). Install it with setup.sh / setup.ps1.");
-  const base = (process.env.PHONEDESK_RELEASE_BASE ?? `${(process.env.PHONEDESK_GITHUB_URL ?? "https://github.com").replace(/\/+$/, "")}/${REPO}/releases/download/${tag}`).replace(/[\\/]+$/, "");
+  if (/^bun(\.exe)?$/i.test(basename(target))) throw new Error("this copy of Nookdeck runs from source, so there is no installed program to replace (use git pull). Install it with setup.sh / setup.ps1.");
+  const base = (process.env.NOOKDECK_RELEASE_BASE ?? `${(process.env.NOOKDECK_GITHUB_URL ?? "https://github.com").replace(/\/+$/, "")}/${REPO}/releases/download/${tag}`).replace(/[\\/]+$/, "");
   const asset = assetName();
   const sums = Buffer.from(await readRelease(base, "SHA256SUMS", o)).toString("utf8");
   const wantRaw = sumFor(sums, asset);
@@ -187,7 +187,7 @@ export async function runUpdate(o: UpdateOptions = {}): Promise<UpdateResult> {
   // stage next to the program (same volume, so the final rename is atomic), check that it runs, then swap
   const dir = dirname(target);
   await mkdir(dir, { recursive: true });
-  const staged = join(dir, platform.id === "win32" ? ".phonedesk.update.exe" : ".phonedesk.update");
+  const staged = join(dir, platform.id === "win32" ? ".nookdeck.update.exe" : ".nookdeck.update");
   await writeFile(staged, raw);
   await chmod(staged, 0o755);
   try {
@@ -197,11 +197,11 @@ export async function runUpdate(o: UpdateOptions = {}): Promise<UpdateResult> {
       if (cs.code !== 0) out("could not sign the new program (codesign failed); it may not start");
     }
     const v = await run([staged, "--version"]);
-    const reported = /^phonedesk (\S+)/m.exec(v.out)?.[1];
+    const reported = /^nookdeck (\S+)/m.exec(v.out)?.[1];
     if (v.code !== 0 || !reported) throw new Error("the downloaded program does not run on this computer");
     if (reported !== latest && !o.version) throw new Error(`the download reports version ${reported}, expected ${latest}`);
     if (platform.id === "win32") {
-      // the running exe cannot be overwritten but it can be renamed; the .old file is removed the next time PhoneDesk starts
+      // the running exe cannot be overwritten but it can be renamed; the .old file is removed the next time Nookdeck starts
       const old = `${target}.old`;
       await rm(old, { force: true });
       if (existsSync(target)) await rename(target, old);
@@ -223,14 +223,14 @@ export async function runUpdate(o: UpdateOptions = {}): Promise<UpdateResult> {
   } catch { /* not fatal */ }
 
   let restarted = false;
-  try { restarted = (await o.restartService?.()) ?? false; } catch (e: any) { out(`could not restart the background service (${String(e?.message ?? e).slice(0, 80)}); restart PhoneDesk yourself`); }
+  try { restarted = (await o.restartService?.()) ?? false; } catch (e: any) { out(`could not restart the background service (${String(e?.message ?? e).slice(0, 80)}); restart Nookdeck yourself`); }
   if (restarted && o.agentVersion) {
     const deadline = Date.now() + (o.verifyMs ?? 20_000);
     let seen: string | null = null;
     while (Date.now() < deadline) { seen = await o.agentVersion(o.port ?? 7420); if (seen === bare(latest)) break; await sleep(500); }
-    if (seen !== bare(latest)) throw new Error(`the program was replaced, but the agent on port ${o.port ?? 7420} reports ${seen ?? "nothing"} instead of ${latest}. Look at ~/.phonedesk/logs/agent.err.log, or run: phonedesk service restart`);
+    if (seen !== bare(latest)) throw new Error(`the program was replaced, but the agent on port ${o.port ?? 7420} reports ${seen ?? "nothing"} instead of ${latest}. Look at ~/.nookdeck/logs/agent.err.log, or run: nookdeck service restart`);
   }
-  out(`Updated ${current} -> ${latest}${restarted ? "" : "\nRestart PhoneDesk to use the new version (a running agent keeps the old one until then)."}`);
+  out(`Updated ${current} -> ${latest}${restarted ? "" : "\nRestart Nookdeck to use the new version (a running agent keeps the old one until then)."}`);
   return { status: "updated", current, latest };
 }
 

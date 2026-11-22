@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { WebhookCard } from "@/components/webhook-card";
-import { HassCard } from "@/components/hass-card";
 import { Icon } from "@/components/icon";
 import { isIconName } from "@shared/icons";
 import { IconShieldCheck as ShieldCheck } from "@tabler/icons-react";
@@ -46,13 +44,13 @@ const TOOLS: Info[] = [
     id: "opencode",
     name: "OpenCode",
     reads: "Reads OpenCode's local session data on this Mac (project, state, cost and tokens per session). Quota is shown only for OpenCode 2.x with Go. Never reads the content of questions or answers.",
-    defaultPath: "~/.config/opencode/plugins/phonedesk.js",
+    defaultPath: "~/.config/opencode/plugins/nookdeck.js",
   },
   {
     id: "grok",
     name: "Grok",
     reads: "Reads Grok's local session data on this Mac (project, state, time) and your usage from the Grok CLI. Never reads the content of questions or answers.",
-    defaultPath: "~/.grok/hooks/phonedesk.json",
+    defaultPath: "~/.grok/hooks/nookdeck.json",
   },
 ];
 
@@ -62,20 +60,20 @@ const SPECIAL: Partial<Record<AiProvider, { label: string; hint: string; title: 
     label: "Answer on the phone",
     hint: "OpenCode's permission requests and questions appear on the phone, where you can answer them.",
     title: "Answer OpenCode on the phone?",
-    desc: "PhoneDesk will install a small plugin file for OpenCode.",
+    desc: "Nookdeck will install a small plugin file for OpenCode.",
     fileLabel: "File that will be created:",
     on: "OpenCode now asks on the phone.",
-    off: "OpenCode no longer asks on the phone. PhoneDesk's plugin was removed.",
+    off: "OpenCode no longer asks on the phone. Nookdeck's plugin was removed.",
     bullets: ["Only this one file is created or removed. Nothing else in OpenCode's settings is changed.", "If the phone does not answer or is not connected, OpenCode asks in the terminal as usual.", "Restart OpenCode after turning this on or off."],
   },
   grok: {
     label: "Show when Grok waits for you",
     hint: "The phone is notified when Grok needs you. Grok only lets the phone be told: you cannot approve from the phone.",
     title: "Show when Grok waits for you?",
-    desc: "PhoneDesk will install a hooks file for Grok.",
+    desc: "Nookdeck will install a hooks file for Grok.",
     fileLabel: "File that will be created:",
     on: "The phone will show when Grok waits for you.",
-    off: "PhoneDesk's Grok hooks were removed.",
+    off: "Nookdeck's Grok hooks were removed.",
     bullets: ["Only this one file is created or removed. Nothing else in Grok's settings is changed.", "The phone can only show that Grok is waiting. Approve or answer in Grok itself.", "Restart Grok after turning this on or off."],
   },
 };
@@ -115,7 +113,8 @@ function QuotaBars({ info }: { info: Integration }) {
   );
 }
 
-export function IntegrationsPanel() {
+/** One tool (a plugin page) or, without `tool`, all of them. */
+export function IntegrationsPanel({ tool: only }: { tool?: AiProvider } = {}) {
   useLanguage();
   const [items, setItems] = useState<Integration[] | null>(null);
   const [error, setError] = useState<{ message: string; missing: boolean } | null>(null);
@@ -151,7 +150,7 @@ export function IntegrationsPanel() {
     try {
       if (on) await api.enableHook(id);
       else await api.disableHook(id);
-      setNotice({ tone: "success", text: SPECIAL[id] ? t(on ? SPECIAL[id]!.on : SPECIAL[id]!.off) : on ? t("Permission prompts on the phone are on.") : t("Permission prompts on the phone are off. PhoneDesk's hook was removed.") });
+      setNotice({ tone: "success", text: SPECIAL[id] ? t(on ? SPECIAL[id]!.on : SPECIAL[id]!.off) : on ? t("Permission prompts on the phone are on.") : t("Permission prompts on the phone are off. Nookdeck's hook was removed.") });
       await load();
     } catch (e) {
       setNotice({ tone: "danger", text: t("Could not change the setting: {error}", { error: e instanceof Error ? e.message : String(e) }) });
@@ -167,14 +166,12 @@ export function IntegrationsPanel() {
   return (
     <div className="flex max-w-3xl flex-col gap-3">
       <p className="text-sm text-muted-foreground">
-        {t("PhoneDesk shows your AI quota and running AI sessions on the phone. It reads metadata only and never sends the content of questions or answers.")}
+        {t("Nookdeck shows your AI quota and running AI sessions on the phone. It reads metadata only and never sends the content of questions or answers.")}
       </p>
-      <HassCard />
-      <WebhookCard />
       {error && <Alert tone={error.missing ? "info" : "danger"} action={{ label: t("Retry"), onClick: () => void load() }}>{error.message}</Alert>}
       {notice && <Alert tone={notice.tone} onDismiss={() => setNotice(null)}>{notice.text}</Alert>}
       {!items && <Spinner label={t("Loading")} />}
-      {items && TOOLS.map((tool) => {
+      {items && TOOLS.filter((x) => !only || x.id === only).map((tool) => {
         const info = items.find((i) => i.id === tool.id);
         return (
           <ToolCard key={tool.id} tool={tool} info={info} onChanged={() => void load()} backendMissing={!!error} busy={busy === tool.id} onToggle={(on) => (on ? setConfirm(tool.id) : void setHook(tool.id, false))} />
@@ -185,7 +182,7 @@ export function IntegrationsPanel() {
         open={!!confirm}
         onOpenChange={(o) => !o && setConfirm(null)}
         title={special ? t(special.title) : t("Ask permission on the phone for {name}?", { name: target?.name ?? "" })}
-        description={special ? t(special.desc) : t("PhoneDesk will add a hook to this tool's settings file.")}
+        description={special ? t(special.desc) : t("Nookdeck will add a hook to this tool's settings file.")}
         size="md"
         footer={
           <>
@@ -202,7 +199,7 @@ export function IntegrationsPanel() {
         ) : (
         <ul className="flex list-disc flex-col gap-2 pl-5 text-sm">
           <li>{t("File that will be changed:")} <code className="break-all rounded bg-muted px-1.5 py-0.5 text-xs">{targetPath ?? t("(the agent did not report a path)")}</code></li>
-          <li>{t("A backup is written before editing:")} <code className="break-all rounded bg-muted px-1.5 py-0.5 text-xs">{targetPath ? `${targetPath}.phonedesk.bak` : "*.phonedesk.bak"}</code></li>
+          <li>{t("A backup is written before editing:")} <code className="break-all rounded bg-muted px-1.5 py-0.5 text-xs">{targetPath ? `${targetPath}.nookdeck.bak` : "*.nookdeck.bak"}</code></li>
           <li>{t("Other hooks in the file are kept. You can turn this off again at any time with the same switch.")}</li>
           <li>{t("If the phone does not answer (not connected or timed out), the tool asks for permission in the terminal as usual.")}</li>
         </ul>
@@ -330,7 +327,7 @@ function AskHookSection({ info, disabled, onChanged }: { info: Integration | und
         open={confirm}
         onOpenChange={setConfirm}
         title={t("Answer Claude's questions on the phone?")}
-        description={t("PhoneDesk will add a second hook to Claude Code's settings file.")}
+        description={t("Nookdeck will add a second hook to Claude Code's settings file.")}
         size="md"
         footer={
           <>
@@ -341,8 +338,8 @@ function AskHookSection({ info, disabled, onChanged }: { info: Integration | und
       >
         <ul className="flex list-disc flex-col gap-2 pl-5 text-sm">
           <li>{t("File that will be changed:")} <code className="break-all rounded bg-muted px-1.5 py-0.5 text-xs">{path}</code> {t("(a PreToolUse hook for AskUserQuestion, separate from the permission hook).")}</li>
-          <li>{t("A backup is written before editing:")} <code className="break-all rounded bg-muted px-1.5 py-0.5 text-xs">{path}.phonedesk.bak</code></li>
-          <li>{t("Other hooks in the file are kept. Turning this switch off removes only PhoneDesk's hook.")}</li>
+          <li>{t("A backup is written before editing:")} <code className="break-all rounded bg-muted px-1.5 py-0.5 text-xs">{path}.nookdeck.bak</code></li>
+          <li>{t("Other hooks in the file are kept. Turning this switch off removes only Nookdeck's hook.")}</li>
           <li>{t("If the phone does not answer or is not connected, Claude asks in the terminal as usual.")}</li>
         </ul>
       </Dialog>

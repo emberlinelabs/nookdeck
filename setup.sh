@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# PhoneDesk for macOS: one command to fetch, verify, install and start it.
+# Nookdeck for macOS: one command to fetch, verify, install and start it.
 #
 # Usage
-#   curl -fsSL https://raw.githubusercontent.com/howznguyen/phonedesk/main/setup.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/howznguyen/phonedesk/main/setup.sh | bash -s -- --port 7421 --no-autostart
+#   curl -fsSL https://raw.githubusercontent.com/howznguyen/nookdeck/main/setup.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/howznguyen/nookdeck/main/setup.sh | bash -s -- --port 7421 --no-autostart
 #
-# Needs no sudo (it refuses to run as root). Run it again any time to upgrade; ~/.phonedesk is never wiped.
+# Needs no sudo (it refuses to run as root). Run it again any time to upgrade; ~/.nookdeck is never wiped.
 #
 # Flags                 Effect                                                   Env twin
 #   -y, --yes           take every default, ask nothing
-#       --version X.Y.Z install that release, not the newest                     PHONEDESK_VERSION
-#       --force         reinstall even if this release is already in place       PHONEDESK_FORCE=1
+#       --version X.Y.Z install that release, not the newest                     NOOKDECK_VERSION
+#       --force         reinstall even if this release is already in place       NOOKDECK_FORCE=1
 #       --port N        port for the agent (default 7420)
 #       --no-autostart  skip the launchd login service
 #       --no-start      place the program only, do not launch it
@@ -21,17 +21,17 @@
 #   -h, --help          show this text
 #
 # Test hooks (not for everyday use)
-#   PHONEDESK_RELEASE_BASE   folder or URL holding phonedesk-darwin-<arch> and SHA256SUMS
-#   PHONEDESK_INSTALL_HOME   install below this directory instead of $HOME
-#   PHONEDESK_GITHUB_URL / PHONEDESK_API_URL   point the "newest release" lookup at a local server
-#   PHONEDESK_RETRY_SECONDS  scales the pause between lookup rounds
+#   NOOKDECK_RELEASE_BASE   folder or URL holding nookdeck-darwin-<arch> and SHA256SUMS
+#   NOOKDECK_INSTALL_HOME   install below this directory instead of $HOME
+#   NOOKDECK_GITHUB_URL / NOOKDECK_API_URL   point the "newest release" lookup at a local server
+#   NOOKDECK_RETRY_SECONDS  scales the pause between lookup rounds
 set -euo pipefail
 
-REPO="howznguyen/phonedesk"
+REPO="howznguyen/nookdeck"
 STAGES=6
-yes=0; version="${PHONEDESK_VERSION:-}"; version="${version#v}"; port=7420
+yes=0; version="${NOOKDECK_VERSION:-}"; version="${version#v}"; port=7420
 autostart=1; start=1; open_page=1; dry=0; add_path=1; force=0
-if [ "${PHONEDESK_FORCE:-}" = 1 ]; then force=1; fi
+if [ "${NOOKDECK_FORCE:-}" = 1 ]; then force=1; fi
 tmp=""
 
 # ---------------------------------------------------------------- terminal look
@@ -58,7 +58,7 @@ fail() { # fail "what failed" ["why / what to try"]
   exit 1
 }
 banner() {
-  printf '\n%s  ╭──────╮%s\n%s  │ ◉  ▭ │%s  %sPhoneDesk%s\n%s  ╰──────╯%s  %sinstaller for macOS%s\n' \
+  printf '\n%s  ╭──────╮%s\n%s  │ ◉  ▭ │%s  %sNookdeck%s\n%s  ╰──────╯%s  %sinstaller for macOS%s\n' \
     "$C_BRAND" "$C_OFF" "$C_BRAND" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BRAND" "$C_OFF" "$C_DIM" "$C_OFF"
 }
 have() { command -v "$1" >/dev/null 2>&1; }
@@ -87,7 +87,7 @@ while [ $# -gt 0 ]; do
 done
 case "$port" in ''|*[!0-9]*) fail "--port must be a number" ;; esac
 if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then fail "--port must be between 1 and 65535"; fi
-if [ "$(id -u)" = 0 ] && [ -z "${PHONEDESK_INSTALL_HOME:-}" ]; then fail "refusing to run as root" "Run it as your own user, without sudo."; fi
+if [ "$(id -u)" = 0 ] && [ -z "${NOOKDECK_INSTALL_HOME:-}" ]; then fail "refusing to run as root" "Run it as your own user, without sudo."; fi
 
 # Prompts read from /dev/tty, so they still work when this file is piped in by curl.
 tty_ok=0
@@ -138,9 +138,9 @@ http_get() { # http_get URL-OR-PATH DEST   (https only, unless the base was set 
     http://*|https://*)
       have curl || fail "curl is missing" "It ships with macOS; check your PATH."
       if [ "$base_is_custom" = 1 ]; then
-        curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors --proto '=http,https' -A phonedesk-setup -o "$dest" "$src" || return 1
+        curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors --proto '=http,https' -A nookdeck-setup -o "$dest" "$src" || return 1
       else
-        curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors --proto '=https' --proto-redir '=https' -A phonedesk-setup -o "$dest" "$src" || return 1
+        curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors --proto '=https' --proto-redir '=https' -A nookdeck-setup -o "$dest" "$src" || return 1
       fi ;;
     *) [ -f "$src" ] || return 1; cp "$src" "$dest" ;;
   esac
@@ -149,7 +149,7 @@ http_get() { # http_get URL-OR-PATH DEST   (https only, unless the base was set 
 size_hint() { # " (63 MB)" for a URL or file; nothing when unknown
   local src="$1" bytes=""
   case "$src" in
-    http://*|https://*) if have curl; then bytes="$(curl -fsSLI --max-time 15 -A phonedesk-setup "$src" 2>/dev/null | tr -d '\r' | awk 'tolower($1) == "content-length:" { n = $2 } END { print n }')"; fi ;;
+    http://*|https://*) if have curl; then bytes="$(curl -fsSLI --max-time 15 -A nookdeck-setup "$src" 2>/dev/null | tr -d '\r' | awk 'tolower($1) == "content-length:" { n = $2 } END { print n }')"; fi ;;
     *) if [ -f "$src" ]; then bytes="$(wc -c <"$src" | tr -d ' ')"; fi ;;
   esac
   case "$bytes" in ''|*[!0-9]*) return 0 ;; esac
@@ -159,7 +159,7 @@ size_hint() { # " (63 MB)" for a URL or file; nothing when unknown
 
 # Big files: a progress bar on a terminal; if nothing arrives for 60 s the attempt is dropped and resumed (5 tries).
 http_get_big() { # http_get_big URL-OR-PATH DEST
-  local src="$1" dest="$2" tries=0 bar=-sS proto rc stall="${PHONEDESK_STALL_SECONDS:-60}"
+  local src="$1" dest="$2" tries=0 bar=-sS proto rc stall="${NOOKDECK_STALL_SECONDS:-60}"
   case "$src" in
     http://*|https://*) ;;
     *) http_get "$src" "$dest"; return ;;
@@ -169,7 +169,7 @@ http_get_big() { # http_get_big URL-OR-PATH DEST
   if [ "$base_is_custom" = 1 ]; then proto=(--proto '=http,https'); else proto=(--proto '=https' --proto-redir '=https'); fi
   while [ "$tries" -lt 5 ]; do
     rc=0
-    curl -fL "$bar" "${proto[@]}" -A phonedesk-setup --retry 3 --retry-delay 2 --speed-limit 1024 --speed-time "$stall" -C - -o "$dest" "$src" || rc=$?
+    curl -fL "$bar" "${proto[@]}" -A nookdeck-setup --retry 3 --retry-delay 2 --speed-limit 1024 --speed-time "$stall" -C - -o "$dest" "$src" || rc=$?
     if [ "$rc" = 0 ]; then return 0; fi
     tries=$((tries + 1))
     if [ "$rc" = 28 ]; then warn "no data for ${stall} s (slow or blocked route to GitHub); resuming from where it stopped ($tries/5)"
@@ -177,35 +177,36 @@ http_get_big() { # http_get_big URL-OR-PATH DEST
     if [ "$rc" = 22 ]; then return 1; fi # an HTTP error such as 404: the same URL will not improve
     sleep 2
   done
-  say "Tip: try later, another network or a VPN, or fetch $src by hand and point PHONEDESK_RELEASE_BASE at that folder."
+  say "Tip: try later, another network or a VPN, or fetch $src by hand and point NOOKDECK_RELEASE_BASE at that folder."
   return 1
 }
 
 # ---------------------------------------------------------------- where everything lives
-home_dir="${PHONEDESK_INSTALL_HOME:-$HOME}"
-data_dir="$home_dir/.phonedesk"
+home_dir="${NOOKDECK_INSTALL_HOME:-$HOME}"
+data_dir="$home_dir/.nookdeck"
 bin_dir="$data_dir/bin"
-bin="$bin_dir/phonedesk"
+bin="$bin_dir/nookdeck"
 log_dir="$data_dir/logs"
 pidfile="$data_dir/agent.pid"
-agents_dir="${PHONEDESK_LAUNCH_AGENTS_DIR:-$home_dir/Library/LaunchAgents}"
-plist="$agents_dir/dev.phonedesk.agent.plist"
+agents_dir="${NOOKDECK_LAUNCH_AGENTS_DIR:-$home_dir/Library/LaunchAgents}"
+plist="$agents_dir/dev.nookdeck.agent.plist"
 marker="$bin_dir/.release"
 # A relocated install (tests) keeps every file the program touches inside it.
-child_env=(PHONEDESK_HOME="$data_dir")
-if [ -n "${PHONEDESK_INSTALL_HOME:-}" ]; then
-  child_env+=(PHONEDESK_LAUNCH_AGENTS_DIR="$agents_dir" PHONEDESK_CLAUDE_DIR="${PHONEDESK_CLAUDE_DIR:-$home_dir/.claude}" PHONEDESK_CODEX_DIR="${PHONEDESK_CODEX_DIR:-$home_dir/.codex}")
+child_env=(NOOKDECK_HOME="$data_dir" PHONEDESK_HOME="$data_dir") # the second one is for a 0.1.x program, which only knows the old name
+if [ -n "${NOOKDECK_INSTALL_HOME:-}" ]; then
+  child_env+=(NOOKDECK_LAUNCH_AGENTS_DIR="$agents_dir" NOOKDECK_CLAUDE_DIR="${NOOKDECK_CLAUDE_DIR:-$home_dir/.claude}" NOOKDECK_CODEX_DIR="${NOOKDECK_CODEX_DIR:-$home_dir/.codex}")
 fi
 run_bin() { env "${child_env[@]}" "$@"; }
 
 # state carried between phases
+legacy_asset=0
 asset=""; base=""; tag=""; new_version=""; old_version=""; raw_sha=""
 up_to_date=0; already_running=0; svc_before=0
 bin_state="already set"; path_state="skipped"; svc_state="skipped"; path_how=""; path_rc_files=""
 
-ver_of() { printf '%s' "$1" | sed -n 's/^phonedesk \([^ ]*\).*/\1/p'; }
+ver_of() { printf '%s' "$1" | sed -nE 's/^(nookdeck|phonedesk) ([^ ]*).*/\2/p'; }
 
-# What the agent on a port says about itself ("phonedesk 0.1.1 (abc1234)"), empty when silent.
+# What the agent on a port says about itself ("nookdeck 0.1.1 (abc1234)"), empty when silent.
 agent_line() {
   local j v c d
   j="$(curl -fsS --max-time 2 "http://127.0.0.1:$1/api/about" 2>/dev/null)" || return 0
@@ -213,7 +214,7 @@ agent_line() {
   c="$(printf '%s' "$j" | sed -n 's/.*"commit"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
   d="$(printf '%s' "$j" | sed -n 's/.*"dirty"[[:space:]]*:[[:space:]]*\(true\).*/-dirty/p')"
   [ -n "$v" ] || return 0
-  if [ -n "$c" ]; then printf 'phonedesk %s (%s%s)' "$v" "$c" "$d"; else printf 'phonedesk %s' "$v"; fi
+  if [ -n "$c" ]; then printf 'nookdeck %s (%s%s)' "$v" "$c" "$d"; else printf 'nookdeck %s' "$v"; fi
 }
 
 # Who listens on a TCP port: "pid<TAB>command", empty when free (or lsof is missing).
@@ -239,17 +240,17 @@ detect_platform() {
       if [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || echo 0)" = 1 ]; then want=arm64; fi ;;
     *) fail "unsupported processor: $arch" ;;
   esac
-  asset="phonedesk-darwin-$want"
+  asset="nookdeck-darwin-$want"
   good "macOS on $arch ${C_DIM}→ $asset${C_OFF}"
 }
 
 # ================================================================ phase 2: resolve_release
 latest_tag() { # prints the newest release tag; retries the redirect, then the API; fails with what went wrong
-  local gh="${PHONEDESK_GITHUB_URL:-https://github.com}" api="${PHONEDESK_API_URL:-https://api.github.com}"
-  local gap="${PHONEDESK_RETRY_SECONDS:-2}" t="" why="" round scheme
+  local gh="${NOOKDECK_GITHUB_URL:-https://github.com}" api="${NOOKDECK_API_URL:-https://api.github.com}"
+  local gap="${NOOKDECK_RETRY_SECONDS:-2}" t="" why="" round scheme
   gh="${gh%/}"; api="${api%/}"
   scheme=(--proto '=https' --proto-redir '=https')
-  if [ -n "${PHONEDESK_GITHUB_URL:-}${PHONEDESK_API_URL:-}" ]; then scheme=(--proto '=http,https'); fi
+  if [ -n "${NOOKDECK_GITHUB_URL:-}${NOOKDECK_API_URL:-}" ]; then scheme=(--proto '=http,https'); fi
   for round in 1 2 3 4; do
     t="$(curl -fsSLI --retry 2 --retry-delay "$gap" --connect-timeout 15 "${scheme[@]}" -o /dev/null -w '%{url_effective}' "$gh/$REPO/releases/latest" 2>"$tmp/lookup.err" | sed -n 's#.*/tag/##p')" || t=""
     if [ -n "$t" ]; then printf '%s' "$t"; return 0; fi
@@ -264,21 +265,21 @@ latest_tag() { # prints the newest release tag; retries the redirect, then the A
 
 resolve_release() {
   stage 2 "Finding the release"
-  tmp="$(mktemp -d "${TMPDIR:-/tmp}/phonedesk-setup.XXXXXX")"
-  if [ -n "${PHONEDESK_RELEASE_BASE:-}" ]; then
-    base="${PHONEDESK_RELEASE_BASE%/}"; base_is_custom=1
-    good "using PHONEDESK_RELEASE_BASE ${C_DIM}($base)${C_OFF}"
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/nookdeck-setup.XXXXXX")"
+  if [ -n "${NOOKDECK_RELEASE_BASE:-}" ]; then
+    base="${NOOKDECK_RELEASE_BASE%/}"; base_is_custom=1
+    good "using NOOKDECK_RELEASE_BASE ${C_DIM}($base)${C_OFF}"
     return 0
   fi
-  local gh="${PHONEDESK_GITHUB_URL:-https://github.com}"
+  local gh="${NOOKDECK_GITHUB_URL:-https://github.com}"
   gh="${gh%/}"
-  if [ -n "${PHONEDESK_GITHUB_URL:-}" ]; then base_is_custom=1; fi
+  if [ -n "${NOOKDECK_GITHUB_URL:-}" ]; then base_is_custom=1; fi
   if [ -n "$version" ]; then
     tag="v$version"
   else
     have curl || fail "curl is missing" "It ships with macOS; check your PATH."
     # GitHub answers 5xx now and then; latest_tag retries and falls back to the API.
-    tag="$(latest_tag)" || fail "couldn't look up the latest release of $REPO" "$(cat "$tmp/lookup.why" 2>/dev/null) - check your connection and run it again, or pin a release with --version 0.1.1 (or PHONEDESK_VERSION=0.1.1)."
+    tag="$(latest_tag)" || fail "couldn't look up the latest release of $REPO" "$(cat "$tmp/lookup.why" 2>/dev/null) - check your connection and run it again, or pin a release with --version 0.1.1 (or NOOKDECK_VERSION=0.1.1)."
   fi
   base="$gh/$REPO/releases/download/$tag"
   good "using release $tag"
@@ -304,10 +305,16 @@ probe_installed() {
 fetch_binary() {
   stage 3 "Getting the program"
   http_get "$base/SHA256SUMS" "$tmp/SHA256SUMS" || fail "could not fetch $base/SHA256SUMS" "Check the release exists and that you are online."
+  # The latest release may still be a 0.1.x one (main is pushed before the new release has finished building): it lists
+  # phonedesk-* only. Take the nookdeck-* name when it is there, else the old one, and install it as the nookdeck program.
+  if ! sum_listed "$asset" "$tmp/SHA256SUMS" && sum_listed "phonedesk-${asset#nookdeck-}" "$tmp/SHA256SUMS"; then
+    asset="phonedesk-${asset#nookdeck-}"; legacy_asset=1
+    warn "this release is from before the rename ($asset); installing it as nookdeck. Run \`nookdeck update\` once Nookdeck 0.2 is out."
+  fi
   probe_installed
   if [ "$up_to_date" = 1 ]; then
     new_version="$old_version"
-    good "PhoneDesk $(ver_of "$old_version") is up to date ${C_DIM}(checksum verified), skipping the download${C_OFF}"
+    good "Nookdeck $(ver_of "$old_version") is up to date ${C_DIM}(checksum verified), skipping the download${C_OFF}"
     return 0
   fi
   # Releases carry a gzip of each binary (about a third of the size); older ones only the plain file.
@@ -345,7 +352,29 @@ verify_binary() {
   fi
   new_version="$("$tmp/$asset" --version 2>/dev/null | head -n1)" || new_version=""
   [ -n "$new_version" ] || fail "the downloaded program does not run on this Mac" "It printed no version."
+  if [ "$legacy_asset" = 1 ]; then new_version="nookdeck ${new_version#phonedesk }"; fi
   good "$new_version"
+}
+
+# PhoneDesk 0.1.x became Nookdeck: an existing ~/.phonedesk is handed to the program's own migration (copies the data and leaves a link,
+# replaces the launchd job, re-points the Claude/Codex hooks, installs the phonedesk alias). It keeps the old folder and is safe to repeat.
+legacy_handover() {
+  local old="$home_dir/.phonedesk"
+  [ -d "$old" ] && [ ! -L "$old" ] && [ ! -e "$data_dir" ] || return 0
+  if [ "$legacy_asset" = 1 ]; then
+    # a 0.1.x program has no `migrate`: copy the data here (the old folder stays) and tell it to use the new place
+    say "found an existing PhoneDesk install ($old): copying its data to $data_dir"
+    cp -Rp "$old" "$data_dir" || { rm -rf "$data_dir"; warn "could not copy $old; your PhoneDesk data is untouched"; return 0; }
+    return 0
+  fi
+  say "found an existing PhoneDesk install ($old): moving it to Nookdeck"
+  # the old agent must let go of its files first
+  if [ -f "$old/agent.pid" ]; then
+    local op; op="$(cat "$old/agent.pid" 2>/dev/null || true)"
+    case "$op" in ''|*[!0-9]*) ;; *) kill "$op" 2>/dev/null || true; sleep 1 ;; esac
+  fi
+  if run_bin "$tmp/$asset" migrate --port "$port"; then good "your PhoneDesk data, login service and hooks were moved to Nookdeck"
+  else warn "the migration reported a problem; your PhoneDesk data is untouched in $old"; fi
 }
 
 # ================================================================ phase 4: place_binary
@@ -356,14 +385,15 @@ place_binary() {
   if [ "$up_to_date" = 0 ] && [ -n "$old_version" ]; then say "upgrading from $old_version"; fi
   if [ "$dry" = 1 ]; then
     warn "dry run: nothing was installed, started or changed"
-    if [ "$autostart" = 1 ]; then say "would register the launchd service dev.phonedesk.agent (starts at login)"; fi
-    say "would start PhoneDesk on port $port and open http://localhost:$port/manage/"
+    if [ "$autostart" = 1 ]; then say "would register the launchd service dev.nookdeck.agent (starts at login)"; fi
+    say "would start Nookdeck on port $port and open http://localhost:$port/manage/"
     exit 0
   fi
   if [ -f "$plist" ]; then svc_before=1; fi
   if [ "$up_to_date" = 1 ]; then bin_state="already set"; return 0; fi
-  ask "Install PhoneDesk to $bin?" y || fail "cancelled" "Nothing was installed."
+  ask "Install Nookdeck to $bin?" y || fail "cancelled" "Nothing was installed."
   if [ -n "$old_version" ]; then bin_state="updated ($(ver_of "$old_version") -> $(ver_of "$new_version"))"; else bin_state=installed; fi
+  legacy_handover
   # let go of the old file: stop the login service first, then an agent we started by hand
   if [ -x "$bin" ]; then run_bin "$bin" service uninstall >/dev/null 2>&1 || true; fi
   if [ -f "$pidfile" ]; then
@@ -374,24 +404,24 @@ place_binary() {
   fi
   mkdir -p "$bin_dir" "$log_dir"
   chmod 700 "$data_dir" 2>/dev/null || true
-  cp "$tmp/$asset" "$bin_dir/.phonedesk.new"
-  chmod 755 "$bin_dir/.phonedesk.new"
-  mv -f "$bin_dir/.phonedesk.new" "$bin" # same volume: the swap is atomic
+  cp "$tmp/$asset" "$bin_dir/.nookdeck.new"
+  chmod 755 "$bin_dir/.nookdeck.new"
+  mv -f "$bin_dir/.nookdeck.new" "$bin" # same volume: the swap is atomic
   printf 'raw=%s installed=%s\n' "$raw_sha" "$(hash_file "$bin")" >"$marker"
   good "installed $new_version"
 }
 
 # ================================================================ phase 4b: link_cli
-RC_LINE='export PATH="$HOME/.phonedesk/bin:$PATH" # phonedesk'
+RC_LINE='export PATH="$HOME/.nookdeck/bin:$PATH" # nookdeck'
 link_cli() {
   if [ "$add_path" = 0 ]; then return 0; fi
   local lb="$home_dir/.local/bin" cur f shell_name files=()
   case ":$PATH:" in
     *":$lb:"*)
-      if [ -d "$lb" ] && { [ ! -e "$lb/phonedesk" ] || [ -L "$lb/phonedesk" ]; }; then
-        cur="$(readlink "$lb/phonedesk" 2>/dev/null || true)"
-        if [ "$cur" = "$bin" ]; then say "phonedesk is already on PATH ($lb/phonedesk)"; path_state=already
-        else ln -sf "$bin" "$lb/phonedesk"; good "phonedesk is on PATH ${C_DIM}($lb/phonedesk $G_ARROW $bin)${C_OFF}"; path_state=installed; fi
+      if [ -d "$lb" ] && { [ ! -e "$lb/nookdeck" ] || [ -L "$lb/nookdeck" ]; }; then
+        cur="$(readlink "$lb/nookdeck" 2>/dev/null || true)"
+        if [ "$cur" = "$bin" ]; then say "nookdeck is already on PATH ($lb/nookdeck)"; path_state=already
+        else ln -sf "$bin" "$lb/nookdeck"; good "nookdeck is on PATH ${C_DIM}($lb/nookdeck $G_ARROW $bin)${C_OFF}"; path_state=installed; fi
         path_how=symlink; return 0
       fi ;;
   esac
@@ -403,8 +433,8 @@ link_cli() {
   fi
   path_state=already
   for f in "${files[@]}"; do
-    if grep -F '# phonedesk' "$f" 2>/dev/null | grep -qF '.phonedesk/bin'; then
-      say "phonedesk is already on PATH ($f has the line)"
+    if grep -F '# nookdeck' "$f" 2>/dev/null | grep -qF '.nookdeck/bin'; then
+      say "nookdeck is already on PATH ($f has the line)"
     else
       if [ -s "$f" ] && [ "$(tail -c1 "$f" | wc -l | tr -d ' ')" = 0 ]; then printf '\n' >>"$f"; fi
       printf '%s\n' "$RC_LINE" >>"$f"
@@ -422,7 +452,7 @@ service_current() {
   [ "$(sed -n 's/^svc=//p' "$marker" 2>/dev/null)" = "$(hash_file "$plist")" ] || return 1
   if [ "$port" = 7420 ]; then ! grep -qF '<string>--port</string>' "$plist"
   else grep -F -A1 '<string>--port</string>' "$plist" | grep -qF "<string>$port</string>"; fi || return 1
-  "${PHONEDESK_LAUNCHCTL:-launchctl}" print "gui/$(id -u)/dev.phonedesk.agent" >/dev/null 2>&1
+  "${NOOKDECK_LAUNCHCTL:-launchctl}" print "gui/$(id -u)/dev.nookdeck.agent" >/dev/null 2>&1
 }
 remember_service() {
   [ -f "$plist" ] && [ -f "$marker" ] || return 0
@@ -448,7 +478,7 @@ wire_service() {
   local keep=0
   if [ "$autostart" = 1 ] && [ "$up_to_date" = 1 ] && service_current; then keep=1; fi
   if [ "$autostart" = 1 ] && [ "$keep" = 0 ]; then
-    ask "Start PhoneDesk automatically when you log in?" y || autostart=0
+    ask "Start Nookdeck automatically when you log in?" y || autostart=0
   fi
   if [ "$start" = 1 ]; then preflight_port; fi
   if [ "$autostart" = 1 ] && [ "$keep" = 1 ]; then
@@ -471,7 +501,7 @@ wire_service() {
 
 # ================================================================ phase 6: launch
 launch() {
-  stage 6 "Starting PhoneDesk"
+  stage 6 "Starting Nookdeck"
   if [ "$start" = 0 ]; then say "not started (--no-start). Start it with: $bin"; return 0; fi
   if [ "$autostart" = 0 ] && [ "$already_running" = 0 ]; then
     # exec keeps a single process, so the pid saved here is the agent's own and a later upgrade can stop it
@@ -484,7 +514,7 @@ launch() {
     if pairing="$(curl -fsS --max-time 2 "http://127.0.0.1:$port/api/pairing" 2>/dev/null)"; then break; fi
     pairing=""; sleep 0.5
   done
-  [ -n "$pairing" ] || fail "PhoneDesk did not answer on port $port" "See $log_dir/agent.err.log"
+  [ -n "$pairing" ] || fail "Nookdeck did not answer on port $port" "See $log_dir/agent.err.log"
   # the answer could come from ANOTHER process on that port: it must be the build installed a moment ago
   local seen=""
   for n in $(seq 1 20); do
@@ -493,7 +523,7 @@ launch() {
     sleep 0.5
   done
   if [ "$seen" != "$new_version" ]; then
-    fail "the agent on port $port is not the one just installed" "It reports \"${seen:-nothing}\" but we installed \"$new_version\". Another PhoneDesk probably owns the port: stop it, or use --port. Last log lines ($log_dir/agent.err.log):
+    fail "the agent on port $port is not the one just installed" "It reports \"${seen:-nothing}\" but we installed \"$new_version\". Another Nookdeck probably owns the port: stop it, or use --port. Last log lines ($log_dir/agent.err.log):
 $(tail -n 8 "$log_dir/agent.err.log" 2>/dev/null | sed 's/^/      /' || true)"
   fi
   good "agent is up on port $port"
@@ -503,7 +533,7 @@ $(tail -n 8 "$log_dir/agent.err.log" 2>/dev/null | sed 's/^/      /' || true)"
 pairing=""
 summary() {
   local pin url url_local
-  printf '\n%s  ── PhoneDesk ─────────────────────────%s\n' "$C_BRAND" "$C_OFF"
+  printf '\n%s  ── Nookdeck ─────────────────────────%s\n' "$C_BRAND" "$C_OFF"
   printf '  %-9s %s\n' Program "$bin_state" PATH "${path_state/already/already set}" Service "$svc_state"
   if [ "$start" = 1 ] && [ -n "$pairing" ]; then
     pin="$(printf '%s' "$pairing" | sed -n 's/.*"pin"[[:space:]]*:[[:space:]]*"\{0,1\}\([0-9]*\)"\{0,1\}.*/\1/p')"
@@ -513,7 +543,7 @@ summary() {
     printf '%s  ───────────────────────────────────────%s\n' "$C_BRAND" "$C_OFF"
     if [ -t 1 ] && [ -n "$pin" ] && [ -n "$url" ]; then printf '\n'; "$bin" qr "${url_local:-$url}" 2>/dev/null || true; fi
     say "On a phone on the same Wi-Fi, open the Phone address and type the PIN (or scan the code)."
-    if [ "$open_page" = 1 ] && have open && [ -z "${PHONEDESK_INSTALL_HOME:-}" ] && ! { [ "$up_to_date" = 1 ] && [ "$already_running" = 1 ]; }; then
+    if [ "$open_page" = 1 ] && have open && [ -z "${NOOKDECK_INSTALL_HOME:-}" ] && ! { [ "$up_to_date" = 1 ] && [ "$already_running" = 1 ]; }; then
       if ask "Open the manage page now?" y; then open "http://localhost:$port/manage/" >/dev/null 2>&1 || true; fi
     fi
   else
@@ -521,10 +551,10 @@ summary() {
   fi
   if [ "$add_path" = 1 ] && [ "$path_how" = rc ] && [ "$path_state" = installed ]; then
     local rc="${path_rc_files# }"; rc="${rc%% *}"
-    say "New terminal windows will find phonedesk; try: phonedesk doctor"
-    say "This window: source ${rc/#$home_dir/~}   (or: export PATH=\"\$HOME/.phonedesk/bin:\$PATH\")"
+    say "New terminal windows will find nookdeck; try: nookdeck doctor"
+    say "This window: source ${rc/#$home_dir/~}   (or: export PATH=\"\$HOME/.nookdeck/bin:\$PATH\")"
   elif [ "$add_path" = 1 ] && [ -n "$path_how" ]; then
-    say "Try: phonedesk doctor   (phonedesk is on your PATH)"
+    say "Try: nookdeck doctor   (nookdeck is on your PATH)"
   else
     say "Try: $bin doctor"
   fi

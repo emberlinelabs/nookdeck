@@ -1,7 +1,7 @@
 export const ZH_SCREENS: Record<string, string> = {
   "iOS Shortcuts": "iOS 快捷指令",
   "Rounded color tiles": "圆角色块磁贴",
-  "PhoneDesk cyan": "PhoneDesk 青色",
+  "Nookdeck cyan": "Nookdeck 青色",
   "Violet": "紫罗兰",
   "The former default": "原默认主题",
   "Default": "默认",

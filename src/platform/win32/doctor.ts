@@ -14,7 +14,7 @@ export const firewallArgv = (exe: string) =>
   PS(`"profile=$((Get-NetFirewallProfile -Profile Private).Enabled)"; Get-NetFirewallApplicationFilter -Program ${q(exe)} -ErrorAction SilentlyContinue | Get-NetFirewallRule | ForEach-Object { "rule=$($_.DisplayName);enabled=$($_.Enabled);action=$($_.Action);dir=$($_.Direction);profile=$($_.Profile)" }`);
 /** The network profile of each active connection: Public networks block incoming connections whatever the rules say. */
 export const networkArgv = () => PS(`Get-NetConnectionProfile | ForEach-Object { "net=$($_.Name);category=$($_.NetworkCategory)" }`);
-export const taskArgv = () => ["schtasks", "/Query", "/TN", "PhoneDesk", "/FO", "LIST"];
+export const taskArgv = () => ["schtasks", "/Query", "/TN", "Nookdeck", "/FO", "LIST"];
 
 export const WIN_PANES = {
   firewall: "windowsdefender://network",
@@ -36,7 +36,7 @@ export async function signature(p: Probes): Promise<DoctorItem> {
   const r = await p.run(signatureArgv(p.exe));
   const kv = parseKv(r.out);
   if (kv.status === "Valid") return { id: "signature", title, status: "ok", detail: t("signed by {who}", { who: kv.subject || "?" }) };
-  if (kv.status === "NotSigned") return { id: "signature", title, status: "ok", detail: t("not signed: Windows SmartScreen may warn the first time it runs"), fix: { text: t("If SmartScreen blocks it, choose More info > Run anyway, or run `Unblock-File` on phonedesk.exe in PowerShell.") } };
+  if (kv.status === "NotSigned") return { id: "signature", title, status: "ok", detail: t("not signed: Windows SmartScreen may warn the first time it runs"), fix: { text: t("If SmartScreen blocks it, choose More info > Run anyway, or run `Unblock-File` on nookdeck.exe in PowerShell.") } };
   return { id: "signature", title, status: "unknown", detail: t("not signed or unreadable ({exe})", { exe: p.exe }) };
 }
 
@@ -44,9 +44,9 @@ export async function smartscreen(p: Probes): Promise<DoctorItem> {
   const title = t("SmartScreen (downloaded file mark)");
   const r = await p.run(motwArgv(p.exe));
   if (parseKv(r.out).motw === "yes") {
-    return { id: "smartscreen", title, status: "missing", detail: t("phonedesk.exe carries the downloaded-from-the-internet mark: Windows may warn each time it starts"), fix: { text: t("Run `Unblock-File` on phonedesk.exe in PowerShell (the installer does this for you)."), settingsUrl: WIN_PANES.smartscreen } };
+    return { id: "smartscreen", title, status: "missing", detail: t("nookdeck.exe carries the downloaded-from-the-internet mark: Windows may warn each time it starts"), fix: { text: t("Run `Unblock-File` on nookdeck.exe in PowerShell (the installer does this for you)."), settingsUrl: WIN_PANES.smartscreen } };
   }
-  return { id: "smartscreen", title, status: "ok", detail: t("no downloaded-file mark on phonedesk.exe") };
+  return { id: "smartscreen", title, status: "ok", detail: t("no downloaded-file mark on nookdeck.exe") };
 }
 
 export async function firewall(p: Probes): Promise<DoctorItem> {
@@ -58,13 +58,13 @@ export async function firewall(p: Probes): Promise<DoctorItem> {
   const rules = r.out.split(/\r?\n/).filter((l) => l.startsWith("rule=")).map((l) => parseKv(l.replace(/;/g, "\n").replace(/^rule=/, "rule=")));
   const inbound = rules.filter((x) => /inbound|^1$/i.test(x.dir ?? "") && /^true$/i.test(x.enabled ?? ""));
   if (inbound.some((x) => /block|^4$/i.test(x.action ?? ""))) {
-    return { id: "firewall", title, status: "denied", detail: t("blocked by a firewall BLOCK rule for phonedesk.exe (Windows creates it when its first-run popup is not answered): phones cannot connect"), fix: { text: t("Run as administrator: netsh advfirewall firewall delete rule name=all program=\"{exe}\" & netsh advfirewall firewall add rule name=\"PhoneDesk\" dir=in action=allow program=\"{exe}\" profile=any remoteip=localsubnet", { exe: p.exe }), settingsUrl: WIN_PANES.firewall } };
+    return { id: "firewall", title, status: "denied", detail: t("blocked by a firewall BLOCK rule for nookdeck.exe (Windows creates it when its first-run popup is not answered): phones cannot connect"), fix: { text: t("Run as administrator: netsh advfirewall firewall delete rule name=all program=\"{exe}\" & netsh advfirewall firewall add rule name=\"Nookdeck\" dir=in action=allow program=\"{exe}\" profile=any remoteip=localsubnet", { exe: p.exe }), settingsUrl: WIN_PANES.firewall } };
   }
-  if (inbound.some((x) => /allow|^2$/i.test(x.action ?? ""))) return { id: "firewall", title, status: "ok", detail: t("the firewall is on and allows incoming connections to phonedesk") };
+  if (inbound.some((x) => /allow|^2$/i.test(x.action ?? ""))) return { id: "firewall", title, status: "ok", detail: t("the firewall is on and allows incoming connections to nookdeck") };
   return {
     id: "firewall", title, status: "missing",
-    detail: t("the firewall is on and has no rule for phonedesk: phones on your network cannot connect until it is allowed"),
-    fix: { text: t("Click Allow when Windows asks, or run as administrator: netsh advfirewall firewall add rule name=\"PhoneDesk\" dir=in action=allow program=\"{exe}\" profile=any remoteip=localsubnet", { exe: p.exe }), settingsUrl: WIN_PANES.firewall },
+    detail: t("the firewall is on and has no rule for nookdeck: phones on your network cannot connect until it is allowed"),
+    fix: { text: t("Click Allow when Windows asks, or run as administrator: netsh advfirewall firewall add rule name=\"Nookdeck\" dir=in action=allow program=\"{exe}\" profile=any remoteip=localsubnet", { exe: p.exe }), settingsUrl: WIN_PANES.firewall },
   };
 }
 
@@ -90,7 +90,7 @@ export function desktopSession(p: Probes): DoctorItem {
   if (station !== null && station !== "WinSta0") {
     return {
       id: "desktop-session", title, status: "missing", detail: t("not running on the signed-in desktop ({station}): key presses, typing, Now Playing and volume will not work", { station }),
-      fix: { text: t("Start PhoneDesk from your own desktop session: `phonedesk service install` does that at logon.") },
+      fix: { text: t("Start Nookdeck from your own desktop session: `nookdeck service install` does that at logon.") },
     };
   }
   return { id: "desktop-session", title, status: "ok", detail: t("key presses and typing work (last input {n} s ago)", { n: Math.round(idle ?? 0) }) };
@@ -101,16 +101,16 @@ export async function helper(p: Probes): Promise<DoctorItem> {
   const ok = await p.helperPing();
   return ok
     ? { id: "helper", title, status: "ok", detail: t("running: media, volume, app icons and the process list work") }
-    : { id: "helper", title, status: "missing", detail: t("the helper did not answer: Now Playing, volume, app icons and processes will not work"), fix: { text: t("Check that Windows PowerShell 5.1 (powershell.exe) can run scripts for your user, then restart PhoneDesk.") } };
+    : { id: "helper", title, status: "missing", detail: t("the helper did not answer: Now Playing, volume, app icons and processes will not work"), fix: { text: t("Check that Windows PowerShell 5.1 (powershell.exe) can run scripts for your user, then restart Nookdeck.") } };
 }
 
 export async function startup(p: Probes): Promise<DoctorItem> {
   const title = t("Background service");
-  if (p.asService) return { id: "service", title, status: "ok", detail: t("started by the PhoneDesk scheduled task at logon") };
+  if (p.asService) return { id: "service", title, status: "ok", detail: t("started by the Nookdeck scheduled task at logon") };
   const r = await p.run(taskArgv());
   return /Status:/i.test(r.out) && r.code === 0
-    ? { id: "service", title, status: "ok", detail: t("the PhoneDesk scheduled task exists (this copy was started by hand)") }
-    : { id: "service", title, status: "n/a", detail: t("not set to start at logon"), fix: { text: t("Run `phonedesk service install` to start PhoneDesk at logon.") } };
+    ? { id: "service", title, status: "ok", detail: t("the Nookdeck scheduled task exists (this copy was started by hand)") }
+    : { id: "service", title, status: "n/a", detail: t("not set to start at logon"), fix: { text: t("Run `nookdeck service install` to start Nookdeck at logon.") } };
 }
 
 export async function claudeSignIn(p: Probes, ctx: DoctorCtx): Promise<DoctorItem> {

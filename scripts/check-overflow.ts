@@ -51,7 +51,7 @@ try {
   }
 } finally {
   await browser.close();
-  await fetch(B + "/api/devices/" + r.deviceId, { method: "DELETE", headers: { "x-phonedesk": "1", "content-type": "application/json" } });
+  await fetch(B + "/api/devices/" + r.deviceId, { method: "DELETE", headers: { "x-nookdeck": "1", "content-type": "application/json" } });
 }
 for (const f of all) console.log(`${f.size} | ${f.page} | #${f.tile} ${f.w}x${f.h} "${f.label}" | ${f.issues.join(" ; ")}`);
 console.log("TOTAL", all.length);

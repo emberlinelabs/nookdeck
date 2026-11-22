@@ -18,8 +18,8 @@ export async function handleMessage(api: AgentApi, msg: Msg): Promise<object | u
       return ok({
         protocolVersion: SUPPORTED.includes(want) ? want : SUPPORTED[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: "phonedesk", version: VERSION },
-        instructions: "Arrange the PhoneDesk deck. Call get_layout first, use preview_changes before saving, and undo reverts the last change.",
+        serverInfo: { name: "nookdeck", version: VERSION },
+        instructions: "Arrange the Nookdeck deck. Call get_layout first, use preview_changes before saving, and undo reverts the last change.",
       });
     }
     case "ping": return ok({});
@@ -52,7 +52,7 @@ export async function runMcp(opts: { port: number; input?: ReadableStream<Uint8A
       const out = await handleMessage(api, msg);
       if (out) write(JSON.stringify(out));
     } catch (e: any) {
-      console.error("phonedesk mcp:", e);
+      console.error("nookdeck mcp:", e);
       write(JSON.stringify(rpcErr(msg?.id, -32603, e?.message ?? "internal error")));
     }
   };

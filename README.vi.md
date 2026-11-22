@@ -1,26 +1,30 @@
 <p align="center">
-  <img src="docs/brand/phonedesk-mark.svg" alt="PhoneDesk logo" width="112" height="112">
+  <img src="docs/brand/nookdeck-mark.svg" alt="Nookdeck logo" width="112" height="112">
 </p>
 
-<h1 align="center">PhoneDesk</h1>
+<h1 align="center">Nookdeck</h1>
 
 <p align="center"><b>Điện thoại cũ thành bảng điều khiển cho máy tính.</b></p>
 
+<p align="center"><sub>Trước đây là PhoneDesk. Bản cài sẵn tự động chuyển sang tên mới khi cập nhật.</sub></p>
+
 <p align="center">
-  <a href="https://github.com/howznguyen/phonedesk/releases"><img alt="Release" src="https://img.shields.io/github/v/release/howznguyen/phonedesk?color=22d3ee&label=release"></a>
+  <a href="https://github.com/howznguyen/nookdeck/releases"><img alt="Release" src="https://img.shields.io/github/v/release/howznguyen/nookdeck?color=22d3ee&label=release"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-22d3ee"></a>
   <img alt="macOS and Windows" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows-0b0d10">
 </p>
 
 <p align="center"><a href="README.md">English</a> · <b>Tiếng Việt</b> · <a href="README.zh.md">中文</a></p>
 
-Biến điện thoại hoặc máy tính bảng cũ thành bảng điều khiển kiểu Stream Deck và màn hình theo dõi cho Mac hoặc PC Windows. PhoneDesk
+<p align="center"><a href="https://nookdeck.app">nookdeck.app</a></p>
+
+Biến điện thoại hoặc máy tính bảng cũ thành bảng điều khiển kiểu Stream Deck và màn hình theo dõi cho Mac hoặc PC Windows. Nookdeck
 là một agent nhỏ chạy trên máy tính, phục vụ giao diện cảm ứng cho trình duyệt bất kỳ trong cùng mạng Wi-Fi. Không cần
 cài app trên điện thoại, không cần tài khoản hay dịch vụ đám mây.
 
 > **Trạng thái:** bản đầu (0.x). Hỗ trợ chính là macOS, Windows đang thử nghiệm. Binary chưa ký bằng Developer ID và chưa notarize: xem [Cài đặt](#cài-đặt).
 
-<p align="center"><img src="docs/images/promo-hero.png" alt="PhoneDesk: điện thoại cũ thành bảng điều khiển cho máy tính"></p>
+<p align="center"><img src="docs/images/promo-hero.png" alt="Nookdeck: điện thoại cũ thành bảng điều khiển cho máy tính"></p>
 
 ## Làm được gì
 
@@ -74,7 +78,7 @@ Wi-Fi**. Không cần cài gì trên điện thoại. Mất khoảng 2 phút.
 2. Sao chép dòng dưới, dán vào Terminal, bấm <kbd>Return</kbd>:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/howznguyen/phonedesk/main/setup.sh | bash
+curl -fsSL https://nookdeck.app/scripts/install | bash
 ```
 
 **Trên Windows** (thử nghiệm)
@@ -83,13 +87,15 @@ curl -fsSL https://raw.githubusercontent.com/howznguyen/phonedesk/main/setup.sh 
 2. Sao chép dòng dưới, dán vào PowerShell, bấm <kbd>Enter</kbd>:
 
 ```powershell
-irm https://raw.githubusercontent.com/howznguyen/phonedesk/main/setup.ps1 | iex
+irm https://nookdeck.app/scripts/install.ps1 | iex
 ```
 
-Bạn sẽ thấy thanh tải, rồi vài dòng `OK`. Cuối cùng PhoneDesk in ra một **mã QR**, một **địa chỉ cho điện thoại**
+Liên kết trực tiếp, nếu mạng của bạn chặn `nookdeck.app`: thay `https://nookdeck.app/scripts/install` bằng `https://raw.githubusercontent.com/howznguyen/nookdeck/main/setup.sh` (Windows: `https://raw.githubusercontent.com/howznguyen/nookdeck/main/setup.ps1`).
+
+Bạn sẽ thấy thanh tải, rồi vài dòng `OK`. Cuối cùng Nookdeck in ra một **mã QR**, một **địa chỉ cho điện thoại**
 (ví dụ `http://may-cua-ban.local:7420`) và một **mã PIN 6 số**. Để nguyên cửa sổ đó cho bước sau.
 
-Từ giờ PhoneDesk tự chạy mỗi khi bạn đăng nhập, và lệnh `phonedesk` dùng được trong mọi cửa sổ terminal mới.
+Từ giờ Nookdeck tự chạy mỗi khi bạn đăng nhập, và lệnh `nookdeck` dùng được trong mọi cửa sổ terminal mới.
 
 ### 2. Mở trên điện thoại
 
@@ -121,39 +127,39 @@ rồi bấm **Save**. Điện thoại cập nhật ngay.
 </table>
 
 Lần đầu một phím gửi phím tắt, macOS sẽ hỏi quyền **Trợ năng (Accessibility)**: hãy cho phép (Cài đặt hệ thống → Quyền riêng
-tư & Bảo mật → Trợ năng). Windows hỏi một lần cho PhoneDesk dùng mạng: hãy cho phép.
+tư & Bảo mật → Trợ năng). Windows hỏi một lần cho Nookdeck dùng mạng: hãy cho phép.
 
 ### Gặp trục trặc?
 
 | Vấn đề | Cách xử lý |
 |---|---|
-| Điện thoại không mở được địa chỉ | Kiểm tra điện thoại và máy tính dùng **chung Wi-Fi**. Trên Windows, cho phép PhoneDesk khi tường lửa hỏi. Thử địa chỉ dạng số mà bộ cài in ra (`http://192.168…:7420`). |
+| Điện thoại không mở được địa chỉ | Kiểm tra điện thoại và máy tính dùng **chung Wi-Fi**. Trên Windows, cho phép Nookdeck khi tường lửa hỏi. Thử địa chỉ dạng số mà bộ cài in ra (`http://192.168…:7420`). |
 | `could not reach GitHub` hoặc `error: 503` | GitHub trục trặc tạm thời. Chờ vài giây rồi chạy lại đúng dòng lệnh đó. |
 | Tải chậm | File khoảng 20 MB (Windows 40 MB). Cứ để chạy, thanh tải cho thấy tiến độ. |
-| `phonedesk: command not found` | Mở một cửa sổ terminal **mới**. |
-| Bấm phím trên Mac không có tác dụng | Cho phép **Trợ năng** cho PhoneDesk, rồi chạy `phonedesk doctor` để xem còn thiếu gì. |
-| Phím ngừng hoạt động sau khi cập nhật | macOS gắn quyền Trợ năng với từng bản build. Vào trang quản lý, tab **Permissions**, bấm **Đặt lại và hỏi lại** (hoặc chạy `phonedesk doctor --request accessibility --reset`) rồi bật phonedesk. |
+| `nookdeck: command not found` | Mở một cửa sổ terminal **mới**. |
+| Bấm phím trên Mac không có tác dụng | Cho phép **Trợ năng** cho Nookdeck, rồi chạy `nookdeck doctor` để xem còn thiếu gì. |
+| Phím ngừng hoạt động sau khi cập nhật | macOS gắn quyền Trợ năng với từng bản build. Vào trang quản lý, tab **Permissions**, bấm **Đặt lại và hỏi lại** (hoặc chạy `nookdeck doctor --request accessibility --reset`) rồi bật nookdeck. |
 | Điện thoại cũ không mở được địa chỉ `.local` | Dùng địa chỉ IP mà bộ cài in ra, và đặt IP cố định cho máy tính trong router để IP không đổi. |
 | `port 7420 is in use` | Có chương trình khác đang dùng cổng đó. Chạy lại bộ cài với `--port 7421` (Mac: `… \| bash -s -- --port 7421`). |
 
 ### Cập nhật hoặc gỡ
 
 - **Cập nhật:** chạy lại đúng dòng lệnh cài. Layout và điện thoại đã ghép đôi vẫn giữ nguyên.
-- **Gỡ (Mac):** `curl -fsSL https://raw.githubusercontent.com/howznguyen/phonedesk/main/uninstall.sh | bash`. Dữ liệu được giữ lại; thêm `-s -- --purge` sau `bash` để xóa luôn.
-- **Gỡ (Windows):** `irm https://raw.githubusercontent.com/howznguyen/phonedesk/main/uninstall.ps1 | iex`.
+- **Gỡ (Mac):** `curl -fsSL https://nookdeck.app/scripts/uninstall | bash`. Dữ liệu được giữ lại; thêm `-s -- --purge` sau `bash` để xóa luôn.
+- **Gỡ (Windows):** `irm https://nookdeck.app/scripts/uninstall.ps1 | iex`.
 
 <details>
 <summary>Tùy chọn khác và chi tiết bộ cài</summary>
 
-- Bộ cài tải đúng file từ [bản phát hành mới nhất](https://github.com/howznguyen/phonedesk/releases/latest), kiểm tra SHA-256
+- Bộ cài tải đúng file từ [bản phát hành mới nhất](https://github.com/howznguyen/nookdeck/releases/latest), kiểm tra SHA-256
   với `SHA256SUMS` (sai là dừng), cài cho riêng người dùng của bạn (không cần `sudo` hay quyền quản trị), tự chạy khi đăng
   nhập (launchd trên macOS, Task Scheduler trên Windows) và thêm vào PATH.
 - Tùy chọn trên Mac đặt sau `bash -s --`: `--yes` (không hỏi), `--version 0.1.1`, `--port 7421`, `--no-autostart`,
   `--no-open`, `--no-path`, `--dry-run`. Trên Windows đặt biến môi trường trước dòng lệnh, ví dụ
-  `$env:PHONEDESK_PORT=7421; irm … | iex` (xem đầu file [setup.ps1](setup.ps1)).
-- Vị trí file: chương trình ở `~/.phonedesk/bin/phonedesk` (macOS) và `%LOCALAPPDATA%\PhoneDesk\bin\phonedesk.exe` (Windows);
-  dữ liệu ở `~/.phonedesk`; log ở `~/.phonedesk/logs`.
-- Dịch vụ nền: `phonedesk service install|uninstall|status|restart`.
+  `$env:NOOKDECK_PORT=7421; irm … | iex` (xem đầu file [setup.ps1](setup.ps1)).
+- Vị trí file: chương trình ở `~/.nookdeck/bin/nookdeck` (macOS) và `%LOCALAPPDATA%\Nookdeck\bin\nookdeck.exe` (Windows);
+  dữ liệu ở `~/.nookdeck`; log ở `~/.nookdeck/logs`.
+- Dịch vụ nền: `nookdeck service install|uninstall|status|restart`.
 - Chữ ký: file thực thi chỉ ký ad-hoc, chưa có Apple Developer ID hay chứng chỉ Windows. Bộ cài đã xử lý chuyện này; nếu tự tải
   bằng trình duyệt thì trên macOS cần `xattr -d com.apple.quarantine <file>`, trên Windows chọn "More info → Run anyway".
 - Lỗi đã biết trên Windows: phím gõ chữ có thể ra sai ký tự. Mở app, phím tắt, media và âm lượng vẫn chạy bình thường.
@@ -167,10 +173,10 @@ Yêu cầu: macOS 13 trở lên (Apple silicon hoặc Intel), hoặc Windows 10/
 Từ mã nguồn (cần [Bun](https://bun.sh) 1.3+):
 
 ```sh
-git clone https://github.com/howznguyen/phonedesk && cd phonedesk
+git clone https://github.com/howznguyen/nookdeck && cd nookdeck
 bun install
-bun run build          # build web và dist/phonedesk
-./dist/phonedesk       # in ra địa chỉ cho điện thoại và mã PIN ghép đôi
+bun run build          # build web và dist/nookdeck
+./dist/nookdeck       # in ra địa chỉ cho điện thoại và mã PIN ghép đôi
 ```
 
 Mở địa chỉ đó trên điện thoại (cùng Wi-Fi), nhập PIN, rồi thêm trang vào màn hình chính để chạy toàn màn hình. Trang
@@ -189,12 +195,12 @@ Trong **Quản lý › AI** có hai công tắc riêng, cài hook vào `~/.claud
 Nếu điện thoại không trả lời kịp, Claude Code hỏi trong terminal như bình thường. Với Codex, hook hỏi quyền được cài
 vào `~/.codex/hooks.json`.
 
-Quota chỉ đọc: PhoneDesk đọc phiên đăng nhập Claude Code đã lưu sẵn (không bao giờ làm mới), file session cục bộ của
+Quota chỉ đọc: Nookdeck đọc phiên đăng nhập Claude Code đã lưu sẵn (không bao giờ làm mới), file session cục bộ của
 Codex và server cục bộ của Antigravity. Mọi kết nối ra ngoài được liệt kê trong [PRIVACY.md](PRIVACY.md).
 
 ## Quyền macOS
 
-macOS gắn mỗi quyền với chương trình đang xin quyền. Khi chạy dịch vụ nền đó là file `phonedesk`; khi chạy từ Terminal đó là ứng dụng Terminal. Chạy `phonedesk doctor` để xem quyền nào đã cấp (lệnh hỏi chính agent đang chạy, tự nó không hiện hộp thoại nào):
+macOS gắn mỗi quyền với chương trình đang xin quyền. Khi chạy dịch vụ nền đó là file `nookdeck`; khi chạy từ Terminal đó là ứng dụng Terminal. Chạy `nookdeck doctor` để xem quyền nào đã cấp (lệnh hỏi chính agent đang chạy, tự nó không hiện hộp thoại nào):
 
 | Quyền | Dùng cho | Ở đâu |
 |---|---|---|
@@ -205,38 +211,38 @@ macOS gắn mỗi quyền với chương trình đang xin quyền. Khi chạy d�
 | Tường lửa | điện thoại kết nối vào agent | Mạng > Tường lửa > Tùy chọn |
 
 ```bash
-phonedesk doctor                          # ✓ / ✗ từng mục, kèm cách sửa
-phonedesk doctor --open accessibility     # mở đúng mục trong Cài đặt
-phonedesk doctor --request accessibility  # để macOS liệt kê phonedesk (hiện hộp thoại)
+nookdeck doctor                          # ✓ / ✗ từng mục, kèm cách sửa
+nookdeck doctor --open accessibility     # mở đúng mục trong Cài đặt
+nookdeck doctor --request accessibility  # để macOS liệt kê nookdeck (hiện hộp thoại)
 ```
 
-Bản cập nhật được ký ad-hoc nên macOS có thể hỏi lại sau mỗi lần cập nhật: xóa mục `phonedesk` cũ trong danh sách Quyền riêng tư rồi thêm lại. Việc này hết khi bản phát hành được ký bằng Developer ID.
+Bản cập nhật được ký ad-hoc nên macOS có thể hỏi lại sau mỗi lần cập nhật: xóa mục `nookdeck` cũ trong danh sách Quyền riêng tư rồi thêm lại. Việc này hết khi bản phát hành được ký bằng Developer ID.
 
-**Trên Windows** `phonedesk doctor` kiểm tra các mục khác (cùng lệnh; `phonedesk doctor --open firewall` mở Windows Security):
+**Trên Windows** `nookdeck doctor` kiểm tra các mục khác (cùng lệnh; `nookdeck doctor --open firewall` mở Windows Security):
 
 | Mục | Vì sao quan trọng |
 |---|---|
-| Tường lửa | Windows chặn kết nối đến trừ khi có quy tắc cho `phonedesk.exe`; trình cài đặt đề nghị thêm một quy tắc chỉ cho mạng nội bộ (local subnet) (một lần UAC, `uninstall.ps1` sẽ xóa). Thủ công, bằng quyền quản trị: `netsh advfirewall firewall add rule name="PhoneDesk" dir=in action=allow program="<đường dẫn>\phonedesk.exe" profile=any remoteip=localsubnet` |
+| Tường lửa | Windows chặn kết nối đến trừ khi có quy tắc cho `nookdeck.exe`; trình cài đặt đề nghị thêm một quy tắc chỉ cho mạng nội bộ (local subnet) (một lần UAC, `uninstall.ps1` sẽ xóa). Thủ công, bằng quyền quản trị: `netsh advfirewall firewall add rule name="Nookdeck" dir=in action=allow program="<đường dẫn>\nookdeck.exe" profile=any remoteip=localsubnet` |
 | Loại mạng | Wi-Fi hoặc Ethernet nên là mạng Private (Settings > Network & internet) |
-| Phiên màn hình | Gửi phím, gõ chữ, Đang phát và âm lượng chỉ hoạt động khi PhoneDesk chạy trong phiên đã đăng nhập (tác vụ đã lên lịch làm đúng như vậy; phiên SSH hoặc Windows service thì không) |
+| Phiên màn hình | Gửi phím, gõ chữ, Đang phát và âm lượng chỉ hoạt động khi Nookdeck chạy trong phiên đã đăng nhập (tác vụ đã lên lịch làm đúng như vậy; phiên SSH hoặc Windows service thì không) |
 | Trình hỗ trợ PowerShell | Đang phát, âm lượng, biểu tượng app và danh sách tiến trình dùng một trình hỗ trợ Windows PowerShell 5.1 nhỏ |
-| SmartScreen | `phonedesk.exe` tải về mang dấu internet sẽ bị cảnh báo; trình cài đặt gỡ dấu này |
+| SmartScreen | `nookdeck.exe` tải về mang dấu internet sẽ bị cảnh báo; trình cài đặt gỡ dấu này |
 
 ## Trợ lý AI sắp xếp layout (MCP)
 
-PhoneDesk có sẵn MCP server, nên Claude Code (hoặc client MCP bất kỳ) sắp xếp được layout bằng lời: "thêm một trang công cụ lập trình", "đặt Spotify cạnh đồng hồ". MCP server nói chuyện với agent đang chạy, nên cần bật PhoneDesk trước.
+Nookdeck có sẵn MCP server, nên Claude Code (hoặc client MCP bất kỳ) sắp xếp được layout bằng lời: "thêm một trang công cụ lập trình", "đặt Spotify cạnh đồng hồ". MCP server nói chuyện với agent đang chạy, nên cần bật Nookdeck trước.
 
 Đăng ký một lần, với đường dẫn mà bộ cài đã dùng:
 
 | Cài bằng | Lệnh |
 |---|---|
-| `setup.sh` (macOS) | `claude mcp add phonedesk -- ~/.phonedesk/bin/phonedesk mcp` |
-| `setup.ps1` (Windows) | `claude mcp add phonedesk -- "%LOCALAPPDATA%\PhoneDesk\bin\phonedesk.exe" mcp` |
-| Build từ mã nguồn | `claude mcp add phonedesk -- /đường/dẫn/đầy/đủ/dist/phonedesk mcp` |
+| `setup.sh` (macOS) | `claude mcp add nookdeck -- ~/.nookdeck/bin/nookdeck mcp` |
+| `setup.ps1` (Windows) | `claude mcp add nookdeck -- "%LOCALAPPDATA%\Nookdeck\bin\nookdeck.exe" mcp` |
+| Build từ mã nguồn | `claude mcp add nookdeck -- /đường/dẫn/đầy/đủ/dist/nookdeck mcp` |
 
-Thêm `--port N` sau `mcp` nếu agent không chạy ở cổng 7420, và `--scope user` trước `phonedesk` để dùng được trong mọi project. Kiểm tra bằng `claude mcp list`.
+Thêm `--port N` sau `mcp` nếu agent không chạy ở cổng 7420, và `--scope user` trước `nookdeck` để dùng được trong mọi project. Kiểm tra bằng `claude mcp list`.
 
-Các tool: `get_layout`, `add_page`, `add_item`, `update_item`, `move_item`, `resize_item`, `remove_item`, `update_page`, `remove_page`, `set_theme`, `list_apps`, `list_widgets`, `search_icons`, `preview_changes`, `undo`. Mọi thay đổi đều qua cùng bước kiểm tra như trang quản lý và hoàn tác được. [Layout skill](docs/skills/phonedesk-layout/SKILL.md) mô tả schema cho trợ lý.
+Các tool: `get_layout`, `add_page`, `add_item`, `update_item`, `move_item`, `resize_item`, `remove_item`, `update_page`, `remove_page`, `set_theme`, `list_apps`, `list_widgets`, `search_icons`, `preview_changes`, `undo`. Mọi thay đổi đều qua cùng bước kiểm tra như trang quản lý và hoàn tác được. [Layout skill](docs/skills/nookdeck-layout/SKILL.md) mô tả schema cho trợ lý.
 
 ## Bảo mật
 
@@ -246,27 +252,19 @@ Các tool: `get_layout`, `add_page`, `add_item`, `update_item`, `move_item`, `re
 
 ## Đóng góp
 
-Pull request luôn được chào đón. Build và test từ bản clone (cần [Bun](https://bun.sh) 1.3+):
+Pull request, báo lỗi và bản dịch đều được chào đón. Đọc [CONTRIBUTING.md](CONTRIBUTING.md) (bằng tiếng Anh) để biết cách dựng môi trường, cấu trúc dự án và các quy tắc một pull request phải theo.
 
 ```sh
 bun install
-bun run dev      # agent chạy ở chế độ watch
-bun run test     # unit test
-bun run build    # các web app và dist/phonedesk
+bun test
+bun run build
 ```
 
-Quy tắc cho một pull request:
-
-- **PR nhỏ, tập trung.** Mỗi PR một thay đổi, kèm test khi hợp lý. `bun run test` phải qua.
-- **Deck phải chạy được trên Safari 12.** Trong `web/deck` không dùng optional chaining (`?.`) và nullish coalescing (`??`); bundle sau khi build được kiểm tra.
-- **Mọi chuỗi giao diện đều có tiếng Anh và tiếng Việt.** Thêm tiếng Trung thì càng tốt. Tiếng Anh là khóa.
-- **Chỉ `src/platform` được đọc `process.platform`.** Khác biệt giữa các hệ điều hành nằm ở đó.
-
-Rất hoan nghênh PR bản dịch. Các tệp là `web/manage/src/i18n/<lang>` (trang quản lý), `web/deck/src/i18n-<lang>.ts` (điện thoại) và `src/i18n.ts` (thông báo của agent). Lỗi và ý tưởng gửi vào [GitHub issues](https://github.com/howznguyen/phonedesk/issues).
+Lỗi và ý tưởng gửi vào [GitHub issues](https://github.com/howznguyen/nookdeck/issues). Lỗ hổng bảo mật: vui lòng báo riêng tư, xem [Bảo mật](CONTRIBUTING.md#security).
 
 ### Người đóng góp
 
-<a href="https://github.com/howznguyen/phonedesk/graphs/contributors"><img src="https://contrib.rocks/image?repo=howznguyen/phonedesk" alt="Người đóng góp cho PhoneDesk"></a>
+<a href="https://github.com/howznguyen/nookdeck/graphs/contributors"><img src="https://contrib.rocks/image?repo=howznguyen/nookdeck" alt="Người đóng góp cho Nookdeck"></a>
 
 Cảm ơn:
 

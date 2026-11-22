@@ -6,7 +6,7 @@ import { mergePlugins } from './plugin-logic'
 import type { PluginSlot } from './plugin-logic'
 import type { QuestionRequest, GotoReq, Notice, PushedValue, WeatherData, HassState, AiData, Layout, Media, MediaCommand, PermissionRequest, ProcInfo, Stats } from './types'
 
-/** Connection to the PhoneDesk agent: pairing (REST) + live deck (WebSocket). No UI code here. */
+/** Connection to the Nookdeck agent: pairing (REST) + live deck (WebSocket). No UI code here. */
 
 export type Status = 'pair' | 'connecting' | 'online' | 'offline'
 
@@ -163,7 +163,7 @@ export class DeckClient {
   private listeners: Array<(s: ClientState) => void> = []
   private base: string
 
-  /** `baseUrl` like "http://phonedesk.local:7420" when embedded in another origin; empty = same origin. */
+  /** `baseUrl` like "http://nookdeck.local:7420" when embedded in another origin; empty = same origin. */
   constructor(baseUrl = '') {
     this.base = baseUrl.replace(/\/+$/, '')
   }

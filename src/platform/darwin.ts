@@ -61,7 +61,7 @@ const mac = () => macNative();
 // ---------- Now Playing from every app (mediaremote-adapter stream) ----------
 
 let adapterFiles: Promise<AdapterFiles | null> | undefined;
-/** The adapter written to ~/.phonedesk/lib (once); null when this build does not carry it. */
+/** The adapter written to ~/.nookdeck/lib (once); null when this build does not carry it. */
 const adapter = () => (adapterFiles ??= extractAdapter(MRA_EMBED).catch(() => null));
 const remote = new NowPlayingStream({ files: adapter });
 
@@ -69,7 +69,7 @@ const remote = new NowPlayingStream({ files: adapter });
 async function nowPlayingStatus(): Promise<{ ok: boolean; why?: string }> {
   if (!MRA_EMBED) return { ok: false, why: "this build does not include the Now Playing adapter" };
   const files = await adapter();
-  if (!files) return { ok: false, why: "the Now Playing adapter could not be unpacked into ~/.phonedesk/lib" };
+  if (!files) return { ok: false, why: "the Now Playing adapter could not be unpacked into ~/.nookdeck/lib" };
   if (remote.gaveUp) return { ok: false, why: "the adapter stopped repeatedly; only Spotify and Music are read" };
   try {
     await runCapture([files.perl, files.script, files.framework, "get", "--no-artwork"], 8000);

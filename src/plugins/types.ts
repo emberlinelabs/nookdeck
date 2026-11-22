@@ -54,7 +54,7 @@ export interface Manifest {
   id: string;
   name: string;
   version: string;
-  phonedesk?: string;
+  nookdeck?: string;
   author?: string;
   description?: string;
   icon?: string;
@@ -69,7 +69,7 @@ export interface Manifest {
   main: null;
 }
 
-/** One entry of ~/.phonedesk/plugins.json. */
+/** One entry of ~/.nookdeck/plugins.json. */
 export interface PluginState {
   version: string;
   sha256: string;

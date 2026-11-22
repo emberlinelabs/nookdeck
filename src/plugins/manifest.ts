@@ -174,7 +174,7 @@ function parseSource(v: unknown, fields: SettingField[], perms: Permissions, whe
     if (v.command.parse !== undefined && !["json", "text"].includes(v.command.parse)) fail(`${where}.command.parse must be json or text`);
     return { command: { run, ...everyField(v.command.every, `${where}.command.every`), ...(v.command.parse ? { parse: v.command.parse } : {}) }, ...(map ? { map } : {}) };
   }
-  if (v.agent !== undefined) return fail(`${where}.agent needs a code plugin, which this version of PhoneDesk cannot run yet`);
+  if (v.agent !== undefined) return fail(`${where}.agent needs a code plugin, which this version of Nookdeck cannot run yet`);
   return fail(`${where} needs "http" or "command"`);
 }
 
@@ -229,23 +229,23 @@ function parseWidget(w: unknown, perms: Permissions, shared: SettingField[], i: 
 }
 
 /**
- * Validates untrusted phonedesk.json and returns a normalized copy. Throws an Error with a message the owner can act on.
- * `agentVersion` (when given) is checked against the manifest's `phonedesk` range.
+ * Validates untrusted nookdeck.json and returns a normalized copy. Throws an Error with a message the owner can act on.
+ * `agentVersion` (when given) is checked against the manifest's `nookdeck` range.
  */
 export function parseManifest(raw: unknown, opts: { agentVersion?: string; allowCore?: boolean } = {}): Manifest {
-  if (!isObj(raw)) return fail("phonedesk.json must be a JSON object");
+  if (!isObj(raw)) return fail("nookdeck.json must be a JSON object");
   const id = text(raw.id, "id", 100);
   if (!PLUGIN_ID_RE.test(id)) fail('id must look like "dev.author.name" (lowercase letters, digits, - and _, at least two parts separated by dots)');
-  if (id.startsWith("core.") && !opts.allowCore) fail('ids starting with "core." are reserved for the plugins that ship with PhoneDesk');
+  if (id.startsWith("core.") && !opts.allowCore) fail('ids starting with "core." are reserved for the plugins that ship with Nookdeck');
   const version = text(raw.version, "version", 40);
   if (!VERSION_RE.test(version)) fail('version must look like "1.2.3"');
-  let phonedesk: string | undefined;
-  if (raw.phonedesk !== undefined) {
-    phonedesk = text(raw.phonedesk, "phonedesk", 40);
-    if (!/^[>=^~\s]*\d+(\.\d+){0,2}\s*$/.test(phonedesk)) fail('phonedesk must look like ">=0.2.0"');
-    if (opts.agentVersion && !versionAtLeast(opts.agentVersion, phonedesk)) fail(`this plugin needs PhoneDesk ${phonedesk}, you have ${opts.agentVersion}. Update PhoneDesk first.`);
+  let nookdeck: string | undefined;
+  if (raw.nookdeck !== undefined) {
+    nookdeck = text(raw.nookdeck, "nookdeck", 40);
+    if (!/^[>=^~\s]*\d+(\.\d+){0,2}\s*$/.test(nookdeck)) fail('nookdeck must look like ">=0.2.0"');
+    if (opts.agentVersion && !versionAtLeast(opts.agentVersion, nookdeck)) fail(`this plugin needs Nookdeck ${nookdeck}, you have ${opts.agentVersion}. Update Nookdeck first.`);
   }
-  if (raw.main !== undefined && raw.main !== null) fail("this plugin has code (main), which this version of PhoneDesk cannot run yet. Only no-code plugins can be installed.");
+  if (raw.main !== undefined && raw.main !== null) fail("this plugin has code (main), which this version of Nookdeck cannot run yet. Only no-code plugins can be installed.");
   const permissions = parsePermissions(raw.permissions);
   const settings = settingFields(raw.settings, "settings");
   const widgets = (raw.widgets === undefined ? [] : Array.isArray(raw.widgets) && raw.widgets.length <= 20 ? raw.widgets : fail("widgets must be a list of up to 20 widgets")).map((w: unknown, i: number) => parseWidget(w, permissions, settings, i));
@@ -273,7 +273,7 @@ export function parseManifest(raw: unknown, opts: { agentVersion?: string; allow
   });
   return {
     id, name: text(raw.name, "name", 60), version,
-    ...(phonedesk ? { phonedesk } : {}),
+    ...(nookdeck ? { nookdeck } : {}),
     ...(raw.author !== undefined ? { author: text(raw.author, "author", 80, false) } : {}),
     ...(raw.description !== undefined ? { description: text(raw.description, "description", 300, false) } : {}),
     ...(raw.icon !== undefined ? { icon: text(raw.icon, "icon", 140, false) } : {}),

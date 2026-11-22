@@ -1,7 +1,7 @@
 export const VI_SCREENS: Record<string, string> = {
   "iOS Shortcuts": "iOS Phím tắt",
   "Rounded color tiles": "Ô màu bo tròn",
-  "PhoneDesk cyan": "PhoneDesk xanh lơ",
+  "Nookdeck cyan": "Nookdeck xanh lơ",
   "Violet": "Tím violet",
   "The former default": "Mặc định cũ",
   "Default": "Mặc định",

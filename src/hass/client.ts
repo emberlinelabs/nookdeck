@@ -3,6 +3,7 @@ import { HassConfigStore, hassWsUrl, normalizeHassUrl } from "./config";
 import { tempUnitOf, type TempUnit } from "../temperature";
 import { toPhoneEntity, type PhoneEntity, type PhoneRelated } from "./entities";
 import { t } from "../i18n";
+import type { HassOAuth } from "./oauth";
 
 export interface HassStatus { url: string | null; hasToken: boolean; connected: boolean; error?: string; /** the last underlying error, short (for support) */ detail?: string; version?: string }
 
@@ -17,6 +18,8 @@ interface SocketLike {
 
 export interface HassClientOptions {
   store: HassConfigStore;
+  /** Sign in with Home Assistant: supplies (and refreshes) the access token. */
+  oauth?: HassOAuth;
   createSocket?: (url: string) => SocketLike;
   /** Reconnect delays in ms; the last one repeats. */
   backoffMs?: number[];
@@ -43,6 +46,11 @@ export class HassClient implements HassLike {
   private gen = 0;
   private classifying = false;
   private version: string | undefined;
+  private haName: string | undefined;
+  private haUser: string | undefined;
+  /** The credential of this attempt came from OAuth (a rejected one is refreshed once before giving up). */
+  private usedOAuth = false;
+  private oauthRetried = false;
   /** HA's configured temperature unit (get_config), for climate/weather entities that carry none. */
   private sysUnit: string | undefined;
   private seq = 1;
@@ -67,6 +75,7 @@ export class HassClient implements HassLike {
   readonly store: HassConfigStore;
 
   constructor(private o: HassClientOptions) { this.store = o.store; }
+  get oauth(): HassOAuth | undefined { return this.o.oauth; }
 
   // ---- state ----
   connected() { return this.ready; }
@@ -74,7 +83,28 @@ export class HassClient implements HassLike {
   /** HA's temperature unit, once known. */
   systemTempUnit(): TempUnit | undefined { return tempUnitOf(this.sysUnit); }
   async status(): Promise<HassStatus> {
-    return { url: (await this.store.url()) ?? null, hasToken: await this.store.hasToken(), connected: this.ready, ...(this.err ? { error: this.err } : {}), ...(this.detail && this.err ? { detail: this.detail } : {}), ...(this.version ? { version: this.version } : {}) };
+    const mode = await this.mode();
+    return { url: (await this.store.url()) ?? null, hasToken: mode !== null, connected: this.ready, ...(this.err ? { error: this.err } : {}), ...(this.detail && this.err ? { detail: this.detail } : {}), ...(this.version ? { version: this.version } : {}) };
+  }
+  /** "oauth" when signed in with Home Assistant, "token" for a pasted long-lived token, null for neither. */
+  async mode(): Promise<"oauth" | "token" | null> {
+    if (this.o.oauth && (await this.store.hasRefreshToken())) return "oauth";
+    return (await this.store.hasToken()) ? "token" : null;
+  }
+  /** GET /api/hass/status. */
+  async oauthStatus() {
+    const mode = await this.mode();
+    return { connected: this.ready, mode, haVersion: this.version ?? null, haName: this.haName ?? null, user: this.haUser ?? null };
+  }
+  /** The access token to authenticate with: OAuth when signed in (refreshed when due), else the pasted token. */
+  private async credential(): Promise<string | null> {
+    if (this.o.oauth && (await this.store.hasRefreshToken())) {
+      this.usedOAuth = true;
+      try { return await this.o.oauth.accessToken(); }
+      catch (e) { this.err = t("could not refresh the Home Assistant sign-in"); this.detail = shortMsg(e); return null; }
+    }
+    this.usedOAuth = false;
+    return (await this.store.token()) ?? null;
   }
   /** Select entities on the same device as a light (scene pickers), with their options and current option. */
   related(entityId: string): PhoneRelated[] {
@@ -170,7 +200,8 @@ export class HassClient implements HassLike {
 
   private async open() {
     const url = await this.store.url();
-    const token = await this.store.token();
+    const token = await this.credential();
+    if (!token && this.usedOAuth && this.err) return this.dropped(); // could not refresh (HA unreachable): try again with the usual back-off
     if (!url || !token) { this.emitStatus(); return; }
     if (this.ws || this.classifying) return; // an attempt is already running: let it finish
     let ws: SocketLike;
@@ -281,16 +312,27 @@ export class HassClient implements HassLike {
         this.setPhase("auth", gen, ms, () => this.fail(t("Home Assistant did not answer authentication within {s} seconds", { s: Math.round(ms / 1000) }), "auth timeout"));
         return this.send({ type: "auth", access_token: token });
       }
-      case "auth_invalid": this.err = t(AUTH_ERR); this.detail = shortMsg(m.message ?? "auth_invalid"); this.attempt = 0; return this.dropped();
+      case "auth_invalid":
+        if (this.usedOAuth && !this.oauthRetried && this.o.oauth) {
+          // the access token was rejected (revoked, or the clock): refresh once and reconnect at once
+          this.oauthRetried = true;
+          this.o.oauth.invalidate();
+          this.teardown();
+          void this.open();
+          return;
+        }
+        this.err = t(AUTH_ERR); this.detail = shortMsg(m.message ?? "auth_invalid"); this.attempt = 0; return this.dropped();
       case "auth_ok":
         this.setPhase("ready", gen, null);
-        this.ready = true; this.err = undefined; this.detail = undefined; this.attempt = 0; this.version = m.ha_version;
+        this.ready = true; this.err = undefined; this.detail = undefined; this.attempt = 0; this.oauthRetried = false; this.version = m.ha_version;
         this.pongAt = Date.now();
         this.startPing();
         this.emitStatus();
         this.subscribe();
         void this.loadRegistry();
+        void this.request<any>({ type: "auth/current_user" }).then((u) => { if (gen === this.gen && typeof u?.name === "string") this.haUser = u.name.slice(0, 80); }).catch(() => {});
         void this.request<any>({ type: "get_config" }).then((cfg) => {
+          if (gen === this.gen && typeof cfg?.location_name === "string") this.haName = cfg.location_name.slice(0, 80);
           const u = tempUnitOf(cfg?.unit_system?.temperature);
           if (!u || gen !== this.gen) return;
           this.sysUnit = u === "f" ? "°F" : "°C";
@@ -450,7 +492,7 @@ export class HassClient implements HassLike {
     this.stopped = false;
     if (this.ready) return this.status();
     const url = await this.store.url();
-    const token = await this.store.token();
+    const token = (await this.store.token()) ?? ((await this.store.hasRefreshToken()) ? "oauth" : undefined);
     if (!url || !token) { this.err = !url ? t("no Home Assistant URL yet") : t("no token yet"); this.detail = undefined; return this.status(); }
     const running = !!this.ws || this.classifying;
     if (!running) {

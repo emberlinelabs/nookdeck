@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-process.env.PHONEDESK_HOME ??= mkdtempSync(join(tmpdir(), "pd-q-"));
+process.env.NOOKDECK_HOME ??= mkdtempSync(join(tmpdir(), "pd-q-"));
 const Q = await import("../src/questions");
 const HI = await import("../src/hooks-install");
 const { startServer } = await import("../src/server");
@@ -145,7 +145,7 @@ describe("hook process side", () => {
     const out = await Q.runAskHook({ stdin: stdin(), port: 7421, secret: "sec", fetch: (async (url: string, init: any) => { seen = { url, init }; return Response.json({ answers: ANS }); }) as any });
     expect(JSON.parse(out!)).toEqual({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow", updatedInput: { questions: QS, answers: ANS } } });
     expect(seen.url).toBe("http://127.0.0.1:7421/api/hooks/question");
-    expect(seen.init.headers["x-phonedesk-hook"]).toBe("sec");
+    expect(seen.init.headers["x-nookdeck-hook"]).toBe("sec");
     expect(JSON.parse(seen.init.body)).toEqual({ questions: QS, sessionId: "sess", cwd: "/p/app" });
   });
   test("keeps other tool_input fields (updatedInput replaces the whole input)", async () => {
@@ -168,13 +168,13 @@ describe("hook process side", () => {
 describe("settings.json entry", () => {
   const cfg = () => join(tmp(), "settings.json");
   const read = (f: string) => JSON.parse(readFileSync(f, "utf8"));
-  const cmd = Q && HI.askHookCommand({ execPath: "/bin/phonedesk", port: 7430, home: "/h/pd", defaultHome: "/d" });
+  const cmd = Q && HI.askHookCommand({ execPath: "/bin/nookdeck", port: 7430, home: "/h/pd", defaultHome: "/d" });
 
   test("command carries the marker, port and home", () => {
-    expect(cmd).toBe("'/bin/phonedesk' hook claude-ask --port 7430 --home '/h/pd' # phonedesk hook claude-ask");
-    expect(HI.askHookCommand({ execPath: "/bin/phonedesk" })).toBe("'/bin/phonedesk' hook claude-ask # phonedesk hook claude-ask");
-    expect(HI.askHookCommand({ execPath: "/opt/phonedesk-bin", indexPath: "/x/index.ts" })).toBe("'/opt/phonedesk-bin' hook claude-ask # phonedesk hook claude-ask"); // compiled form
-    expect(HI.askHookCommand({ execPath: "/usr/bin/bun", indexPath: "/x/index.ts" })).toBe("'/usr/bin/bun' '/x/index.ts' hook claude-ask # phonedesk hook claude-ask");
+    expect(cmd).toBe("'/bin/nookdeck' hook claude-ask --port 7430 --home '/h/pd' # nookdeck hook claude-ask");
+    expect(HI.askHookCommand({ execPath: "/bin/nookdeck" })).toBe("'/bin/nookdeck' hook claude-ask # nookdeck hook claude-ask");
+    expect(HI.askHookCommand({ execPath: "/opt/nookdeck-bin", indexPath: "/x/index.ts" })).toBe("'/opt/nookdeck-bin' hook claude-ask # nookdeck hook claude-ask"); // compiled form
+    expect(HI.askHookCommand({ execPath: "/usr/bin/bun", indexPath: "/x/index.ts" })).toBe("'/usr/bin/bun' '/x/index.ts' hook claude-ask # nookdeck hook claude-ask");
   });
   test("install: PreToolUse + matcher AskUserQuestion + timeout 600; idempotent; keeps other hooks; backup; uninstall removes only ours", async () => {
     const f = cfg();
@@ -187,7 +187,7 @@ describe("settings.json entry", () => {
     expect(d.hooks.Stop).toEqual(mine.hooks.Stop);
     expect(d.hooks.PreToolUse[0]).toEqual(mine.hooks.PreToolUse[0]);
     expect(d.hooks.PreToolUse[1]).toEqual({ matcher: "AskUserQuestion", hooks: [{ type: "command", command: cmd, timeout: 600 }] });
-    expect(readFileSync(`${f}.phonedesk.bak`, "utf8")).toBe(JSON.stringify(mine));
+    expect(readFileSync(`${f}.nookdeck.bak`, "utf8")).toBe(JSON.stringify(mine));
     expect(await HI.isAskHookInstalled(f)).toBe(true);
     expect((await HI.installAskHook(f, cmd)).changed).toBe(false);
     expect((await HI.installAskHook(f, cmd + "2")).changed).toBe(true); // port changed: command updated in place
@@ -199,7 +199,7 @@ describe("settings.json entry", () => {
   });
   test("separate from the permission hook: either can be installed and removed alone", async () => {
     const f = cfg();
-    await HI.installHook(f, HI.hookCommand("claude", { execPath: "/bin/phonedesk" }));
+    await HI.installHook(f, HI.hookCommand("claude", { execPath: "/bin/nookdeck" }));
     expect(await HI.isAskHookInstalled(f)).toBe(false);
     await HI.installAskHook(f, cmd);
     expect(await HI.isHookInstalled(f)).toBe(true);
@@ -207,7 +207,7 @@ describe("settings.json entry", () => {
     await HI.uninstallHook(f);
     expect(await HI.isHookInstalled(f)).toBe(false);
     expect(await HI.isAskHookInstalled(f)).toBe(true);
-    await HI.installHook(f, HI.hookCommand("claude", { execPath: "/bin/phonedesk" }));
+    await HI.installHook(f, HI.hookCommand("claude", { execPath: "/bin/nookdeck" }));
     await HI.uninstallAskHook(f);
     expect(await HI.isHookInstalled(f)).toBe(true);
     expect(read(f).hooks.PreToolUse).toBeUndefined();
@@ -259,14 +259,14 @@ describe("through the server", () => {
     const answer = async (body: Record<string, unknown>) => { const reqId = `a${n++}`; ws.send(JSON.stringify({ type: "question-answer", reqId, ...body })); return next((m) => m.type === "result" && m.reqId === reqId); };
     return { ws, next, answer };
   }
-  const ask = (body: any = { questions: QS, sessionId: "s1", cwd: "/p/app" }, headers: Record<string, string> = { "x-phonedesk-hook": SECRET }, signal?: AbortSignal) =>
+  const ask = (body: any = { questions: QS, sessionId: "s1", cwd: "/p/app" }, headers: Record<string, string> = { "x-nookdeck-hook": SECRET }, signal?: AbortSignal) =>
     rawFetch(`${base}/api/hooks/question`, { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json", ...headers }, signal });
   const GOOD = { "Which database?": "Postgres", "Which features?": "Auth, Search" };
 
   test("secret required; no phone connected -> answers null at once; bad body 400", async () => {
     expect((await ask(undefined, {})).status).toBe(401);
-    expect((await ask(undefined, { "x-phonedesk-hook": "wrong" })).status).toBe(401);
-    expect((await rawFetch(`${base}/api/hooks/question`, { method: "POST", body: "{}", headers: { "x-phonedesk-hook": SECRET, host: "evil.example" } })).status).toBe(403);
+    expect((await ask(undefined, { "x-nookdeck-hook": "wrong" })).status).toBe(401);
+    expect((await rawFetch(`${base}/api/hooks/question`, { method: "POST", body: "{}", headers: { "x-nookdeck-hook": SECRET, host: "evil.example" } })).status).toBe(403);
     const none = await (await ask()).json() as any;
     expect(none).toEqual({ answers: null });
     const p = phone();
@@ -322,7 +322,7 @@ describe("through the server", () => {
     const p = phone();
     await p.next((x) => x.type === "hello");
     const ac = new AbortController();
-    const pending = ask(undefined, { "x-phonedesk-hook": SECRET }, ac.signal).catch(() => null);
+    const pending = ask(undefined, { "x-nookdeck-hook": SECRET }, ac.signal).catch(() => null);
     const m = await p.next((x) => x.type === "question");
     ac.abort();
     await pending;
@@ -383,7 +383,7 @@ describe("through the server", () => {
   });
 
   // Bun.spawn with a buffer as stdin never closes the pipe on Windows (the real hook, fed by a shell pipe, works)
-  test.skipIf(WIN)("end to end: `phonedesk hook claude-ask` as a real process prints the PreToolUse JSON the phone's answer produced", async () => {
+  test.skipIf(WIN)("end to end: `nookdeck hook claude-ask` as a real process prints the PreToolUse JSON the phone's answer produced", async () => {
     await fetch(`${base}/api/integrations/claude/ask-hook`, { method: "PUT", body: JSON.stringify({ onlyWhenAway: false }) });
     const home = tmp("pd-q-home-");
     writeFileSync(join(home, "hook-secret"), SECRET + "\n");
@@ -391,7 +391,7 @@ describe("through the server", () => {
     await p.next((x) => x.type === "hello");
     const proc = Bun.spawn(["bun", join(import.meta.dir, "..", "src", "index.ts"), "hook", "claude-ask", "--port", String(app.port), "--home", home], {
       stdin: new TextEncoder().encode(JSON.stringify({ tool_name: "AskUserQuestion", session_id: "e2e", cwd: "/p/app", tool_input: { questions: QS } })),
-      stdout: "pipe", stderr: "pipe", env: { ...process.env, PHONEDESK_HOME: home },
+      stdout: "pipe", stderr: "pipe", env: { ...process.env, NOOKDECK_HOME: home },
     });
     const m = await p.next((x) => x.type === "question", 15000);
     expect(m.request.sessionId).toBe("e2e");

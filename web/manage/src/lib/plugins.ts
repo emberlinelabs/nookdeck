@@ -4,13 +4,13 @@ import { isPluginTile, randomId, uniquePageId } from "@/lib/layout";
 import type { Item, Layout, PluginInfo } from "@/types";
 
 /** Plugins whose tiles and buttons can be placed: enabled and with every permission granted. Refetched each time a screen mounts it, so changes made in the Plugins tab show up. */
-export function useEnabledPlugins(): PluginInfo[] {
+export function useEnabledPlugins(refreshKey?: string): PluginInfo[] {
   const [list, setList] = useState<PluginInfo[]>([]);
   useEffect(() => {
     let live = true;
     api.getPlugins().then((p) => live && setList(p.filter((x) => x.enabled))).catch(() => undefined);
     return () => { live = false; };
-  }, []);
+  }, [refreshKey]);
   return list;
 }
 

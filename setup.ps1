@@ -1,33 +1,33 @@
-# PhoneDesk for Windows 10/11 (experimental): fetch, verify, install and start it from one command.
+# Nookdeck for Windows 10/11 (experimental): fetch, verify, install and start it from one command.
 #
 # Usage
-#   irm https://raw.githubusercontent.com/howznguyen/phonedesk/main/setup.ps1 | iex
+#   irm https://raw.githubusercontent.com/howznguyen/nookdeck/main/setup.ps1 | iex
 #
 # Run it from a normal PowerShell window. Only the optional firewall rule needs administrator rights, and Windows asks
-# for those itself (UAC). Run it again any time to upgrade; %USERPROFILE%\.phonedesk is never wiped.
+# for those itself (UAC). Run it again any time to upgrade; %USERPROFILE%\.nookdeck is never wiped.
 #
 # `irm | iex` cannot take parameters, so every switch has an environment twin:
 #
 #   Environment variable            Effect
-#   $env:PHONEDESK_YES=1            take every default, ask nothing
-#   $env:PHONEDESK_VERSION=0.2.0    install that release, not the newest
-#   $env:PHONEDESK_FORCE=1          reinstall even if this release is already in place
-#   $env:PHONEDESK_PORT=7420        port for the agent
-#   $env:PHONEDESK_NO_AUTOSTART=1   skip the sign-in scheduled task
-#   $env:PHONEDESK_NO_START=1       place the program only, do not launch it
-#   $env:PHONEDESK_NO_OPEN=1        do not open the manage page afterwards
-#   $env:PHONEDESK_NO_FIREWALL=1    do not offer the firewall rule
-#   $env:PHONEDESK_NO_PATH=1        leave PATH alone
-#   $env:PHONEDESK_DRY_RUN=1        fetch and verify, say what would change, change nothing
+#   $env:NOOKDECK_YES=1            take every default, ask nothing
+#   $env:NOOKDECK_VERSION=0.2.0    install that release, not the newest
+#   $env:NOOKDECK_FORCE=1          reinstall even if this release is already in place
+#   $env:NOOKDECK_PORT=7420        port for the agent
+#   $env:NOOKDECK_NO_AUTOSTART=1   skip the sign-in scheduled task
+#   $env:NOOKDECK_NO_START=1       place the program only, do not launch it
+#   $env:NOOKDECK_NO_OPEN=1        do not open the manage page afterwards
+#   $env:NOOKDECK_NO_FIREWALL=1    do not offer the firewall rule
+#   $env:NOOKDECK_NO_PATH=1        leave PATH alone
+#   $env:NOOKDECK_DRY_RUN=1        fetch and verify, say what would change, change nothing
 #
-# Prefer parameters? Save the file, set $env:PHONEDESK_SETUP_NORUN=1, dot-source it, then call
-#   Install-PhoneDesk -Yes -Port 7421
+# Prefer parameters? Save the file, set $env:NOOKDECK_SETUP_NORUN=1, dot-source it, then call
+#   Install-Nookdeck -Yes -Port 7421
 #
 # Test hooks (not for everyday use)
-#   PHONEDESK_RELEASE_BASE   folder or URL holding phonedesk-windows-x64.exe and SHA256SUMS
-#   PHONEDESK_INSTALL_HOME   install below this folder instead of %LOCALAPPDATA% / %USERPROFILE%
-#   PHONEDESK_GITHUB_URL / PHONEDESK_API_URL   point the "newest release" lookup at a local server
-#   PHONEDESK_RETRY_SECONDS  scales the pause between lookup rounds
+#   NOOKDECK_RELEASE_BASE   folder or URL holding nookdeck-windows-x64.exe and SHA256SUMS
+#   NOOKDECK_INSTALL_HOME   install below this folder instead of %LOCALAPPDATA% / %USERPROFILE%
+#   NOOKDECK_GITHUB_URL / NOOKDECK_API_URL   point the "newest release" lookup at a local server
+#   NOOKDECK_RETRY_SECONDS  scales the pause between lookup rounds
 
 # The same switches work on a saved copy (.\setup.ps1 -NoOpen -Port 7421); a switch OR its environment twin turns the option on.
 param(
@@ -35,7 +35,7 @@ param(
   [switch]$NoOpen, [switch]$NoFirewall, [switch]$NoPath, [switch]$DryRun, [switch]$Force
 )
 
-function Install-PhoneDesk {
+function Install-Nookdeck {
   [CmdletBinding()]
   param(
     [switch]$Yes, [string]$Version = '', [int]$Port = 7420, [switch]$NoAutostart, [switch]$NoStart,
@@ -43,14 +43,14 @@ function Install-PhoneDesk {
   )
   $ErrorActionPreference = 'Stop'
   $ProgressPreference = 'SilentlyContinue' # the progress bar makes Invoke-WebRequest crawl in Windows PowerShell 5.1
-  $repo = 'howznguyen/phonedesk'
-  $asset = 'phonedesk-windows-x64.exe'
+  $repo = 'howznguyen/nookdeck'
+  $asset = 'nookdeck-windows-x64.exe'
   $stages = 6
 
   # state shared between phases (a hashtable, so nested functions can change it)
   $S = @{
     tmp = $null; base = $null; tag = $null; custom = $false
-    newVersion = $null; oldVersion = $null; upToDate = $false; dryDone = $false
+    asset = $asset; legacy = $false; newVersion = $null; oldVersion = $null; upToDate = $false; dryDone = $false
     alreadyRunning = $false; svcBefore = $false; svcKeep = $false; autostart = $false
     binState = 'already set'; pathState = 'skipped'; svcState = 'skipped'; fwState = 'skipped'
     pathAdded = $false; pairing = $null
@@ -75,18 +75,18 @@ function Install-PhoneDesk {
     if ($why) { Put "  $why" '' }
     Write-Host ''
     Put "  Need help? https://github.com/$repo/issues" ''
-    throw "PhoneDesk setup failed: $what"
+    throw "Nookdeck setup failed: $what"
   }
   function Show-Banner {
     Write-Host ''
     if ($utf) {
       $tl = [char]0x256D; $tr = [char]0x256E; $bl = [char]0x2570; $br = [char]0x256F; $h = [string][char]0x2500; $v = [char]0x2502
       Put ("  $tl" + ($h * 6) + "$tr") 'Cyan'
-      Put "  $v $([char]0x25C9)  $([char]0x25AD) $v  PhoneDesk" 'Cyan'
+      Put "  $v $([char]0x25C9)  $([char]0x25AD) $v  Nookdeck" 'Cyan'
       Put ("  $bl" + ($h * 6) + "$br  installer for Windows") 'Cyan'
     } else {
       Put '  +------+' 'Cyan'
-      Put '  | o  = |  PhoneDesk' 'Cyan'
+      Put '  | o  = |  Nookdeck' 'Cyan'
       Put '  +------+  installer for Windows' 'Cyan'
     }
   }
@@ -110,33 +110,33 @@ function Install-PhoneDesk {
     if ($Port -lt 1 -or $Port -gt 65535) { Fail '-Port must be between 1 and 65535' '' }
 
     # ------------------------------------------------------------ where everything lives
-    $relocated = [bool]$env:PHONEDESK_INSTALL_HOME
+    $relocated = [bool]$env:NOOKDECK_INSTALL_HOME
     if ($relocated) {
-      $installHome = $env:PHONEDESK_INSTALL_HOME
+      $installHome = $env:NOOKDECK_INSTALL_HOME
       $binDir = Join-Path $installHome 'bin'
-      $dataDir = Join-Path $installHome '.phonedesk'
+      $dataDir = Join-Path $installHome '.nookdeck'
       $svcDir = Join-Path $installHome 'service'
     } else {
       $local = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $env:USERPROFILE 'AppData\Local' }
-      $binDir = Join-Path $local 'PhoneDesk\bin'
-      $dataDir = Join-Path $env:USERPROFILE '.phonedesk'
-      $svcDir = Join-Path $local 'PhoneDesk'
+      $binDir = Join-Path $local 'Nookdeck\bin'
+      $dataDir = Join-Path $env:USERPROFILE '.nookdeck'
+      $svcDir = Join-Path $local 'Nookdeck'
     }
-    $exe = Join-Path $binDir 'phonedesk.exe'
+    $exe = Join-Path $binDir 'nookdeck.exe'
     $releaseFile = Join-Path $binDir '.release'
     $launcher = Join-Path $svcDir 'launch.vbs'
     $logDir = Join-Path $dataDir 'logs'
     # A relocated install (tests) keeps every file the program touches inside it.
-    $childEnv = @{ PHONEDESK_HOME = $dataDir }
+    $childEnv = @{ NOOKDECK_HOME = $dataDir; PHONEDESK_HOME = $dataDir } # the second one is for a 0.1.x program, which only knows the old name
     if ($relocated) {
-      $childEnv['PHONEDESK_WIN_DIR'] = $svcDir
-      $childEnv['PHONEDESK_CLAUDE_DIR'] = if ($env:PHONEDESK_CLAUDE_DIR) { $env:PHONEDESK_CLAUDE_DIR } else { Join-Path $installHome '.claude' }
-      $childEnv['PHONEDESK_CODEX_DIR'] = if ($env:PHONEDESK_CODEX_DIR) { $env:PHONEDESK_CODEX_DIR } else { Join-Path $installHome '.codex' }
-    } elseif ($env:PHONEDESK_HOME) {
-      $childEnv['PHONEDESK_HOME'] = $env:PHONEDESK_HOME
+      $childEnv['NOOKDECK_WIN_DIR'] = $svcDir
+      $childEnv['NOOKDECK_CLAUDE_DIR'] = if ($env:NOOKDECK_CLAUDE_DIR) { $env:NOOKDECK_CLAUDE_DIR } else { Join-Path $installHome '.claude' }
+      $childEnv['NOOKDECK_CODEX_DIR'] = if ($env:NOOKDECK_CODEX_DIR) { $env:NOOKDECK_CODEX_DIR } else { Join-Path $installHome '.codex' }
+    } elseif ($env:NOOKDECK_HOME) {
+      $childEnv['NOOKDECK_HOME'] = $env:NOOKDECK_HOME
     }
     function Run-Bin([string]$file, [string[]]$arguments, [switch]$Quiet) {
-      # runs the program with PhoneDesk's environment; returns its exit code (output shown unless -Quiet)
+      # runs the program with Nookdeck's environment; returns its exit code (output shown unless -Quiet)
       $saved = @{}
       foreach ($k in $childEnv.Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k, 'Process'); [Environment]::SetEnvironmentVariable($k, $childEnv[$k], 'Process') }
       $ea = $ErrorActionPreference; $ErrorActionPreference = 'Continue' # a native program writing to stderr must not abort us
@@ -151,15 +151,15 @@ function Install-PhoneDesk {
       }
     }
     function Sha([string]$f) { return (Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash.ToLowerInvariant() }
-    function VerOf([string]$line) { if ($line -match '^phonedesk (\S+)') { return $Matches[1] }; return '' }
+    function VerOf([string]$line) { if ($line -match '^(?:nookdeck|phonedesk) (\S+)') { return $Matches[1] }; return '' }
     function Version-Line([string]$file) {
       $ea = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
       try { return (& $file --version 2>$null | Select-Object -First 1) } catch { return $null } finally { $ErrorActionPreference = $ea }
     }
     function Agent-Line([int]$p) { # what the agent on a port says about itself, $null when silent
       try {
-        $ab = Invoke-RestMethod -Uri "http://127.0.0.1:$p/api/about" -Headers @{ 'x-phonedesk' = '1' } -TimeoutSec 2
-        $line = "phonedesk $($ab.version)"
+        $ab = Invoke-RestMethod -Uri "http://127.0.0.1:$p/api/about" -Headers @{ 'x-nookdeck' = '1' } -TimeoutSec 2
+        $line = "nookdeck $($ab.version)"
         if ($ab.commit) { $line += " ($($ab.commit)$(if ($ab.dirty) { '-dirty' }))" }
         return $line
       } catch { return $null }
@@ -169,9 +169,9 @@ function Install-PhoneDesk {
     function Detect-Platform {
       Stage 1 'Checking this PC'
       if ($PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) { Fail "this installer only runs on Windows" '' }
-      if (-not [Environment]::Is64BitOperatingSystem) { Fail 'PhoneDesk needs 64-bit Windows 10 or 11' '' }
+      if (-not [Environment]::Is64BitOperatingSystem) { Fail 'Nookdeck needs 64-bit Windows 10 or 11' '' }
       $os = [Environment]::OSVersion.Version
-      if ($os.Major -lt 10) { Fail "PhoneDesk needs Windows 10 or 11" "This is $($os.ToString())." }
+      if ($os.Major -lt 10) { Fail "Nookdeck needs Windows 10 or 11" "This is $($os.ToString())." }
       if (([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) -and -not $relocated) {
         # With UAC off (EnableLUA=0) every process of an administrator account is elevated and there is no normal window to
         # switch to: installing for this user is the only option, so carry on without asking.
@@ -180,7 +180,7 @@ function Install-PhoneDesk {
         if ($uacOff) {
           Say 'UAC is off on this PC, so PowerShell always runs elevated; installing for this user.'
         } else {
-          Warn 'This window is elevated. PhoneDesk should run as your own user; a normal PowerShell window is better.'
+          Warn 'This window is elevated. Nookdeck should run as your own user; a normal PowerShell window is better.'
           if (-not (Ask 'Continue anyway?' $false)) { Fail 'cancelled' 'Nothing was installed.' }
         }
       }
@@ -190,27 +190,27 @@ function Install-PhoneDesk {
     # ============================================================ phase 2: resolve release
     function Resolve-Release {
       Stage 2 'Finding the release'
-      $S.tmp = Join-Path ([IO.Path]::GetTempPath()) ('phonedesk-setup-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+      $S.tmp = Join-Path ([IO.Path]::GetTempPath()) ('nookdeck-setup-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
       New-Item -ItemType Directory -Path $S.tmp | Out-Null
-      if ($env:PHONEDESK_RELEASE_BASE) {
-        $S.base = $env:PHONEDESK_RELEASE_BASE.TrimEnd('/', '\')
+      if ($env:NOOKDECK_RELEASE_BASE) {
+        $S.base = $env:NOOKDECK_RELEASE_BASE.TrimEnd('/', '\')
         $S.custom = $true
-        Good "using PHONEDESK_RELEASE_BASE ($($S.base))"
+        Good "using NOOKDECK_RELEASE_BASE ($($S.base))"
         return
       }
-      $ghUrl = if ($env:PHONEDESK_GITHUB_URL) { $env:PHONEDESK_GITHUB_URL.TrimEnd('/') } else { 'https://github.com' }
-      if ($env:PHONEDESK_GITHUB_URL) { $S.custom = $true }
+      $ghUrl = if ($env:NOOKDECK_GITHUB_URL) { $env:NOOKDECK_GITHUB_URL.TrimEnd('/') } else { 'https://github.com' }
+      if ($env:NOOKDECK_GITHUB_URL) { $S.custom = $true }
       if ($Version) {
         $S.tag = 'v' + $Version.TrimStart('v')
       } else {
         # GitHub answers 5xx now and then: redirect lookup, then the API, 4 rounds with a growing pause.
-        $apiUrl = if ($env:PHONEDESK_API_URL) { $env:PHONEDESK_API_URL.TrimEnd('/') } else { 'https://api.github.com' }
-        $pause = if ($env:PHONEDESK_RETRY_SECONDS) { [int]$env:PHONEDESK_RETRY_SECONDS } else { 2 }
+        $apiUrl = if ($env:NOOKDECK_API_URL) { $env:NOOKDECK_API_URL.TrimEnd('/') } else { 'https://api.github.com' }
+        $pause = if ($env:NOOKDECK_RETRY_SECONDS) { [int]$env:NOOKDECK_RETRY_SECONDS } else { 2 }
         $tag = $null; $why = ''
         for ($round = 1; $round -le 4 -and -not $tag; $round++) {
           try {
             $req = [Net.HttpWebRequest]::Create("$ghUrl/$repo/releases/latest")
-            $req.Method = 'HEAD'; $req.UserAgent = 'phonedesk-setup'; $req.Timeout = 15000
+            $req.Method = 'HEAD'; $req.UserAgent = 'nookdeck-setup'; $req.Timeout = 15000
             $resp = $req.GetResponse()
             $tag = ($resp.ResponseUri.AbsoluteUri -split '/tag/')[1]
             $resp.Close()
@@ -218,7 +218,7 @@ function Install-PhoneDesk {
           if (-not $tag) {
             try {
               $rq = [Net.HttpWebRequest]::Create("$apiUrl/repos/$repo/releases/latest")
-              $rq.UserAgent = 'phonedesk-setup'; $rq.Accept = 'application/vnd.github+json'; $rq.Timeout = 15000
+              $rq.UserAgent = 'nookdeck-setup'; $rq.Accept = 'application/vnd.github+json'; $rq.Timeout = 15000
               $rs = $rq.GetResponse()
               $sr = New-Object IO.StreamReader($rs.GetResponseStream())
               try { $tag = [string](($sr.ReadToEnd() | ConvertFrom-Json).tag_name) } finally { $sr.Dispose(); $rs.Close() }
@@ -227,7 +227,7 @@ function Install-PhoneDesk {
           }
           if (-not $tag -and $round -lt 4) { Warn "GitHub did not answer ($why); retrying..."; Start-Sleep -Seconds ($round * $pause) }
         }
-        if (-not $tag) { Fail "couldn't look up the latest release of $repo" "$why - check your connection and run it again, or pin a release with `$env:PHONEDESK_VERSION='0.1.1'." }
+        if (-not $tag) { Fail "couldn't look up the latest release of $repo" "$why - check your connection and run it again, or pin a release with `$env:NOOKDECK_VERSION='0.1.1'." }
         $S.tag = $tag
       }
       $S.base = "$ghUrl/$repo/releases/download/$($S.tag)"
@@ -239,7 +239,7 @@ function Install-PhoneDesk {
       if ($src -match '^https?://') {
         if (-not $S.custom -and $src -notmatch '^https://') { throw 'refusing a non-https download' }
         for ($try = 1; $try -le 3; $try++) {
-          try { Invoke-WebRequest -Uri $src -OutFile $dest -UseBasicParsing -UserAgent 'phonedesk-setup'; break }
+          try { Invoke-WebRequest -Uri $src -OutFile $dest -UseBasicParsing -UserAgent 'nookdeck-setup'; break }
           catch { if ($try -ge 3 -or $_.Exception.Message -match '404|Not Found') { throw }; Start-Sleep -Seconds 2 }
         }
       } else {
@@ -265,7 +265,7 @@ function Install-PhoneDesk {
       $bytes = 0
       try {
         if ($src -match '^https?://') {
-          $rq = [Net.HttpWebRequest]::Create($src); $rq.Method = 'HEAD'; $rq.UserAgent = 'phonedesk-setup'; $rq.Timeout = 15000
+          $rq = [Net.HttpWebRequest]::Create($src); $rq.Method = 'HEAD'; $rq.UserAgent = 'nookdeck-setup'; $rq.Timeout = 15000
           $rs = $rq.GetResponse(); $bytes = $rs.ContentLength; $rs.Close()
         } elseif (Test-Path -LiteralPath $src) { $bytes = (Get-Item -LiteralPath $src).Length }
       } catch { }
@@ -277,14 +277,14 @@ function Install-PhoneDesk {
     function Fetch-Big([string]$src, [string]$dest) {
       if ($src -notmatch '^https?://') { Fetch $src $dest; return }
       if (-not $S.custom -and $src -notmatch '^https://') { throw 'refusing a non-https download' }
-      $stall = if ($env:PHONEDESK_STALL_SECONDS) { [int]$env:PHONEDESK_STALL_SECONDS } else { 60 }
+      $stall = if ($env:NOOKDECK_STALL_SECONDS) { [int]$env:NOOKDECK_STALL_SECONDS } else { 60 }
       $show = -not [Console]::IsOutputRedirected
       if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Force }
       for ($try = 1; $try -le 5; $try++) {
         $have = if (Test-Path -LiteralPath $dest) { (Get-Item -LiteralPath $dest).Length } else { 0 }
         $rs = $null; $in = $null; $out = $null
         try {
-          $rq = [Net.HttpWebRequest]::Create($src); $rq.UserAgent = 'phonedesk-setup'; $rq.ReadWriteTimeout = $stall * 1000; $rq.Timeout = $stall * 1000
+          $rq = [Net.HttpWebRequest]::Create($src); $rq.UserAgent = 'nookdeck-setup'; $rq.ReadWriteTimeout = $stall * 1000; $rq.Timeout = $stall * 1000
           if ($have -gt 0) { $rq.AddRange([int64]$have) }
           $rs = $rq.GetResponse()
           $resumed = ($have -gt 0 -and [int]$rs.StatusCode -eq 206)
@@ -312,13 +312,14 @@ function Install-PhoneDesk {
           Start-Sleep -Seconds 2
         } finally { foreach ($x in @($in, $out, $rs)) { if ($x) { try { $x.Dispose() } catch { } } } }
       }
-      Say "Tip: try later, another network or a VPN, or fetch $src by hand and point PHONEDESK_RELEASE_BASE at that folder."
+      Say "Tip: try later, another network or a VPN, or fetch $src by hand and point NOOKDECK_RELEASE_BASE at that folder."
       throw 'download failed'
     }
 
     # ============================================================ phase 3: fetch binary
     $dl = $null
     function Probe-Installed {
+      $asset = $S.asset
       # A previous install leaves .release holding the sha256 of the release file it came from and of the file on disk.
       # Same release sum + untouched file + it still runs = nothing to download.
       $S.oldVersion = $null
@@ -331,14 +332,24 @@ function Install-PhoneDesk {
       }
     }
     function Fetch-Binary {
+      $asset = $S.asset
       Stage 3 'Getting the program'
       $sums = Join-Path $S.tmp 'SHA256SUMS'
       try { Fetch "$($S.base)/SHA256SUMS" $sums } catch { Fail "could not fetch $($S.base)/SHA256SUMS" "$($_.Exception.Message) - check the release exists and that you are online." }
       $S.sumLines = @(Get-Content -LiteralPath $sums)
+      # The latest release may still be a 0.1.x one (main is pushed before the new release has finished building): it lists
+      # phonedesk-* only. Take the nookdeck-* name when it is there, else the old one, and install it as the nookdeck program.
+      if (-not (Sum-For $asset)) {
+        $old = $asset -replace '^nookdeck-', 'phonedesk-'
+        if (Sum-For $old) {
+          $S.asset = $old; $asset = $old; $S.legacy = $true
+          Warn "this release is from before the rename ($old); installing it as nookdeck. Run: nookdeck update (once Nookdeck 0.2 is out)."
+        }
+      }
       Probe-Installed
       if ($S.upToDate) {
         $S.newVersion = $S.oldVersion
-        Good "PhoneDesk $(VerOf $S.oldVersion) is up to date (checksum verified), skipping the download"
+        Good "Nookdeck $(VerOf $S.oldVersion) is up to date (checksum verified), skipping the download"
         return
       }
       # Releases carry a gzip of the program (a third of the size); older ones only the plain .exe.
@@ -367,6 +378,7 @@ function Install-PhoneDesk {
 
     # ============================================================ phase 3b: verify binary
     function Verify-Binary {
+      $asset = $S.asset
       if ($S.upToDate) { return }
       Sum-Check $dl $asset # always the program itself, however it arrived
       Unblock-File -LiteralPath $dl -ErrorAction SilentlyContinue # no "from the internet" mark: SmartScreen stays quiet
@@ -375,36 +387,59 @@ function Install-PhoneDesk {
       try { $v = (& $dl --version 2>$null | Select-Object -First 1) } catch { }
       $ErrorActionPreference = $ea
       if (-not $v) { Fail 'the downloaded program does not run on this PC' 'It printed no version.' }
+      if ($S.legacy) { $v = 'nookdeck ' + ($v -replace '^phonedesk ', '') }
       $S.newVersion = $v
       Good "$v"
     }
 
+    # PhoneDesk 0.1.x became Nookdeck: an existing ~\.phonedesk is handed to the program's own migration (copies the data, replaces the
+    # startup entry, firewall rule and PATH entry, re-points the Claude/Codex hooks). The old folder is kept. Safe to repeat.
+    function Invoke-Handover {
+      $oldHome = if ($relocated) { Join-Path $installHome '.phonedesk' } else { Join-Path $env:USERPROFILE '.phonedesk' }
+      if (-not (Test-Path -LiteralPath $oldHome -PathType Container)) { return }
+      if (Test-Path -LiteralPath $dataDir) { return }
+      if ($S.legacy) {
+        # a 0.1.x program has no `migrate`: copy the data here (the old folder stays) and tell it to use the new place
+        Say "found an existing PhoneDesk install ($oldHome): copying its data to $dataDir"
+        try { Copy-Item -LiteralPath $oldHome -Destination $dataDir -Recurse -Force -ErrorAction Stop }
+        catch { Remove-Item -LiteralPath $dataDir -Recurse -Force -ErrorAction SilentlyContinue; Warn "could not copy $oldHome; your PhoneDesk data is untouched" }
+        return
+      }
+      Say "found an existing PhoneDesk install ($oldHome): moving it to Nookdeck"
+      Get-Process -Name phonedesk -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+      Start-Sleep -Milliseconds 700
+      $code = Run-Bin $dl @('migrate', '--port', "$Port")
+      if ($code -eq 0) { Good 'your PhoneDesk data, startup entry and hooks were moved to Nookdeck' }
+      else { Warn "the migration reported a problem; your PhoneDesk data is untouched in $oldHome" }
+    }
     # ============================================================ phase 4: place binary
     function Place-Binary {
+      $asset = $S.asset
       Stage 4 'Installing'
       Say "program   $exe"
       Say "your data stays in $dataDir"
       if (-not $S.upToDate -and $S.oldVersion) { Say "upgrading from $($S.oldVersion)" }
       if ($DryRun) {
         Warn 'dry run: nothing was installed, started or changed'
-        if (-not $NoAutostart) { Say 'would create the scheduled task "PhoneDesk" (starts when you sign in)' }
-        if (-not $NoFirewall) { Say 'would offer a firewall rule for phonedesk.exe, local network only (one UAC prompt)' }
-        Say "would start PhoneDesk on port $Port and open http://localhost:$Port/manage/"
+        if (-not $NoAutostart) { Say 'would create the scheduled task "Nookdeck" (starts when you sign in)' }
+        if (-not $NoFirewall) { Say 'would offer a firewall rule for nookdeck.exe, local network only (one UAC prompt)' }
+        Say "would start Nookdeck on port $Port and open http://localhost:$Port/manage/"
         $S.dryDone = $true
         return
       }
       $S.svcBefore = (Test-Path -LiteralPath $launcher)
       if ($S.upToDate) { $S.binState = 'already set'; return }
-      if (-not (Ask "Install PhoneDesk to ${exe}?" $true)) { Fail 'cancelled' 'Nothing was installed.' }
+      if (-not (Ask "Install Nookdeck to ${exe}?" $true)) { Fail 'cancelled' 'Nothing was installed.' }
       $S.binState = if ($S.oldVersion) { "updated ($(VerOf $S.oldVersion) -> $(VerOf $S.newVersion))" } else { 'installed' }
+      Invoke-Handover
       # let go of the old file: the scheduled task first, then an agent started by hand
       if (Test-Path -LiteralPath $exe) {
         [void](Run-Bin $exe @('service', 'uninstall') -Quiet)
-        Get-Process -Name phonedesk -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Stop-Process -Force -ErrorAction SilentlyContinue
+        Get-Process -Name nookdeck -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Stop-Process -Force -ErrorAction SilentlyContinue
         Start-Sleep -Milliseconds 700
       }
       New-Item -ItemType Directory -Force -Path $binDir, $logDir | Out-Null
-      $staged = Join-Path $binDir '.phonedesk.new.exe'
+      $staged = Join-Path $binDir '.nookdeck.new.exe'
       Copy-Item -LiteralPath $dl -Destination $staged -Force
       Move-Item -LiteralPath $staged -Destination $exe -Force
       "raw=$(Sum-For $asset) installed=$(Sha $exe)" | Set-Content -LiteralPath $releaseFile -Encoding ascii
@@ -420,8 +455,8 @@ function Install-PhoneDesk {
         # SetEnvironmentVariable writes HKCU\Environment and broadcasts WM_SETTINGCHANGE, so new terminals see it
         [Environment]::SetEnvironmentVariable('Path', (($parts + $binDir) -join ';'), 'User')
         $S.pathAdded = $true; $S.pathState = 'installed'
-        Good 'phonedesk is on your PATH'
-      } else { $S.pathState = 'already set'; Say 'phonedesk is already on PATH' }
+        Good 'nookdeck is on your PATH'
+      } else { $S.pathState = 'already set'; Say 'nookdeck is already on PATH' }
       if ($env:Path -notlike "*$binDir*") { $env:Path = "$env:Path;$binDir" } # this window too
     }
 
@@ -433,7 +468,7 @@ function Install-PhoneDesk {
       $txt = Get-Content -LiteralPath $launcher -Raw
       if ($Port -eq 7420) { if ($txt -match '--port') { return $false } } elseif ($txt -notmatch "--port\W+$Port\b") { return $false }
       $ea = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-      try { & schtasks.exe /Query /TN PhoneDesk *> $null; return ($LASTEXITCODE -eq 0) } finally { $ErrorActionPreference = $ea }
+      try { & schtasks.exe /Query /TN Nookdeck *> $null; return ($LASTEXITCODE -eq 0) } finally { $ErrorActionPreference = $ea }
     }
     function Firewall-Rule {
       if ($NoFirewall -or $NoStart) { return }
@@ -445,18 +480,18 @@ function Install-PhoneDesk {
         $has = [bool]($rules | Where-Object { $_.Action -eq 'Allow' })
         $blocked = [bool]($rules | Where-Object { $_.Action -eq 'Block' })
       } catch { }
-      if ($has -and -not $blocked) { Good 'firewall already allows phonedesk.exe'; $S.fwState = 'already set'; return }
-      Say 'Windows blocks incoming connections by default, so a phone on your Wi-Fi could not reach PhoneDesk.'
-      if ($blocked) { Warn 'There are BLOCK rules for phonedesk.exe (from an unanswered firewall popup); the same step removes them.' }
-      Say 'One inbound rule for phonedesk.exe, local subnet only (any profile, nothing from the internet). Windows will ask permission (UAC).'
+      if ($has -and -not $blocked) { Good 'firewall already allows nookdeck.exe'; $S.fwState = 'already set'; return }
+      Say 'Windows blocks incoming connections by default, so a phone on your Wi-Fi could not reach Nookdeck.'
+      if ($blocked) { Warn 'There are BLOCK rules for nookdeck.exe (from an unanswered firewall popup); the same step removes them.' }
+      Say 'One inbound rule for nookdeck.exe, local subnet only (any profile, nothing from the internet). Windows will ask permission (UAC).'
       if (Ask 'Add the firewall rule?' $true) {
-        $rule = "netsh advfirewall firewall delete rule name=all program=`"$exe`" >nul 2>&1 & netsh advfirewall firewall add rule name=`"PhoneDesk`" dir=in action=allow program=`"$exe`" profile=any remoteip=localsubnet enable=yes"
+        $rule = "netsh advfirewall firewall delete rule name=all program=`"$exe`" >nul 2>&1 & netsh advfirewall firewall add rule name=`"Nookdeck`" dir=in action=allow program=`"$exe`" profile=any remoteip=localsubnet enable=yes"
         try {
           $p = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $rule) -Verb RunAs -Wait -PassThru -WindowStyle Hidden
-          if ($p.ExitCode -eq 0) { Good 'firewall rule added (local subnet only)'; $S.fwState = 'installed' } else { Warn "netsh returned $($p.ExitCode); run `phonedesk doctor` for what to do" }
-        } catch { Warn 'the permission prompt was declined, so no rule was added. `phonedesk doctor` shows how to add it later.' }
+          if ($p.ExitCode -eq 0) { Good 'firewall rule added (local subnet only)'; $S.fwState = 'installed' } else { Warn "netsh returned $($p.ExitCode); run `nookdeck doctor` for what to do" }
+        } catch { Warn 'the permission prompt was declined, so no rule was added. `nookdeck doctor` shows how to add it later.' }
       } else {
-        Say 'Skipped. Without the rule your phone cannot connect; `phonedesk doctor` shows the command to add it later.'
+        Say 'Skipped. Without the rule your phone cannot connect; `nookdeck doctor` shows the command to add it later.'
       }
     }
     function Preflight-Port {
@@ -468,14 +503,14 @@ function Install-PhoneDesk {
       if ($S.upToDate -and (Agent-Line $Port) -eq $S.newVersion) { $S.alreadyRunning = $true; Say "agent already running on port $Port"; return }
       $hp = $null; try { $hp = Get-Process -Id $holder.OwningProcess -ErrorAction Stop } catch { }
       $who = if ($hp) { "$($hp.ProcessName) (pid $($hp.Id)$(if ($hp.Path) { ', ' + $hp.Path }))" } else { "process $($holder.OwningProcess)" }
-      Fail "port $Port is taken by $who" "Free it with Stop-Process -Id $($holder.OwningProcess) - or install on another port with `$env:PHONEDESK_PORT=7421. The program is in place at $exe; nothing was started."
+      Fail "port $Port is taken by $who" "Free it with Stop-Process -Id $($holder.OwningProcess) - or install on another port with `$env:NOOKDECK_PORT=7421. The program is in place at $exe; nothing was started."
     }
     function Wire-Service {
       Stage 5 'Background service and firewall'
       Link-Cli
       $S.autostart = -not $NoAutostart
       if ($S.autostart -and $S.upToDate -and (Service-Current)) { $S.svcKeep = $true }
-      elseif ($S.autostart) { if (-not (Ask 'Start PhoneDesk automatically when you sign in?' $true)) { $S.autostart = $false } }
+      elseif ($S.autostart) { if (-not (Ask 'Start Nookdeck automatically when you sign in?' $true)) { $S.autostart = $false } }
       Firewall-Rule
       if (-not $NoStart) { Preflight-Port }
       if ($S.autostart -and $S.svcKeep) {
@@ -504,8 +539,8 @@ function Install-PhoneDesk {
 
     # ============================================================ phase 6: launch
     function Launch-Agent {
-      Stage 6 'Starting PhoneDesk'
-      if ($NoStart) { Say "not started (PHONEDESK_NO_START). Start it with: $exe"; return }
+      Stage 6 'Starting Nookdeck'
+      if ($NoStart) { Say "not started (NOOKDECK_NO_START). Start it with: $exe"; return }
       if (-not $S.autostart -and -not $S.alreadyRunning) {
         $saved = @{}
         foreach ($k in $childEnv.Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k, 'Process'); [Environment]::SetEnvironmentVariable($k, $childEnv[$k], 'Process') }
@@ -515,9 +550,9 @@ function Install-PhoneDesk {
       }
       $pairing = $null
       for ($i = 0; $i -lt 40; $i++) {
-        try { $pairing = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/pairing" -Headers @{ 'x-phonedesk' = '1' } -TimeoutSec 2; break } catch { Start-Sleep -Milliseconds 500 }
+        try { $pairing = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/pairing" -Headers @{ 'x-nookdeck' = '1' } -TimeoutSec 2; break } catch { Start-Sleep -Milliseconds 500 }
       }
-      if (-not $pairing) { Fail "PhoneDesk did not answer on port $Port" "See $logDir\agent.err.log" }
+      if (-not $pairing) { Fail "Nookdeck did not answer on port $Port" "See $logDir\agent.err.log" }
       # the answer could come from ANOTHER process on that port: it must be the build installed a moment ago
       $seen = $null
       for ($i = 0; $i -lt 20; $i++) {
@@ -527,7 +562,7 @@ function Install-PhoneDesk {
       }
       if ($seen -ne $S.newVersion) {
         $tail = ''; try { $tail = ((Get-Content -LiteralPath (Join-Path $logDir 'agent.err.log') -Tail 8 -ErrorAction Stop) -join [Environment]::NewLine) } catch { }
-        Fail "the agent on port $Port is not the one just installed" "It reports '$seen' but we installed '$($S.newVersion)'. Another PhoneDesk probably owns the port: stop it, or use another port. Last log lines ($logDir\agent.err.log):$([Environment]::NewLine)$tail"
+        Fail "the agent on port $Port is not the one just installed" "It reports '$seen' but we installed '$($S.newVersion)'. Another Nookdeck probably owns the port: stop it, or use another port. Last log lines ($logDir\agent.err.log):$([Environment]::NewLine)$tail"
       }
       $S.pairing = $pairing
       Good "agent is up on port $Port"
@@ -536,7 +571,7 @@ function Install-PhoneDesk {
     # ============================================================ summary
     function Show-Summary {
       Write-Host ''
-      Put '  -- PhoneDesk ----------------------' 'Cyan'
+      Put '  -- Nookdeck ----------------------' 'Cyan'
       Write-Host ('  {0,-9} {1}' -f 'Program', $S.binState)
       Write-Host ('  {0,-9} {1}' -f 'PATH', $S.pathState)
       Write-Host ('  {0,-9} {1}' -f 'Service', $S.svcState)
@@ -554,8 +589,8 @@ function Install-PhoneDesk {
           if (Ask 'Open the manage page now?' $true) { try { Start-Process "http://localhost:$Port/manage/" } catch { } }
         }
       }
-      if ($S.pathState -eq 'installed') { Say 'New terminal windows will find phonedesk; try: phonedesk doctor   (this window already does)' }
-      Say 'Permissions and firewall check, any time: phonedesk doctor'
+      if ($S.pathState -eq 'installed') { Say 'New terminal windows will find nookdeck; try: nookdeck doctor   (this window already does)' }
+      Say 'Permissions and firewall check, any time: nookdeck doctor'
       Say 'To upgrade, run the same command again. To remove: uninstall.ps1 (see the README).'
     }
 
@@ -577,12 +612,12 @@ function Install-PhoneDesk {
   }
 }
 
-if ($env:PHONEDESK_SETUP_NORUN -ne '1') {
+if ($env:NOOKDECK_SETUP_NORUN -ne '1') {
   $on = { param([bool]$flag, [string]$name) $flag -or ([Environment]::GetEnvironmentVariable($name) -eq '1') }
-  Install-PhoneDesk `
-    -Yes:(& $on $Yes.IsPresent 'PHONEDESK_YES') -Version $(if ($Version) { $Version } else { [string]$env:PHONEDESK_VERSION }) `
-    -Port $(if ($Port -gt 0) { $Port } elseif ($env:PHONEDESK_PORT) { [int]$env:PHONEDESK_PORT } else { 7420 }) `
-    -NoAutostart:(& $on $NoAutostart.IsPresent 'PHONEDESK_NO_AUTOSTART') -NoStart:(& $on $NoStart.IsPresent 'PHONEDESK_NO_START') `
-    -NoOpen:(& $on $NoOpen.IsPresent 'PHONEDESK_NO_OPEN') -NoFirewall:(& $on $NoFirewall.IsPresent 'PHONEDESK_NO_FIREWALL') `
-    -NoPath:(& $on $NoPath.IsPresent 'PHONEDESK_NO_PATH') -DryRun:(& $on $DryRun.IsPresent 'PHONEDESK_DRY_RUN') -Force:(& $on $Force.IsPresent 'PHONEDESK_FORCE')
+  Install-Nookdeck `
+    -Yes:(& $on $Yes.IsPresent 'NOOKDECK_YES') -Version $(if ($Version) { $Version } else { [string]$env:NOOKDECK_VERSION }) `
+    -Port $(if ($Port -gt 0) { $Port } elseif ($env:NOOKDECK_PORT) { [int]$env:NOOKDECK_PORT } else { 7420 }) `
+    -NoAutostart:(& $on $NoAutostart.IsPresent 'NOOKDECK_NO_AUTOSTART') -NoStart:(& $on $NoStart.IsPresent 'NOOKDECK_NO_START') `
+    -NoOpen:(& $on $NoOpen.IsPresent 'NOOKDECK_NO_OPEN') -NoFirewall:(& $on $NoFirewall.IsPresent 'NOOKDECK_NO_FIREWALL') `
+    -NoPath:(& $on $NoPath.IsPresent 'NOOKDECK_NO_PATH') -DryRun:(& $on $DryRun.IsPresent 'NOOKDECK_DRY_RUN') -Force:(& $on $Force.IsPresent 'NOOKDECK_FORCE')
 }

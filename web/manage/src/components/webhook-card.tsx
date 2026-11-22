@@ -76,7 +76,7 @@ export function WebhookCard() {
                 <Button size="sm" variant="secondary" icon={copied === "key" ? <Check /> : <Copy />} onClick={() => void copyKey()}>{copied === "key" ? t("Copied") : t("Copy key")}</Button>
                 <Button size="sm" variant="destructive" icon={<Refresh />} loading={busy} onClick={() => setConfirm(true)}>{t("Change key")}</Button>
               </div>
-              <p className="text-[11.5px] text-muted-foreground">{t("Other machines on the LAN send this key in the Authorization: Bearer header. The key can only call the webhook, not the phone control API. Calls from this machine also need the header X-PhoneDesk: 1.")}</p>
+              <p className="text-[11.5px] text-muted-foreground">{t("Other machines on the LAN send this key in the Authorization: Bearer header. The key can only call the webhook, not the phone control API. Calls from this machine also need the header X-Nookdeck: 1.")}</p>
             </div>
             <div className="flex flex-col gap-1.5">
               <span className="text-[13px] font-medium">{t("Example (replace <KEY> with the copied key)")}</span>

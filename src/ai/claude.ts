@@ -18,9 +18,9 @@ export const tokenFingerprint = (token: string): string => createHash("sha256").
 const blockedTokens = new Map<string, number>();
 export const resetClaudeBackoff = () => blockedTokens.clear();
 
-/** Claude Code config dir. Overridable for tests: PHONEDESK_CLAUDE_DIR, then CLAUDE_CONFIG_DIR. */
+/** Claude Code config dir. Overridable for tests: NOOKDECK_CLAUDE_DIR, then CLAUDE_CONFIG_DIR. */
 export function claudeDir(): string {
-  return process.env.PHONEDESK_CLAUDE_DIR ?? process.env.CLAUDE_CONFIG_DIR ?? join(safeHome(), ".claude");
+  return process.env.NOOKDECK_CLAUDE_DIR ?? process.env.CLAUDE_CONFIG_DIR ?? join(safeHome(), ".claude");
 }
 
 export interface ClaudeCreds {
@@ -133,7 +133,7 @@ export async function fetchClaudeQuota(deps: ClaudeDeps = {}, last?: ProviderQuo
         Authorization: `Bearer ${creds.accessToken}`,
         "anthropic-beta": "oauth-2025-04-20",
         Accept: "application/json",
-        "User-Agent": "phonedesk",
+        "User-Agent": "nookdeck",
       },
       signal: AbortSignal.timeout(10_000),
     });
