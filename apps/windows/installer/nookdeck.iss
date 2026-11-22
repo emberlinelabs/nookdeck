@@ -91,7 +91,10 @@ var
   Code: Integer;
 begin
   Result := '';
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM Nookdeck.exe', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  // by path, not `taskkill /IM`: image names are case-insensitive, so that would stop the agent (nookdeck.exe) too
+  Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -NonInteractive -Command "Get-Process -Name Nookdeck -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq ''' + ExpandConstant('{app}\Nookdeck.exe') + ''' } | Stop-Process -Force"',
+    '', SW_HIDE, ewWaitUntilTerminated, Code);
   Sleep(500);
 end;
 

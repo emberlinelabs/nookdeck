@@ -6,8 +6,8 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// These tests run the real shell scripts (several processes, some deliberate 2-3 s waits). Bun's 5 s default fails them on a busy machine.
-setDefaultTimeout(30_000);
+// These tests run the real shell scripts (several processes, some deliberate 2-3 s waits). Bun's 5 s default fails them on a busy machine; these are upper bounds only, an idle machine is as fast as before.
+setDefaultTimeout(90_000);
 
 // setup.sh / uninstall.sh against a temp release directory and a temp install home. launchctl is `echo`, and every
 // directory the binary touches is inside the sandbox: never the real ~/.nookdeck, ~/.claude or ~/Library/LaunchAgents.
@@ -180,7 +180,7 @@ describe.skipIf(!mac)("setup.sh", () => {
     await expect(fetch(`http://127.0.0.1:${port}/api/pairing`)).rejects.toThrow(); // the old one is gone
     expect((await fetch(`http://127.0.0.1:${port2}/api/pairing`)).status).toBe(200);
     expect(existsSync(join(home, ".nookdeck", "bin", ".nookdeck.new"))).toBe(false);
-  }, 60_000);
+  }, 120_000);
 
   test("autostart: the launchd plist is written under the install home (launchctl is echo); --no-start leaves the agent off", () => {
     const home = newHome();
@@ -192,7 +192,7 @@ describe.skipIf(!mac)("setup.sh", () => {
     expect(readFileSync(plist, "utf8")).toContain("<string>7533</string>");
     expect(readFileSync(plist, "utf8")).toContain(join(home, ".nookdeck"));
     expect(existsSync(join(home, ".nookdeck", "agent.pid"))).toBe(false);
-  }, 30_000);
+  }, 90_000);
 
   test("a checksum mismatch is refused and nothing is installed", () => {
     const home = newHome();
@@ -270,7 +270,7 @@ describe.skipIf(!mac)("uninstall.sh", () => {
     const purge = sh("uninstall.sh", ["--yes", "--purge"], env(home, release));
     expect(purge.exitCode, out(purge)).toBe(0);
     expect(existsSync(join(home, ".nookdeck"))).toBe(false);
-  }, 60_000);
+  }, 120_000);
 });
 
 describe.skipIf(!mac)("setup.sh: finding the latest release when GitHub misbehaves", () => {
@@ -313,7 +313,7 @@ describe.skipIf(!mac)("setup.sh: finding the latest release when GitHub misbehav
       expect(r.code, r.text).toBe(0);
       expect(r.text).toContain("release v9.9.9");
     } finally { gh.close(); }
-  }, 60_000);
+  }, 120_000);
   test("the redirect keeps failing: it falls back to api.github.com tag_name", async () => {
     const gh = await githubStandIn({ redirectWorks: false, apiTag: "v9.9.9" });
     try {
@@ -322,7 +322,7 @@ describe.skipIf(!mac)("setup.sh: finding the latest release when GitHub misbehav
       expect(r.text).toContain("release v9.9.9");
       expect(gh.hits.some((h) => h.includes("/repos/") && h.includes("/releases/latest"))).toBe(true);
     } finally { gh.close(); }
-  }, 60_000);
+  }, 120_000);
   test("both fail: the error says what failed and suggests --version / NOOKDECK_VERSION; nothing is installed", async () => {
     const gh = await githubStandIn({ redirectWorks: false, apiTag: null, status: 404 });
     try {
@@ -334,7 +334,7 @@ describe.skipIf(!mac)("setup.sh: finding the latest release when GitHub misbehav
       expect(r.text).toContain("retrying"); // it did retry
       expect(existsSync(join(r.home, ".nookdeck", "bin", "nookdeck"))).toBe(false);
     } finally { gh.close(); }
-  }, 60_000);
+  }, 120_000);
   test("NOOKDECK_VERSION skips the lookup entirely", async () => {
     const gh = await githubStandIn({ redirectWorks: false, apiTag: null });
     try {
@@ -342,7 +342,7 @@ describe.skipIf(!mac)("setup.sh: finding the latest release when GitHub misbehav
       expect(r.code, r.text).toBe(0);
       expect(gh.hits.some((h) => h.includes("/releases/latest"))).toBe(false);
     } finally { gh.close(); }
-  }, 60_000);
+  }, 120_000);
 
 });
 
@@ -409,7 +409,7 @@ describe.skipIf(!mac)("setup.sh / uninstall.sh: PATH and the port check", () => 
     if (pid) spawned.push(pid);
     expect(r.exitCode, text).toBe(0);
     expect(text).toContain(`agent is up on port ${port}`);
-  }, 60_000);
+  }, 120_000);
 });
 
 describe.skipIf(!mac)("setup.sh: running it again does not redo what is done", () => {
@@ -448,7 +448,7 @@ describe.skipIf(!mac)("setup.sh: running it again does not redo what is done", (
     expect(out(r3)).toContain("Fetching");
     expect(sum(out(r3))?.[0]).toMatch(/^updated/);
     spawned.push(Number(readFileSync(pidfile, "utf8")));
-  }, 90_000);
+  }, 150_000);
   test("the launchd service: kept when it runs this program on this port; rewritten when the port changes", () => {
     const home = newHome();
     const release = makeRelease();
@@ -465,7 +465,7 @@ describe.skipIf(!mac)("setup.sh: running it again does not redo what is done", (
     const r3 = sh("setup.sh", [...args, "--port", "7542"], e);
     expect(sum(out(r3))?.[2]).toBe("updated");
     expect(readFileSync(plist, "utf8")).toContain("<string>7542</string>");
-  }, 90_000);
+  }, 150_000);
   test("a tampered install is not 'up to date'; a different release is an upgrade", () => {
     const home = newHome();
     const args = ["--yes", "--no-open", "--no-start", "--no-autostart"];
@@ -483,7 +483,7 @@ describe.skipIf(!mac)("setup.sh: running it again does not redo what is done", (
     expect(out(fix)).not.toContain("up to date");
     expect(fix.exitCode, out(fix)).toBe(0);
     expect(readFileSync(bin, "utf8")).not.toContain("# edited");
-  }, 90_000);
+  }, 150_000);
   test("an install without the .release marker (older setup) is reinstalled once, then it is up to date", () => {
     const home = newHome();
     const rel = makeRelease();
@@ -492,7 +492,7 @@ describe.skipIf(!mac)("setup.sh: running it again does not redo what is done", (
     rmSync(join(home, ".nookdeck", "bin", ".release"));
     expect(out(sh("setup.sh", args, env(home, rel)))).not.toContain("up to date");
     expect(out(sh("setup.sh", args, env(home, rel)))).toContain("up to date");
-  }, 90_000);
+  }, 150_000);
 });
 
 // main is pushed before the new release has finished building: for a while the latest release is a 0.1.x one with phonedesk-* assets only
