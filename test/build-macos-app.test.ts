@@ -23,6 +23,6 @@ describe("build-macos-app (pure parts)", () => {
   test("flags", () => {
     expect(parseArgs([])).toMatchObject({ hostAgent: false, dmg: true });
     expect(parseArgs(["--host-agent", "--no-dmg", "--agent-arm64", "a", "--agent-x64", "b"])).toMatchObject({ hostAgent: true, dmg: false, agentArm64: "a", agentX64: "b" });
-    expect(parseArgs(["--out", "x"]).out.endsWith("/x")).toBe(true);
+    expect(/[\\/]x$/.test(parseArgs(["--out", "x"]).out)).toBe(true);
   });
 });
