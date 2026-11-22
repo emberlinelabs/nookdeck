@@ -553,7 +553,7 @@ export interface PluginInfo {
 }
 
 // Theme packs (GET /api/themes). A pack holds 1 to 12 variants and optional choices (options); see specs/plugin-system D14 to D16.
-export interface ThemeVariantInfo { id: string; name: string; mode: "light" | "dark"; look: Partial<ThemeLook>; preview?: string }
+export interface ThemeVariantInfo { id: string; name: string; mode: "light" | "dark"; look: Partial<ThemeLook>; preview?: string; /** The agent found that the declared mode does not match the colours. */ modeMismatch?: boolean }
 export interface ThemeOptionValue { id: string; name: string; theme?: Partial<ThemeLook>; variants?: Record<string, Partial<ThemeLook>> }
 export interface ThemeOptionInfo { id: string; name: string; values: ThemeOptionValue[] }
 export interface ThemeSource { pack: string; variant?: string; auto?: { light: string; dark: string }; options?: Record<string, string> }

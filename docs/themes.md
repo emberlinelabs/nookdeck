@@ -198,6 +198,8 @@ A pack does **not** run code and cannot install anything: no `node_modules`, no 
 
 `data-part="background"` is the layer behind everything. A pack may paint it (gradients, patterns, package images) with `background-image`, `background-color` and so on; its colour defaults to `--nd-bg`. Whenever a pack is applied the deck guarantees that layer is shown and that the panel and sheet are transparent over it, so no override is needed. `data-part="clock-card"` is the flip card of a flip clock and `data-part="clock-digit"` each half of a digit on it.
 
+`data-part="num"` marks every number the deck draws (clock digits, metric and weather values, media times, deltas, ring centres, entity values); together with `tile-value` it takes the pack's `numberFont`, with `font` as the fallback. Big text is fitted to its box after the fonts load: row text and ring centres are scaled down when a wide font (Orbitron, Press Start 2P) would overflow, ring centres drop their unit first, and button labels wrap to two lines, then step down, then end in an ellipsis. Tiles clip their content, so a pack never needs its own overflow rules.
+
 ## Custom CSS (`theme.css`)
 
 For things a look cannot say (glows, pseudo-element decoration, animations) add a CSS file and set `"css": "theme.css"` in the manifest. The agent parses it with a real CSS parser when you install it, then scopes every rule under your pack, so it cannot style anything else:
@@ -239,7 +241,7 @@ What a theme can reach on the deck:
 
 | Attribute | Values |
 |---|---|
-| `data-part` | `tile`, `tile-icon`, `tile-label`, `tile-value`, `tile-sub`, `chart`, `gauge`, `button`, `header`, `page-dots`, `sheet`, `standby`, `background`, `clock-digit`, `clock-card` |
+| `data-part` | `tile`, `tile-icon`, `tile-label`, `tile-value`, `tile-sub`, `chart`, `gauge`, `button`, `header`, `page-dots`, `sheet`, `standby`, `background`, `clock-digit`, `clock-card`, `num` |
 | `data-kind` | `button`, `clock`, `metric`, `media`, `weather`, `quota`, `entity`, `plugin`, `folder`, `header`, `standby`, `sheet` |
 | `data-state` | `on`, `off`, `playing`, `ok`, `warn`, `error` |
 | `data-size` | The tile's size in cells, like `"2x1"` |

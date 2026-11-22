@@ -21,12 +21,31 @@ export const ICON_MAX_BYTES = 20 * 1024;
 export const PACK_MAX_BYTES = 5 * 1024 * 1024;
 
 export interface ThemeState { version: string; sha256: string; source: string; installedAt: number; files: string[]; reviewed?: boolean; registryVersion?: string; builtin?: boolean }
-export interface VariantSummary { id: string; name: string; mode: "light" | "dark"; look: PackLook; preview?: string }
+export interface VariantSummary { id: string; name: string; mode: "light" | "dark"; look: PackLook; preview?: string; modeMismatch?: boolean }
+
+/** Relative luminance (0 black .. 1 white) of a #rgb / #rrggbb / #rrggbbaa colour, or null when it is not one. */
+export function luminance(c: unknown): number | null {
+  const m = typeof c === "string" ? /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(c.trim()) : null;
+  if (!m) return null;
+  let h = m[1]!;
+  if (h.length === 3) h = h.split("").map((x) => x + x).join("");
+  const ch = (i: number) => { const v = parseInt(h.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * ch(0) + 0.7152 * ch(2) + 0.0722 * ch(4);
+}
+
+/** True when the variant's background says the opposite of its declared mode (a "light" variant on a dark background, or the reverse). */
+export function modeMismatch(look: PackLook, mode: "light" | "dark"): boolean {
+  const l = luminance((look as Record<string, unknown>).background);
+  if (l === null) return false;
+  return mode === "light" ? l < 0.18 : l > 0.5;
+}
 export interface ThemeSummary {
   id: string; name: string; version: string; author?: string; description?: string; nookdeck?: string;
   variants: VariantSummary[];
   options: Array<{ id: string; name: string; values: Array<{ id: string; name: string; theme: Look; variants?: Record<string, Look> }> }>;
   auto?: { light: string; dark: string };
+  /** ids of variants whose background contradicts their declared mode (wrong metadata) */
+  modeMismatch?: string[];
   preview?: string; hasCss: boolean; fonts: string[]; icons: string[];
   sha256: string; source: string; installedAt: number; reviewed: boolean; registryVersion?: string; builtin: boolean;
 }
@@ -194,9 +213,10 @@ export class ThemeStore {
     return {
       id, name: m.name, version: m.version, ...(m.author ? { author: m.author } : {}), ...(m.description ? { description: m.description } : {}),
       ...(m.nookdeck ? { nookdeck: m.nookdeck } : {}),
-      variants: m.variants.map((v) => ({ id: v.id, name: v.name, mode: v.mode, look: resolveVariant(m, v.id), ...(has(v.preview) ? { preview: url(v.preview) } : {}) })),
+      variants: m.variants.map((v) => { const look = resolveVariant(m, v.id); return { id: v.id, name: v.name, mode: v.mode, look, ...(modeMismatch(look, v.mode) ? { modeMismatch: true } : {}), ...(has(v.preview) ? { preview: url(v.preview) } : {}) }; }),
       options: m.options.map((o) => ({ id: o.id, name: o.name, values: o.values.map((v) => ({ id: v.id, name: v.name, theme: v.theme, ...(v.variants ? { variants: v.variants } : {}) })) })),
       ...(m.auto ? { auto: m.auto } : {}),
+      ...(m.variants.some((v) => modeMismatch(resolveVariant(m, v.id), v.mode)) ? { modeMismatch: m.variants.filter((v) => modeMismatch(resolveVariant(m, v.id), v.mode)).map((v) => v.id) } : {}),
       ...(has(m.preview) ? { preview: url(m.preview) } : {}),
       hasCss: !!m.css || m.variants.some((v) => !!v.css), fonts: [...fonts],
       icons: s.files.filter((f) => /^icons\/.+\.svg$/i.test(f)).map((f) => f.slice(6, -4)),
@@ -224,7 +244,7 @@ export class ThemeStore {
       let l: PackLook;
       try { l = resolveVariant(m, variant, options); } catch (e: any) { return bad(e?.message ?? String(e)); }
       const v = m.variants.find((x) => x.id === variant)!;
-      return l.mode ? l : { ...l, mode: v.mode };
+      return { ...l, mode: v.mode }; // the variant's declared mode always wins: a light variant never leaves the deck dark
     };
     let autoReq: { light: string; dark: string } | undefined;
     if (req.auto !== undefined) {
@@ -266,6 +286,7 @@ export class ThemeStore {
     catch (e: any) { throw new PluginError(e instanceof SyntaxError ? `${MANIFEST_FILE} is not valid JSON: ${e.message}` : `${MANIFEST_FILE}: ${e?.message ?? e}`); }
     if (this.state[m.id]?.builtin) throw new PluginError("that theme ships with Nookdeck and cannot be replaced", 409);
     checkPackage(m, files);
+    for (const v of m.variants) if (modeMismatch(resolveVariant(m, v.id), v.mode)) console.warn(`theme ${m.id}: variant "${v.id}" is declared ${v.mode} but its background looks ${v.mode === "light" ? "dark" : "light"}; check its mode`);
     const sha = packageHash(files);
     if (from && (sha !== from.sha256.toLowerCase() || m.version !== from.version)) throw new PluginError("the theme files do not match the reviewed version", 409);
     const prev = this.state[m.id];

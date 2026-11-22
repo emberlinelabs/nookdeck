@@ -113,4 +113,6 @@ export const VI_THEMES: Record<string, string> = {
   "Paste the address of a theme on GitHub, or a folder on this computer. Themes cannot run code, but check where it comes from.": "Dán địa chỉ của một giao diện trên GitHub, hoặc một thư mục trên máy này. Giao diện không thể chạy mã, nhưng hãy kiểm tra nguồn gốc.",
   "Address or folder": "Địa chỉ hoặc thư mục",
   "Theme applied.": "Đã áp dụng giao diện.",
+  "Jump to": "Đến nhóm",
+  "The colours do not look {mode}": "Màu sắc không giống giao diện {mode}",
 };

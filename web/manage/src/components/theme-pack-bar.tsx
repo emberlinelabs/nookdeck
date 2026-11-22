@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { IconArrowRight as ArrowRight, IconCopy as Copy, IconDownload as Download, IconShieldHalf as Safe } from "@tabler/icons-react";
+import { IconCheck as Check, IconArrowRight as ArrowRight, IconCopy as Copy, IconDownload as Download, IconShieldHalf as Safe } from "@tabler/icons-react";
 import { api } from "@/api";
 import { Alert } from "@/components/ui/knowns/alert";
 import { Badge } from "@/components/ui/knowns/badge";
@@ -8,6 +8,7 @@ import { Dialog } from "@/components/ui/knowns/dialog";
 import { Field, Input, } from "@/components/ui/knowns/input";
 import { VariantMini } from "@/components/variant-mini";
 import { packLook } from "@/lib/pack-preview";
+import { SegmentedControl } from "@/components/ui/knowns/segmented-control";
 import { Switch } from "@/components/ui/knowns/switch";
 import { Textarea } from "@/components/ui/knowns/textarea";
 import { t, useLanguage } from "@/lib/i18n";
@@ -114,40 +115,51 @@ export function ThemeCards({ theme, source: saved, beforeApply, onChanged, onBro
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [undo, setUndo] = useState(false);
+  const [keep, setKeep] = useState<string | null>(null);
+  const [modeFilter, setModeFilter] = useState<"all" | "light" | "dark">("all");
   useEffect(() => { api.getThemes().then((r) => setPacks((r?.packs ?? []).filter((p) => p.installed)), () => setPacks([])); }, [saved?.pack, saved?.variant]);
   useEffect(() => { if (!undo) return; const id = window.setTimeout(() => setUndo(false), 15000); return () => window.clearTimeout(id); }, [undo]);
+  // after an apply the groups above may change height: keep the card that was pressed where the user can see it
+  useEffect(() => {
+    if (!keep) return;
+    const id = window.setTimeout(() => { const el = Array.from(document.querySelectorAll("[data-card]")).find((e) => e.getAttribute("data-card") === keep); if (el) (el as HTMLElement).scrollIntoView({ block: "nearest" }); setKeep(null); }, 450);
+    return () => window.clearTimeout(id);
+  }, [keep, packs, saved?.pack, saved?.variant]);
   const classic = packs.find((p) => p.id === CLASSIC_ID);
   const guess = !saved && classic ? classic.variants.find((v) => lookEquals(theme, v.look)) : undefined;
   const cur: ThemeSource | undefined = saved ?? (classic && guess ? { pack: classic.id, variant: guess.id } : undefined);
   const curId = cur?.pack.split("@")[0];
   const active = packs.find((p) => p.id === curId);
-  const others = packs.filter((p) => p.id !== curId).sort((a, b) => Number(b.builtin) - Number(a.builtin) || a.name.localeCompare(b.name));
+  // a stable order: built-ins first, then the rest by name; the pack in use keeps its place and is only highlighted
+  const ordered = [...packs].sort((a, b) => Number(b.builtin) - Number(a.builtin) || a.name.localeCompare(b.name));
   const apply = async (p: ThemePack, body: ApplyBody) => {
     setBusy(true); setError(null);
-    try { await beforeApply?.(); await api.applyTheme(p.id, body); setUndo(true); onChanged(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+    try { await beforeApply?.(); await api.applyTheme(p.id, body); setUndo(true); setKeep(body.variant ? `${p.id}/${body.variant}` : null); onChanged(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
   if (!packs.length) return null;
   const grid = (p: ThemePack, isActive: boolean) => (
     <div role="radiogroup" aria-label={p.name} className="grid grid-cols-3 gap-2">
-      {p.variants.map((v) => (
-        <VariantMini key={v.id} small look={packLook(p, v.id, isActive ? cur?.options : undefined)} name={v.name} mode={v.mode}
+      {p.variants.filter((v) => modeFilter === "all" || v.mode === modeFilter).map((v) => (
+        <VariantMini key={v.id} small cardKey={`${p.id}/${v.id}`} look={packLook(p, v.id, isActive ? cur?.options : undefined)} name={v.name} mode={v.mode} mismatch={v.modeMismatch}
           picked={isActive && (cur?.variant === v.id || cur?.auto?.light === v.id || cur?.auto?.dark === v.id)} current={isActive && cur?.variant === v.id}
           disabled={busy} onPick={() => void apply(p, { variant: v.id, ...(isActive && cur?.options ? { options: cur.options } : {}) })} />
       ))}
     </div>
   );
   let activeBlock: React.ReactNode = null;
+  let summary = "";
   if (active && cur) {
     const vName = (id?: string) => active.variants.find((v) => v.id === id)?.name ?? id ?? "";
     const optNames = Object.entries(cur.options ?? {}).map(([o, v]) => active.options.find((x) => x.id === o)?.values.find((x) => x.id === v)?.name ?? v);
     const label = [active.name, cur.auto ? `${t("Auto")} (${vName(cur.auto.light)}/${vName(cur.auto.dark)})` : vName(cur.variant), ...optNames].filter((x, i, a) => x && a.indexOf(x) === i).join(" · ");
+    summary = label;
     const light = active.variants.filter((v) => v.mode === "light"), dark = active.variants.filter((v) => v.mode === "dark");
     const canAuto = light.length > 0 && dark.length > 0;
     const pair = cur.auto ?? { light: active.auto?.light ?? light[0]?.id ?? "", dark: active.auto?.dark ?? dark[0]?.id ?? "" };
     const refVariant = cur.variant ?? cur.auto?.dark;
     activeBlock = (
-      <div className="flex flex-col gap-2 rounded-xl border p-2.5">
-        <div className="flex flex-wrap items-center gap-1.5 text-[13px]"><span className="text-muted-foreground">{t("In use")}:</span><span className="font-medium">{label}</span>{active.hasCss && <Badge size="sm" tone="warning">{t("Custom CSS")}</Badge>}</div>
+      <div id={`tc-pack-${active.id}`} className="flex flex-col gap-2 rounded-xl border border-primary p-2.5 ring-1 ring-primary">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><span className="text-[13px] font-medium text-foreground">{active.name}</span>{active.builtin && <Badge size="sm" tone="neutral">{t("Built-in")}</Badge>}{active.hasCss && <Badge size="sm" tone="warning">{t("Custom CSS")}</Badge>}<Badge size="sm" tone="success" icon={<Check />}>{t("In use")}</Badge></div>
         {!cur.auto && grid(active, true)}
         {canAuto && (
           <div className="flex flex-col gap-2">
@@ -161,7 +173,7 @@ export function ThemeCards({ theme, source: saved, beforeApply, onChanged, onBro
                 <span className="text-xs text-muted-foreground">{m === "light" ? t("Light") : t("Dark")}</span>
                 <div className="grid grid-cols-3 gap-2">
                   {(m === "light" ? light : dark).map((v) => (
-                    <VariantMini key={v.id} small look={packLook(active, v.id, cur.options)} name={v.name} mode={v.mode} picked={cur.auto![m] === v.id} disabled={busy}
+                    <VariantMini key={v.id} small look={packLook(active, v.id, cur.options)} name={v.name} mode={v.mode} mismatch={v.modeMismatch} picked={cur.auto![m] === v.id} disabled={busy}
                       onPick={() => void apply(active, { auto: { ...cur.auto!, [m]: v.id }, ...(cur.options ? { options: cur.options } : {}) })} />
                   ))}
                 </div>
@@ -192,9 +204,18 @@ export function ThemeCards({ theme, source: saved, beforeApply, onChanged, onBro
   }
   return (
     <section aria-labelledby="tc-h" className="flex flex-col gap-3">
-      <h2 id="tc-h" className="text-sm font-semibold">{t("Themes")}</h2>
-      {activeBlock}
-      {others.map((p) => (
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="tc-h" className="text-sm font-semibold">{t("Themes")}</h2>
+        <SegmentedControl size="sm" aria-label={t("Show")} value={modeFilter} onValueChange={(v) => setModeFilter(v as "all" | "light" | "dark")}
+          options={[{ value: "all", label: t("All") }, { value: "light", label: t("Light") }, { value: "dark", label: t("Dark") }]} />
+      </div>
+      {active && cur && (
+        <p className="flex flex-wrap items-center gap-x-2 text-[13px]">
+          <span className="text-muted-foreground">{t("In use")}:</span><span className="font-medium">{summary}</span>
+          <button type="button" className="text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring" onClick={() => document.getElementById(`tc-pack-${active.id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" })}>{t("Jump to")}</button>
+        </p>
+      )}
+      {ordered.filter((p) => p.id === curId || modeFilter === "all" || p.variants.some((v) => v.mode === modeFilter)).map((p) => p.id === curId && activeBlock ? <div key={p.id}>{activeBlock}</div> : (
         <div key={p.id} className="flex flex-col gap-1.5">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="font-medium text-foreground">{p.name}</span>{p.builtin && <Badge size="sm" tone="neutral">{t("Built-in")}</Badge>}{p.hasCss && <Badge size="sm" tone="warning">{t("Custom CSS")}</Badge>}</div>
           {grid(p, false)}

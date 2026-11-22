@@ -3631,3 +3631,28 @@
 /* Now Playing: the transport row may squeeze its buttons a little, never clip the volume button */
 .pd-root .pd-npl__tr--sb .pd-npl__ghost, .pd-root .pd-npl__tr3 .pd-npl__ghost { -webkit-flex: 0 1 auto; flex: 0 1 auto; min-width: 32px; }
 .pd-npl__tr--sb, .pd-npl__tr3 { min-width: 0; max-width: 100%; }
+
+/* every clock style takes the theme's numberFont (font as the fallback): digital, minimal, flip cards, world clocks and standby */
+.pd-root .pd-clock__t, .pd-root .pd-clock__s, .pd-root .pd-clk__min, .pd-root .pd-fl__h span, .pd-root [data-part='clock-digit'] span, .pd-root .pd-wd__t, .pd-root .pd-sb__time { font-family: var(--pd-ff-num, var(--pd-ff, inherit)); }
+
+/* numbers: one hook, data-part="num" (and tile-value) takes the pack's numberFont, font as the fallback */
+.pd-root [data-part='num'], .pd-root [data-part='tile-value'] { font-family: var(--pd-ff-num, var(--pd-ff, inherit)); }
+/* deck-wide guard: text never pushes content out of its tile, whatever the font */
+.pd-root [data-part='tile'] { overflow: hidden; }
+.pd-root [data-part='tile-label'], .pd-root [data-part='tile-value'], .pd-root [data-part='tile-sub'], .pd-root [data-part='num'] { min-width: 0; max-width: 100%; }
+.pd-root [data-part='tile-sub'] { overflow: hidden; text-overflow: ellipsis; }
+.pd-root [data-part='header'] span, .pd-root [data-part='sheet'] h2, .pd-root [data-part='sheet'] h3 { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* button labels: up to two lines (fit.ts then steps the size down), an ellipsis last */
+.pd-root .pd-tile__lb, .pd-root .pd-ios__lb { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; word-break: break-word; overflow: hidden; text-overflow: ellipsis; }
+/* short captions inside tiles: one line, an ellipsis when a wide pack font does not fit */
+.pd-root .pd-gstat__m, .pd-root .pd-ml, .pd-root .pd-qname, .pd-root .pd-wx__s, .pd-root .pd-vl__lb { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* quota tiles on a theme: the bar track is a muted shade of the tile, never black */
+.pd-root[data-theme-pkg] .pd-tile--wplain .pd-um__bar, .pd-root[data-theme-pkg] .pd-tile--wplain .pd-qt__bar, .pd-root[data-theme-pkg] .pd-tile--wplain .pd-ul__bar { background: var(--pd-border-strong); }
+
+/* light mode: the standby screen is not a black hole on a light theme */
+.pd-root[data-pd-theme='light'] .pd-sb { background: var(--pd-bg); color: var(--pd-text-2); }
+.pd-root[data-pd-theme='light'] .pd-sb__time, .pd-root[data-pd-theme='light'] .pd-sb__words { color: var(--pd-text); }
+.pd-root[data-pd-theme='light'] .pd-sb__date, .pd-root[data-pd-theme='light'] .pd-sb__next { color: var(--pd-muted); }
+.pd-root[data-pd-theme='light'] .pd-sb__analog line, .pd-root[data-pd-theme='light'] .pd-sb__analog circle { stroke: var(--pd-text); }
+.pd-root[data-pd-theme='light'] .pd-sb__analog circle { fill: var(--pd-text); }

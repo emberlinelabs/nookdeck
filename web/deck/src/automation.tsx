@@ -210,7 +210,7 @@ export function WeatherTile(props: WeatherProps) {
   if (noStrip && (mode === 'full' || mode === 'wide' || mode === 'tall')) mode = ch <= 1 ? 'row' : 'card'
 
   const temp = (size: number) => (
-    <span class="pd-wx__t" style={{ fontSize: size + 'px', color: col }}>
+    <span class="pd-wx__t" data-part="num" style={{ fontSize: size + 'px', color: col }}>
       {deg(cur.temp)}
     </span>
   )
@@ -226,7 +226,7 @@ export function WeatherTile(props: WeatherProps) {
             <span class="pd-wx__h" key={i}>
               <span class="pd-wx__hl">{i === 0 ? t('Now') : hourLabel(ms)}</span>
               <WxGlyph cond={condAt(h.condition, ms)} size={big ? 24 : 20} assets={props.assets} />
-              <b style={{ color: col }}>{deg(h.temp)}</b>
+              <b data-part="num" style={{ color: col }}>{deg(h.temp)}</b>
             </span>
           )
         })}
@@ -253,11 +253,11 @@ export function WeatherTile(props: WeatherProps) {
             <span class="pd-wx__d" key={i} style={rh ? { height: rh + 'px' } : undefined}>
               <span class="pd-wx__dn">{i === 0 ? t('Today') : DAY()[new Date(toMs(x.t)).getDay()]}</span>
               <WxGlyph cond={x.condition} size={20} assets={props.assets} />
-              <span class="pd-wx__lo">{deg(x.low)}</span>
+              <span class="pd-wx__lo" data-part="num">{deg(x.low)}</span>
               <span class="pd-wx__bar">
                 <i style={{ left: l + '%', width: Math.min(100 - l, w) + '%' }} />
               </span>
-              <span class="pd-wx__hi" style={{ color: col }}>{deg(x.high)}</span>
+              <span class="pd-wx__hi" data-part="num" style={{ color: col }}>{deg(x.high)}</span>
             </span>
           )
         })}

@@ -178,7 +178,7 @@ export function Rings(props: { size: number; rings: RingSpec[]; gap?: number; ce
         })}
       </svg>
       {props.center ? (
-        <span class="pd-ring__t" style={{ fontSize: (props.centerSize || Math.max(10, Math.round(props.size * 0.24))) + 'px' }}>
+        <span class="pd-ring__t" data-part="num" style={{ fontSize: (props.centerSize || Math.max(10, Math.round(props.size * 0.24))) + 'px' }}>
           {props.center}
         </span>
       ) : null}

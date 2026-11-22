@@ -113,4 +113,6 @@ export const ZH_THEMES: Record<string, string> = {
   "Paste the address of a theme on GitHub, or a folder on this computer. Themes cannot run code, but check where it comes from.": "粘贴 GitHub 上主题的地址，或本机上的文件夹。主题不能运行代码，但请确认来源。",
   "Address or folder": "地址或文件夹",
   "Theme applied.": "已应用主题。",
+  "Jump to": "跳转",
+  "The colours do not look {mode}": "颜色看起来不是{mode}",
 };

@@ -175,7 +175,7 @@ function normalizeThemePack(raw: unknown, installed: boolean): ThemePack | null 
   if (!id) return null;
   const variants = arr(r.variants).flatMap((x): ThemeVariantInfo[] => {
     const v = rec(x); const vid = str(v.id);
-    return vid ? [{ id: vid, name: str(v.name) ?? vid, mode: v.mode === "light" ? "light" : "dark", look: rec(v.look ?? v.theme) as Partial<ThemeLook>, preview: str(v.preview) }] : [];
+    return vid ? [{ id: vid, name: str(v.name) ?? vid, mode: v.mode === "light" ? "light" : "dark", look: rec(v.look ?? v.theme) as Partial<ThemeLook>, preview: str(v.preview), ...(v.modeMismatch ? { modeMismatch: true } : {}) }] : [];
   });
   const options = arr(r.options).flatMap((x): ThemeOptionInfo[] => {
     const o = rec(x); const oid = str(o.id);

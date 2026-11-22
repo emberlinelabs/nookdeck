@@ -1,4 +1,4 @@
-import { IconCheck as Check } from "@tabler/icons-react";
+import { IconAlertTriangle as Warn, IconCheck as Check, IconMoon as Moon, IconSun as Sun } from "@tabler/icons-react";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { ThemeLook } from "@/types";
@@ -64,20 +64,22 @@ export function MiniScreen({ look, mode, bare }: { look: Partial<ThemeLook>; mod
 }
 
 /** One variant as a small card: the mini screen, its name, light or dark, and a check with an accent ring when it is the one in use. */
-export function VariantMini({ look, name, mode, current, picked, disabled, onPick, onHover, small }: {
-  look: Partial<ThemeLook>; name: string; mode: "light" | "dark"; current?: boolean; picked: boolean; disabled?: boolean; onPick: () => void; onHover?: (on: boolean) => void; small?: boolean;
+export function VariantMini({ look, name, mode, current, picked, disabled, onPick, onHover, small, cardKey, mismatch }: {
+  look: Partial<ThemeLook>; name: string; mode: "light" | "dark"; current?: boolean; picked: boolean; disabled?: boolean; onPick: () => void; onHover?: (on: boolean) => void; small?: boolean; cardKey?: string; mismatch?: boolean;
 }) {
   return (
-    <button type="button" role="radio" aria-checked={picked} disabled={disabled} onClick={onPick}
+    <button type="button" role="radio" data-card={cardKey} aria-checked={picked} disabled={disabled} onClick={onPick}
       onMouseEnter={() => onHover?.(true)} onMouseLeave={() => onHover?.(false)} onFocus={() => onHover?.(true)} onBlur={() => onHover?.(false)}
       style={{ background: lookSurface(look, mode), color: look.text ?? (mode === "light" ? "#111113" : "#f4f4f5"), borderColor: picked ? look.accent ?? undefined : alpha(look.text ?? "#888888", 0.22), boxShadow: picked ? `0 0 0 2px ${look.accent ?? "#22d3ee"}` : undefined }}
       className="flex min-w-0 flex-col gap-1.5 rounded-xl border p-1.5 text-left text-[12px] transition-transform hover:-translate-y-px focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50">
       <MiniScreen look={look} mode={mode} bare />
       <span className="flex items-center justify-between gap-1 px-0.5">
         <span className={cn("min-w-0 truncate font-medium", small && "text-[11.5px]")}>{name}</span>
-        <span className="flex flex-none items-center gap-1 text-[10.5px] opacity-70">
+        <span className="flex flex-none items-center gap-1 text-[10.5px]">
+          {mismatch && <Warn className="size-3.5" style={{ color: look.accent }} aria-label={t("The colours do not look {mode}", { mode: mode === "light" ? t("Light") : t("Dark") })}><title>{t("The colours do not look {mode}", { mode: mode === "light" ? t("Light") : t("Dark") })}</title></Warn>}
           {current && <Check className="size-3.5" style={{ color: look.accent }} aria-label={t("In use")} />}
-          {!small && (mode === "light" ? t("Light") : t("Dark"))}
+          <span className="flex items-center rounded-full p-0.5" style={{ background: "rgba(128,128,128,.22)", opacity: 1 }}>{mode === "light" ? <Sun className="size-4" aria-label={t("Light")} /> : <Moon className="size-4" aria-label={t("Dark")} />}</span>
+          {!small && <span>{mode === "light" ? t("Light") : t("Dark")}</span>}
         </span>
       </span>
     </button>

@@ -237,7 +237,7 @@ export function EntityTile(props: EntityProps) {
   const text$ = (
     <span class="pd-ent__tx">
       {value ? (
-        <span class={'pd-ent__v' + (props.pend !== undefined ? ' pd-ent__v--pend' : '')} style={{ fontSize: vSize + 'px', color: isClimate && !gone && raw !== 'off' && !fg ? HVAC_COLOR[raw] || undefined : fg || undefined }}>
+        <span class={'pd-ent__v' + (props.pend !== undefined ? ' pd-ent__v--pend' : '')} data-part="num" style={{ fontSize: vSize + 'px', color: isClimate && !gone && raw !== 'off' && !fg ? HVAC_COLOR[raw] || undefined : fg || undefined }}>
           {value}
           {unit ? <span class="pd-ent__u" style={{ fontSize: Math.max(10, Math.round(vSize * 0.45)) + 'px' }}>{unit}</span> : null}
           {compactStp && tw >= 200 ? mchip : null}

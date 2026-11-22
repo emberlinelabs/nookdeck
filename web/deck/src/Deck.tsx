@@ -4,6 +4,7 @@ import { Icon, TileIcon, setIconStroke } from './icon'
 import { soundKey } from './sounds'
 import { ControlSheet } from './hass-controls'
 import { demoHist, demoStats } from './demo-lib'
+import { installFit } from './fit'
 import { naturalColor, HIST_LEN, Widget, type Hist } from './widgets'
 import { DeckClient, savedDeviceName, type ClientState } from './client'
 import { setTempUnit } from './temp'
@@ -449,7 +450,7 @@ function SoundRing(props: { w: number; h: number; r: number; color: string; at: 
 }
 
 /** data-state of a tile: on / off (entities), playing (media, sound), ok / warn / error (status and load), or nothing. */
-function tileState(item: Item, props: { sound?: unknown; busy?: boolean; media: Media | null; hassEnt?: HassEntity; hassForceOn?: boolean; plug?: PluginSlot; stats?: Stats | null }): string | undefined {
+function tileState(item: Item, props: { sound?: unknown; busy?: boolean; media: Media | null; hassEnt?: HassEntity; hassForceOn?: boolean; plug?: PluginSlot; stats?: Stats | null; ai?: AiData | null }): string | undefined {
   if (item.kind !== 'widget') return props.sound || props.busy ? 'playing' : undefined
   const w = item.widget || ''
   if (w === 'nowplaying') return props.media && props.media.playing ? 'playing' : 'off'
@@ -463,6 +464,13 @@ function tileState(item: Item, props: { sound?: unknown; busy?: boolean; media: 
     if (pl.error !== undefined) return 'error'
     const st = pl.data && pl.data.state
     return st === 'ok' || st === 'warn' || st === 'error' ? st : st === 'off' ? 'off' : undefined
+  }
+  if (w === 'quota' && props.ai) {
+    // usage of the tile's main window: warn from 75%, error from 90%
+    const pv = props.ai.providers.filter((x) => x.id === (item.provider || 'claude'))[0]
+    const acc = pv && ((pv.accounts && pv.accounts[0] && pv.accounts[0].windows) || pv.windows)
+    const used = acc && acc.length ? Math.max.apply(null, acc.map((x) => x.usedPercent || 0)) : -1
+    if (used >= 0) return used >= 90 ? 'error' : used >= 75 ? 'warn' : 'ok'
   }
   const stt = props.stats
   if (stt && (w === 'cpu' || w === 'memory')) {
@@ -553,9 +561,11 @@ function Tile(props: {
   if (item.kind === 'widget' && sty !== 'ios') {
     const natural = item.widget === 'quota' ? (PROVIDER_COLOR[item.provider || 'claude'] || '#d97757') : naturalColor(item.widget || '')
     const wc = item.color || natural || props.tt.accent
-    if (!item.color && props.tt.tileSet) {
+    // a quota tile's brand colour (it is on the item by default) is only an accent, never the surface, once a theme sets the tile colour
+    const quotaOnTheme = item.widget === 'quota' && !!props.tt.tileSet
+    if ((!item.color || quotaOnTheme) && props.tt.tileSet) {
       // the theme sets its own tile colour: a widget without a colour of its own sits on it (like the default card)
-      wColor = natural || undefined
+      wColor = quotaOnTheme ? item.color || natural : natural || undefined
       cls += ' pd-tile--wplain'
     } else if (sty === 'solid') {
       style.background = op ? tint(wc, op) || wc : wc
@@ -1197,6 +1207,9 @@ export function Deck(props: DeckProps) {
       document.removeEventListener('webkitfullscreenchange', on)
     }
   }, [])
+
+  // wide pack fonts: scale big text down until it fits its box (clocks, metric values, weather temp)
+  useEffect(() => (rootRef.current ? installFit(rootRef.current) : undefined), [])
 
   // no pinch / double-tap zoom (iOS 10+ ignores user-scalable=no)
   useEffect(() => {

@@ -352,8 +352,8 @@ export function NowPlayingTile(props: NowPlayingTileProps) {
   }
   const Times = () => (
     <div class="pd-npl__times" aria-hidden="true">
-      <span>{formatTime(shownAt)}</span>
-      <span>{shownTotal > 0 ? '-' + formatTime(shownTotal - shownAt) : '-:--'}</span>
+      <span data-part="num">{formatTime(shownAt)}</span>
+      <span data-part="num">{shownTotal > 0 ? '-' + formatTime(shownTotal - shownAt) : '-:--'}</span>
     </div>
   )
   const volChange = (v: number) => run(props.onVolume({ level: v }))

@@ -151,7 +151,7 @@ function PackSheet({ pack, layout, applied, onClose, busy, onInstall, onApply, o
           <h3 id="ts-variants" className="text-[13px] font-semibold">{pack.variants.length > 1 ? t("Variants") : t("Look")}</h3>
           <div role="radiogroup" aria-label={t("Variants")} className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
             {pack.variants.map((v) => (
-              <VariantMini key={v.id} look={packLook(pack, v.id, choice.options)} name={v.name} mode={v.mode} picked={!choice.auto && choice.variant === v.id}
+              <VariantMini key={v.id} look={packLook(pack, v.id, choice.options)} name={v.name} mode={v.mode} mismatch={v.modeMismatch} picked={!choice.auto && choice.variant === v.id}
                 current={isCurrent(applied, pack, v.id)} disabled={choice.auto} onPick={() => set({ variant: v.id })} onHover={(on) => setHover(on ? v.id : null)} />
             ))}
           </div>
@@ -169,7 +169,7 @@ function PackSheet({ pack, layout, applied, onClose, busy, onInstall, onApply, o
                       <span className="text-xs text-muted-foreground">{m === "light" ? t("Light") : t("Dark")}</span>
                       <div className="grid grid-cols-3 gap-2">
                         {modeVariants(m).map((v) => (
-                          <VariantMini key={v.id} small look={packLook(pack, v.id, choice.options)} name={v.name} mode={v.mode} picked={(m === "light" ? choice.light : choice.dark) === v.id}
+                          <VariantMini key={v.id} small look={packLook(pack, v.id, choice.options)} name={v.name} mode={v.mode} mismatch={v.modeMismatch} picked={(m === "light" ? choice.light : choice.dark) === v.id}
                             onPick={() => set(m === "light" ? { light: v.id } : { dark: v.id })} />
                         ))}
                       </div>
@@ -226,6 +226,7 @@ function PackSheet({ pack, layout, applied, onClose, busy, onInstall, onApply, o
 export function ThemesStore({ layout, beforeApply, deeplinkId, onDeeplinkDone, onLayoutChanged }: { layout: Layout; beforeApply?: () => Promise<void>; deeplinkId?: string | null; onDeeplinkDone?: () => void; onLayoutChanged: () => void }) {
   useLanguage();
   const [tab, setTab] = useState<Tab>("discover");
+  const [modeFilter, setModeFilter] = useState<"all" | "light" | "dark">("all");
   const [query, setQuery] = useState("");
   const [data, setData] = useState<{ packs: ThemePack[]; applied: ThemeSource | null } | null | undefined>(undefined);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -248,7 +249,7 @@ export function ThemesStore({ layout, beforeApply, deeplinkId, onDeeplinkDone, o
 
   const q = query.trim().toLowerCase();
   const packs = data?.packs ?? [];
-  const list = useMemo(() => packs.filter((p) => (tab === "installed" ? p.installed : true) && (!q || `${p.name} ${p.author ?? ""} ${p.description ?? ""}`.toLowerCase().includes(q))), [packs, tab, q]);
+  const list = useMemo(() => packs.filter((p) => (tab === "installed" ? p.installed : true) && (modeFilter === "all" || p.variants.some((v) => v.mode === modeFilter)) && (!q || `${p.name} ${p.author ?? ""} ${p.description ?? ""}`.toLowerCase().includes(q))), [packs, tab, q, modeFilter]);
   const installedCount = packs.filter((p) => p.installed).length;
   const open = packs.find((p) => p.id === openId) ?? null;
   const fail = (e: unknown) => setError(e instanceof ApiError || e instanceof Error ? e.message : String(e));
@@ -290,6 +291,8 @@ export function ThemesStore({ layout, beforeApply, deeplinkId, onDeeplinkDone, o
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-[200px] flex-1"><Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search themes")} aria-label={t("Search themes")} icon={<Search />} /></div>
         <Button size="sm" variant="secondary" icon={<LinkIcon />} onClick={() => setLinkOpen(true)}>{t("Install from a link")}</Button>
+        <SegmentedControl size="sm" aria-label={t("Show")} value={modeFilter} onValueChange={(v) => setModeFilter(v as "all" | "light" | "dark")}
+          options={[{ value: "all", label: t("All") }, { value: "light", label: t("Light") }, { value: "dark", label: t("Dark") }]} />
         <SegmentedControl size="sm" aria-label={t("Themes")} value={tab} onValueChange={(v) => setTab(v as Tab)}
           options={[{ value: "discover", label: t("Discover") }, { value: "installed", label: `${t("Installed")} (${installedCount})` }]} />
       </div>

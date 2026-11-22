@@ -246,6 +246,9 @@ describe("deck theming hooks", () => {
     expect(all).toContain("data-state={dstate}");
     // a pack always gets the background layer and a transparent panel and sheet over it
     const css = readFileSync(join(import.meta.dir, "../web/deck/src/deck.css"), "utf8");
+    // every clock style's digits take the theme's numberFont (font as the fallback) without extra css
+    const num = /([^{}]+)\{ font-family: var\(--pd-ff-num, var\(--pd-ff, inherit\)\); \}/.exec(css)![1]!;
+    for (const sel of [".pd-clock__t", ".pd-clk__min", ".pd-fl__h span", "[data-part='clock-digit'] span", ".pd-wd__t", ".pd-sb__time"]) expect(num).toContain(sel);
     expect(css).toMatch(/\.pd-root\[data-theme-pkg\] \.pd-bgimg \{ display: block/);
     expect(css).toMatch(/\.pd-root\[data-theme-pkg\] \.pd-sheet, \.pd-root\[data-theme-pkg\] \.pd-panel \{ background: transparent/);
     // every hook the docs table lists exists in the source
@@ -375,7 +378,7 @@ describe("theme css", () => {
 });
 
 describe("theme endpoints", () => {
-  let app: any, base = "";
+  let app: any, base = "", original: any;
   const H = { "x-nookdeck": "1", "content-type": "application/json" };
   const api = (p: string, init: RequestInit = {}) => fetch(base + p, { ...init, headers: { ...H, ...(init.headers as any) } });
   const d = tmp();
@@ -389,8 +392,14 @@ describe("theme endpoints", () => {
       aiSources: { claude: async () => ({ id: "claude", name: "c", windows: [], updatedAt: 1 }), codex: async () => ({ id: "codex", name: "c", windows: [], updatedAt: 1 }), antigravity: async () => ({ id: "antigravity", name: "c", windows: [], updatedAt: 1 }), sessions: async () => [] } as any,
     } as any);
     base = `http://localhost:${app.port}`;
+    original = await (await api("/api/layout")).json(); // these tests save layouts (one with language "vi") into the shared test home
   });
-  afterAll(async () => { app?.stop(); (await import("../src/i18n")).setLanguage(undefined); }); // the server sets the agent language from the layout: do not leak it into other test files
+  afterAll(async () => {
+    // put the layout back and reset the agent language, or the next file that starts a server inherits "vi"
+    if (original) await api("/api/layout", { method: "PUT", body: JSON.stringify(original) });
+    app?.stop();
+    (await import("../src/i18n")).setLanguage(undefined);
+  });
 
   test("install, list, apply keeps behaviour and per-tile colours, undo restores", async () => {
     const lay: any = { pages: [{ id: "p", name: "P", items: [{ id: "b", kind: "button", label: "Go", color: "#ff0000" }] }], theme: { language: "vi", header: "minimal", accent: "#111111", radius: 33 } };

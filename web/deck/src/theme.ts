@@ -137,17 +137,36 @@ export function chartColor(i: number, fallback: string): string {
   return i >= 0 && i < CHARTS.length ? CHARTS[i] : fallback
 }
 
+/** The phone's status bar follows the mode: <meta name="theme-color"> is the screen colour and the iOS bar style is light text on dark, dark text on light. */
+function chromeFor(root: HTMLElement, mode: string, t: Theme | undefined) {
+  if (typeof document === 'undefined' || root.classList.contains('pd-root--preview')) return
+  const light = mode === 'light'
+  const set = (name: string, content: string) => {
+    let m = document.querySelector('meta[name="' + name + '"]') as HTMLMetaElement | null
+    if (!m) {
+      m = document.createElement('meta')
+      m.name = name
+      document.head.appendChild(m)
+    }
+    if (m.content !== content) m.content = content
+  }
+  const bg = t && typeof t.background === 'string' && /^#[0-9a-f]{3,8}$/i.test(t.background) ? t.background : light ? '#f5f5f7' : '#0b0d10'
+  set('theme-color', bg)
+  set('apple-mobile-web-app-status-bar-style', light ? 'default' : 'black-translucent')
+}
+
 export function applyTheme(root: HTMLElement, t0: Theme | undefined, ctx: ThemeCtx = {}) {
   const t = ctx.off ? undefined : effectiveTheme(t0, ctx.page)
   const mode = resolveMode(t0 && ctx.off ? ({ mode: t0.mode } as Theme) : t)
   root.setAttribute('data-pd-theme', t && t.mode ? t.mode : mode)
+  chromeFor(root, t && t.mode ? t.mode : mode, t)
   VARS.forEach((v) => root.style.removeProperty(v))
   ATTRS.forEach((a) => root.removeAttribute(a))
   root.style.removeProperty('background-image')
   const bgEl = root.querySelector('.pd-bgimg') as HTMLElement | null
   if (bgEl) {
     bgEl.style.backgroundImage = ''
-    bgEl.style.display = 'none'
+    bgEl.style.display = '' // css decides: hidden without an image or a pack, always shown for a pack (data-part="background")
   }
   if (!t) return
   const text = color(t.text)

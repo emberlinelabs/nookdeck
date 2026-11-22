@@ -70,7 +70,7 @@ export function AnimatedNumber(props: { value: number; format?: (n: number) => s
     lastValue.current = props.value
   }
   return (
-    <span class={'pd-an ' + (props.class || '')} style={props.style} aria-label={(props.prefix || '') + text + (props.suffix || '')}>
+    <span class={'pd-an ' + (props.class || '')} data-part="num" style={props.style} aria-label={(props.prefix || '') + text + (props.suffix || '')}>
       {props.prefix}
       {slots.map((s) => (s.digit === null ? <span key={s.key}>{s.char}</span> : <Digit key={s.key} digit={s.digit} dir={dir.current} />))}
       {props.suffix}
@@ -87,7 +87,7 @@ export function DeltaPill(props: { value: number; unit?: string; decimals?: numb
   const up = props.value >= 0
   const cls = flat || !props.tone ? 'flat' : props.tone === 'bad' ? 'bad' : 'warn'
   return (
-    <span class={'pd-delta pd-delta--' + cls} style={props.size ? { fontSize: props.size + 'px' } : undefined}>
+    <span class={'pd-delta pd-delta--' + cls} data-part="num" style={props.size ? { fontSize: props.size + 'px' } : undefined}>
       {!flat ? (
         <svg aria-hidden="true" viewBox="0 0 12 12" width="10" height="10" style={up ? undefined : { transform: 'rotate(180deg)' }}>
           <path d="M6 9.5V2.5M3 5.5l3-3 3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
