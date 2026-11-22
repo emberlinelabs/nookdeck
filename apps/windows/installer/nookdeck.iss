@@ -47,8 +47,8 @@ UninstallDisplayName=Nookdeck
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-CloseApplications=yes
-CloseApplicationsFilter=Nookdeck.exe
+; the tray app has no window, so Windows' Restart Manager cannot ask it to close (an upgrade then aborted with exit 5): PrepareToInstall stops it itself
+CloseApplications=no
 RestartApplications=no
 UsePreviousAppDir=yes
 
@@ -83,6 +83,16 @@ var
 function AgentPath(): String;
 begin
   Result := ExpandConstant('{localappdata}\Nookdeck\bin\nookdeck.exe');
+end;
+
+// stops a running tray app (its exe is locked while it runs). The agent keeps running: its own copy lives in %LOCALAPPDATA%\Nookdeck\bin and --setup adopts or replaces it.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Code: Integer;
+begin
+  Result := '';
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM Nookdeck.exe', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Sleep(500);
 end;
 
 function InitializeUninstall(): Boolean;
