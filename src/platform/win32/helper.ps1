@@ -53,6 +53,8 @@ namespace PD {
 
   [StructLayout(LayoutKind.Sequential)] struct SIZE { public int cx, cy; }
   [StructLayout(LayoutKind.Sequential)] struct BITMAP { public int bmType, bmWidth, bmHeight, bmWidthBytes; public short bmPlanes, bmBitsPixel; public IntPtr bmBits; }
+  [StructLayout(LayoutKind.Sequential)] struct BITMAPINFOHEADER { public int biSize, biWidth, biHeight; public short biPlanes, biBitCount; public int biCompression, biSizeImage, biXPelsPerMeter, biYPelsPerMeter, biClrUsed, biClrImportant; }
+  [StructLayout(LayoutKind.Sequential)] struct DIBSECTION { public BITMAP dsBm; public BITMAPINFOHEADER dsBmih; public int dsBitfields0, dsBitfields1, dsBitfields2; public IntPtr dshSection; public int dsOffset; }
   [ComImport, Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
   interface IShellItemImageFactory { int GetImage(SIZE size, int flags, out IntPtr phbm); }
 
@@ -108,6 +110,7 @@ namespace PD {
     static extern void SHCreateItemFromParsingName(string path, IntPtr bc, ref Guid riid, [MarshalAs(UnmanagedType.Interface)] out IShellItemImageFactory f);
     [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr o);
     [DllImport("gdi32.dll")] static extern int GetObject(IntPtr h, int n, ref BITMAP b);
+    [DllImport("gdi32.dll", EntryPoint = "GetObject")] static extern int GetDib(IntPtr h, int n, ref DIBSECTION d);
 
     // PNG bytes of the icon the shell shows for an item (an app in shell:AppsFolder, or a file path), px by px, keeping alpha.
     public static byte[] IconPng(string parsingName, int px) {
@@ -117,7 +120,13 @@ namespace PD {
       Marshal.ThrowExceptionForHR(f.GetImage(s, 4 /* ICONONLY */ | 1 /* BIGGERSIZEOK */, out h));
       try {
         BITMAP b = new BITMAP(); GetObject(h, Marshal.SizeOf(typeof(BITMAP)), ref b);
-        using (Bitmap src = new Bitmap(b.bmWidth, b.bmHeight, b.bmWidthBytes, PixelFormat.Format32bppArgb, b.bmBits))
+        // The shell hands back a DIB section, normally bottom-up (positive biHeight): its first row in memory is the
+        // bottom of the picture. Read it from the last row with a negative stride so the icon is not upside down.
+        DIBSECTION d = new DIBSECTION();
+        bool bottomUp = GetDib(h, Marshal.SizeOf(typeof(DIBSECTION)), ref d) == Marshal.SizeOf(typeof(DIBSECTION)) ? d.dsBmih.biHeight > 0 : true;
+        IntPtr scan0 = bottomUp ? new IntPtr(b.bmBits.ToInt64() + (long)b.bmWidthBytes * (b.bmHeight - 1)) : b.bmBits;
+        int stride = bottomUp ? -b.bmWidthBytes : b.bmWidthBytes;
+        using (Bitmap src = new Bitmap(b.bmWidth, b.bmHeight, stride, PixelFormat.Format32bppArgb, scan0))
         using (Bitmap dst = new Bitmap(px, px, PixelFormat.Format32bppArgb))
         using (Graphics g = Graphics.FromImage(dst)) {
           g.Clear(Color.Transparent);

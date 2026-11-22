@@ -165,11 +165,12 @@ export class Icons {
    */
   async appIcon(bundleId: string): Promise<Uint8Array | null> {
     if (!BUNDLE_ID_RE.test(bundleId)) return null;
-    const cached = join(this.cacheDir, `${bundleId}.png`);
+    const os = this.osApps;
+    // Icons from the OS catalog (Windows) before 0.2 were cached upside down; ".v2" makes them extract again.
+    const cached = join(this.cacheDir, os ? `${bundleId}.v2.png` : `${bundleId}.png`);
     try { return new Uint8Array(await readFile(cached)); } catch { /* extract */ }
     const app = (await this.listApps()).find((a) => a.bundleId === bundleId);
     if (!app) return null;
-    const os = this.osApps;
     if (os) {
       const png = await os.icon(bundleId);
       if (!png || imageKind(png) !== "png") return null;
