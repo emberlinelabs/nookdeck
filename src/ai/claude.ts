@@ -7,7 +7,11 @@ import { clampPercent, safeHome, type ProviderQuota, type QuotaWindow } from "./
 
 export const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 /** English key; run through t() when shown. */
-export const TOKEN_EXPIRED = "Claude Code token expired, open Claude Code to sign in again";
+export const TOKEN_EXPIRED = "Claude Code sign-in expired, open Claude Code once to refresh it";
+/** English key: no sign-in, or one that was blanked (signed out). */
+export const SIGNED_OUT = "Claude Code is not signed in on this computer. Run `claude` and use /login.";
+/** English key: the credentials file names a sign-in (claudeAiOauth) but holds no access token (Claude Code keeps it in the OS credential store). */
+export const TOKEN_NOT_IN_FILE = "Claude Code keeps its access token outside its credentials file and Nookdeck could not read it. Open Claude Code once.";
 /** After a 401/403 the same token is not tried again for this long (Claude Code refreshes it itself). */
 export const UNAUTHORIZED_BACKOFF_MS = 30 * 60_000;
 
@@ -75,6 +79,18 @@ export async function readClaudeToken(deps: ClaudeDeps = {}): Promise<ClaudeCred
   }
 }
 
+/** True when .credentials.json has a claudeAiOauth entry but no usable access token. Reads only the shape, never a value. */
+export async function fileSignInState(deps: ClaudeDeps = {}): Promise<"none" | "signed-out" | "no-token"> {
+  try {
+    const text = await (deps.readFile ?? ((p: string) => readFile(p, "utf8")))(join(deps.dir ?? claudeDir(), ".credentials.json"));
+    const o = JSON.parse(text)?.claudeAiOauth;
+    if (!o || typeof o !== "object" || (typeof o.accessToken === "string" && o.accessToken)) return "none";
+    // blanked tokens (what /logout leaves behind): no refresh token, or an expiry of 0
+    const noRefresh = !(typeof o.refreshToken === "string" && o.refreshToken);
+    return noRefresh || o.expiresAt === 0 ? "signed-out" : "no-token";
+  } catch { return "none"; }
+}
+
 const WINDOW_DEFS: Array<{ key: string; label: string; minutes: number }> = [
   { key: "five_hour", label: "5 hours", minutes: 300 },
   { key: "seven_day", label: "7 days", minutes: 10080 },
@@ -119,7 +135,10 @@ export async function fetchClaudeQuota(deps: ClaudeDeps = {}, last?: ProviderQuo
     updatedAt: now,
   });
   const creds = await readClaudeToken(deps);
-  if (!creds) return keep(t("Sign in to Claude Code on this Mac"));
+  if (!creds) {
+    const st = await fileSignInState(deps);
+    return keep(t(st === "no-token" ? TOKEN_NOT_IN_FILE : SIGNED_OUT));
+  }
   if (creds.expiresAt !== undefined && creds.expiresAt <= now) return keep(t(TOKEN_EXPIRED), creds.plan);
   const fp = tokenFingerprint(creds.accessToken);
   const until = blocked.get(fp);

@@ -97,7 +97,7 @@ describe("claude quota", () => {
     expect(expired.windows).toEqual(ok.windows);
 
     const nothing = await fetchClaudeQuota({ readFile: async () => { throw new Error("x"); }, platform: "linux" });
-    expect(nothing.error).toContain("Sign in to Claude Code");
+    expect(nothing.error).toContain("not signed in");
     const limited = await fetchClaudeQuota({ readFile: async () => CREDS, blocked: new Map(), fetch: async () => new Response("slow down", { status: 429 }) }, ok);
     expect(limited.error).toContain("rate limiting");
     expect(limited.windows).toEqual(ok.windows);
@@ -180,7 +180,7 @@ describe("antigravity", () => {
     expect(parseAgyUsage("not json")).toEqual([]);
   });
   test("fetch: no binary, failure, success", async () => {
-    expect((await fetchAntigravityQuota(async () => "", 1, null)).error).toContain("not installed");
+    expect((await fetchAntigravityQuota(async () => "", 1, null)).error).toContain("was not found");
     expect((await fetchAntigravityQuota(async () => { throw new Error("timed out"); }, 1, "/x/agy")).error).toContain("timed out");
     let argv: string[] = [];
     const ok = await fetchAntigravityQuota(async (a) => { argv = a; return JSON_OUT; }, 1, "/x/agy");

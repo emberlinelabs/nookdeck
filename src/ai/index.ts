@@ -20,7 +20,7 @@ export const QUOTA_REFRESH_MS = 60_000;
 export interface AiSources {
   claude: (last?: ProviderQuota) => Promise<ProviderQuota>;
   codex: () => Promise<ProviderQuota>;
-  antigravity: () => Promise<ProviderQuota>;
+  antigravity: (force?: boolean) => Promise<ProviderQuota>;
   /** Optional: a source set without them (older tests) shows these providers as "not read". */
   opencode?: () => Promise<ProviderQuota>;
   grok?: () => Promise<ProviderQuota>;
@@ -30,7 +30,7 @@ export interface AiSources {
 export const realAiSources = (states?: ToolStates): AiSources => ({
   claude: (last) => fetchClaudeQuota({}, last),
   codex: () => fetchCodexQuota(),
-  antigravity: () => fetchAntigravityQuota(),
+  antigravity: (force) => fetchAntigravityQuota(undefined, undefined, undefined, { force }),
   opencode: async () => fetchOpencodeQuota({ version: await detectOpencode() }),
   grok: () => grokQuota(),
   sessions: async (hints) => {
@@ -88,13 +88,13 @@ export class AiHub {
     return true;
   }
 
-  private async localQuota(id: AiProviderId): Promise<ProviderQuota> {
+  private async localQuota(id: AiProviderId, force = false): Promise<ProviderQuota> {
     const cached = this.local.get(id);
-    if (cached && this.now() - cached.at < LOCAL_REFRESH_MS) return cached.q;
+    if (!force && cached && this.now() - cached.at < LOCAL_REFRESH_MS) return cached.q;
     let q: ProviderQuota;
     try {
       const fn = id === "claude" ? undefined : this.src[id];
-      q = id === "claude" ? await this.src.claude(cached?.q) : fn ? await fn() : { id, name: NAMES[id], windows: [], error: t("Reading…"), updatedAt: this.now() };
+      q = id === "claude" ? await this.src.claude(cached?.q) : fn ? await (id === "antigravity" ? this.src.antigravity(force) : fn()) : { id, name: NAMES[id], windows: [], error: t("Reading…"), updatedAt: this.now() };
     } catch (err: any) {
       q = { id, name: NAMES[id], windows: cached?.q.windows ?? [], error: String(err?.message ?? err), updatedAt: this.now() };
     }
@@ -109,7 +109,7 @@ export class AiHub {
     this.quotaBusy = true;
     this.quotaAt = this.now();
     try {
-      await Promise.all(ORDER.map(async (id) => { this.providers.set(id, await this.localQuota(id)); }));
+      await Promise.all(ORDER.map(async (id) => { this.providers.set(id, await this.localQuota(id, force)); }));
       this.history?.record([...this.providers.values()]);
     } finally {
       this.quotaBusy = false;

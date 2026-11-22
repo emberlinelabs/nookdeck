@@ -30,7 +30,9 @@ export interface PlistOptions {
 export function buildPlist(o: PlistOptions): string {
   const logs = o.logDir ?? logsDir();
   // launchd gives agents a minimal PATH; add the usual Homebrew locations so playerctl, agy and grok are found
-  const env: Record<string, string> = { PATH: "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin", ...(o.env ?? {}) };
+  // ~/.local/bin and ~/.bun/bin are where agy, grok, opencode, claude and codex usually live
+  const home = process.env.HOME || homedir();
+  const env: Record<string, string> = { PATH: `${home}/.local/bin:${home}/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`, ...(o.env ?? {}) };
   const envXml = Object.entries(env).map(([k, v]) => `    <key>${xml(k)}</key>\n    <string>${xml(v)}</string>`).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
