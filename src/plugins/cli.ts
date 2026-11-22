@@ -107,7 +107,8 @@ export function zipFiles(files: Files): Uint8Array {
 }
 
 export async function pluginPack(args: string[], log = console.log): Promise<{ file: string; zipSha256: string; packageSha256: string }> {
-  const dir = resolve(args.find((a) => !a.startsWith("-") && a !== args[args.indexOf("--out") + 1]) ?? ".");
+  const outAt = args.indexOf("--out");
+  const dir = resolve(args.find((a, i) => !a.startsWith("-") && !(outAt >= 0 && i === outAt + 1)) ?? ".");
   const files = await readFolder(dir);
   const raw = files.get(MANIFEST_FILE);
   if (!raw) throw new Error(`there is no ${MANIFEST_FILE} in ${dir}`);
@@ -169,7 +170,9 @@ export async function runPluginCli(args: string[], parsePort: (a: string[]) => n
     if (sub === "new") { await pluginNew(rest); return 0; }
     if (sub === "pack") { await pluginPack(rest); return 0; }
     if (sub === "dev") {
-      const dir = rest.find((a) => !a.startsWith("-") && a !== rest[rest.indexOf("--port") + 1] && a !== rest[rest.indexOf("-p") + 1]) ?? ".";
+      // the folder is the first word that is not a flag or a flag's value (indexOf is -1 when a flag is absent: skip it then)
+      const flagValues = new Set(["--port", "-p"].map((f) => rest.indexOf(f)).filter((i) => i >= 0).map((i) => i + 1));
+      const dir = rest.find((a, i) => !a.startsWith("-") && !flagValues.has(i)) ?? ".";
       await pluginDev(dir, parsePort(rest));
       await new Promise(() => {}); // watching until Ctrl+C
     }
