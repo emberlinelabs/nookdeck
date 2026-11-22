@@ -64,6 +64,10 @@ export function signMacos(file: string, env: Record<string, string | undefined> 
     const kc = join(work, "build.keychain-db");
     const pw = randomBytes(18).toString("hex");
     const p12Pass = env.MACOS_SIGN_P12_PASSWORD ?? "";
+    // codesign on the CI runner only finds an identity in a keychain that is on the user search list, even with
+    // --keychain. The runner is thrown away after the job; the list is restored anyway.
+    const listed = Bun.spawnSync(["security", "list-keychains", "-d", "user"], { stdout: "pipe" }).stdout.toString()
+      .split("\n").map((l) => l.trim().replace(/^"|"$/g, "")).filter(Boolean);
     try {
       writeFileSync(join(work, "id.p12"), Buffer.from(env.MACOS_SIGN_P12!, "base64"), { mode: 0o600 });
       sh(["security", "create-keychain", "-p", pw, kc], [pw]);
@@ -71,11 +75,13 @@ export function signMacos(file: string, env: Record<string, string | undefined> 
       sh(["security", "unlock-keychain", "-p", pw, kc], [pw]);
       sh(["security", "import", join(work, "id.p12"), "-k", kc, "-P", p12Pass, "-T", "/usr/bin/codesign"], [pw, p12Pass]);
       sh(["security", "set-key-partition-list", "-S", "apple-tool:,apple:", "-s", "-k", pw, kc], [pw]);
+      sh(["security", "list-keychains", "-d", "user", "-s", kc, ...listed]);
       const hash = /\b([0-9A-F]{40})\b/.exec(sh(["security", "find-identity", "-p", "codesigning", kc]))?.[1];
       if (!hash) throw new Error("the imported .p12 has no signing identity");
       sh(["codesign", "--force", "-s", hash, "-i", IDENTIFIER, "--keychain", kc, file], [pw, p12Pass]);
       console.log(`signed ${file} with the CI identity ${hash.slice(0, 8)}...`);
     } finally {
+      if (listed.length) Bun.spawnSync(["security", "list-keychains", "-d", "user", "-s", ...listed]);
       Bun.spawnSync(["security", "delete-keychain", kc]);
       rmSync(work, { recursive: true, force: true });
     }
