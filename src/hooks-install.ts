@@ -1,6 +1,7 @@
+import { userHome } from "./home";
 import { platform } from "./platform";
 import { basename, dirname, join } from "node:path";
-import { homedir } from "node:os";
+
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { claudeDir } from "./ai/claude";
 import { codexDir } from "./ai/codex";
@@ -35,7 +36,7 @@ export function hookCommand(
   // default secret, and an agent on another port or NOOKDECK_HOME would never see the request.
   let args = "";
   if (opts.port !== undefined && opts.port !== 7420) args += ` --port ${opts.port}`;
-  if (opts.home && opts.home !== (opts.defaultHome ?? join(homedir(), ".nookdeck"))) args += ` --home ${shq(platform.hookPath(opts.home))}`;
+  if (opts.home && opts.home !== (opts.defaultHome ?? join(userHome(), ".nookdeck"))) args += ` --home ${shq(platform.hookPath(opts.home))}`;
   return `${base} hook ${tool}${args} # ${HOOK_MARKER}`;
 }
 

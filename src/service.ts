@@ -1,5 +1,6 @@
+import { userHome } from "./home";
 import { basename, dirname, join, resolve } from "node:path";
-import { homedir } from "node:os";
+
 import { chmod, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { HOME } from "./config";
 import { ASK_EVENT, ASK_MARKER, HOOK_EVENT, HOOK_MARKER, LEGACY_ASK_MARKER, LEGACY_HOOK_MARKER, hookConfigPath, uninstallAskHook, uninstallHook, type HookTool } from "./hooks-install";
@@ -17,7 +18,7 @@ const labelOverride = process.env.NOOKDECK_SERVICE_LABEL;
 export const SERVICE_LABEL = labelOverride && /^[A-Za-z0-9][A-Za-z0-9._-]{2,80}$/.test(labelOverride) ? labelOverride : DEFAULT_SERVICE_LABEL;
 
 /** Where the plist goes. NOOKDECK_LAUNCH_AGENTS_DIR overrides it (tests, a relocated install). */
-export const launchAgentsDir = (): string => process.env.NOOKDECK_LAUNCH_AGENTS_DIR ?? join(homedir(), "Library", "LaunchAgents");
+export const launchAgentsDir = (): string => process.env.NOOKDECK_LAUNCH_AGENTS_DIR ?? join(userHome(), "Library", "LaunchAgents");
 export const plistPath = (): string => join(launchAgentsDir(), `${SERVICE_LABEL}.plist`);
 export const logsDir = (): string => join(HOME, "logs");
 
@@ -36,7 +37,7 @@ export function buildPlist(o: PlistOptions): string {
   const logs = o.logDir ?? logsDir();
   // launchd gives agents a minimal PATH; add the usual Homebrew locations so playerctl, agy and grok are found
   // ~/.local/bin and ~/.bun/bin are where agy, grok, opencode, claude and codex usually live
-  const home = process.env.HOME || homedir();
+  const home = process.env.HOME || userHome();
   const env: Record<string, string> = { PATH: `${home}/.local/bin:${home}/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`, ...(o.env ?? {}) };
   const envXml = Object.entries(env).map(([k, v]) => `    <key>${xml(k)}</key>\n    <string>${xml(v)}</string>`).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -88,7 +89,7 @@ export interface ServiceDeps {
 }
 
 /** %LOCALAPPDATA%\Nookdeck: the launcher script of the Windows service. NOOKDECK_WIN_DIR overrides it (tests). */
-export const winServiceDir = (): string => process.env.NOOKDECK_WIN_DIR ?? join(process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"), "Nookdeck");
+export const winServiceDir = (): string => process.env.NOOKDECK_WIN_DIR ?? join(process.env.LOCALAPPDATA ?? join(userHome(), "AppData", "Local"), "Nookdeck");
 
 export const winServiceCtxFrom = (d: ServiceDeps, port?: number): WinServiceCtx => winCtx(d, port);
 
@@ -240,7 +241,7 @@ const DEFAULT_PORT = 7420;
 const unq = (v: string) => (v.startsWith("'") ? v.slice(1, -1).replace(/'\\''/g, "'") : v);
 
 /** The instance a hook command belongs to: its --port and --home, defaults included (what hookCommand leaves out). */
-export function commandInstance(command: string, defaultHome: string = join(homedir(), ".nookdeck")): Instance {
+export function commandInstance(command: string, defaultHome: string = join(userHome(), ".nookdeck")): Instance {
   const port = /\s--port[ =](\d+)/.exec(command)?.[1];
   const home = /\s--home[ =]('(?:[^']|'\\'')*'|\S+)/.exec(command)?.[1];
   return { port: port ? Number(port) : DEFAULT_PORT, home: resolve(home ? unq(home) : defaultHome) };
@@ -256,7 +257,7 @@ export const currentInstance = (port?: number): Instance => ({ port: port ?? (Nu
  * NOOKDECK_CLAUDE_DIR / NOOKDECK_CODEX_DIR, the real ~/.claude and ~/.codex are left alone and a note says so.
  */
 export function hookTargets(files: Partial<Record<HookTool, string>> = {}): { files: Partial<Record<HookTool, string>>; skipped: string[]; notes: string[] } {
-  const sandboxed = resolve(HOME) !== resolve(join(homedir(), ".nookdeck"));
+  const sandboxed = resolve(HOME) !== resolve(join(userHome(), ".nookdeck"));
   const out: Partial<Record<HookTool, string>> = {};
   const skipped: string[] = [];
   const notes: string[] = [];

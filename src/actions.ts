@@ -1,4 +1,5 @@
-import { homedir } from "node:os";
+
+import { userHome } from "./home";
 import type { Action } from "./config.ts";
 import { platform } from "./platform";
 
@@ -37,7 +38,7 @@ function looksLikePath(target: string): boolean {
 }
 
 function expandHome(p: string): string {
-  return p === "~" ? homedir() : p.startsWith("~/") ? homedir() + p.slice(1) : p;
+  return p === "~" ? userHome() : p.startsWith("~/") ? userHome() + p.slice(1) : p;
 }
 
 // ---------- Windows ----------

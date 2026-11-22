@@ -1,9 +1,10 @@
+import { userHome } from "../home";
 import { platform } from "../platform";
 import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
-import { homedir } from "node:os";
+
 import { runCapture } from "../actions";
 import { t } from "../i18n";
 import { clampPercent, safeHome, windowLabel, type AiSession, type ProviderQuota, type QuotaWindow } from "./types";
@@ -20,13 +21,13 @@ const env = (k: string) => process.env[k];
 
 /** ~/.local/share/opencode (XDG_DATA_HOME honoured; the same layout under %USERPROFILE% on Windows). */
 export function opencodeDataDir(): string {
-  return join(env("XDG_DATA_HOME") || join(safeHome() || homedir(), ".local", "share"), "opencode");
+  return join(env("XDG_DATA_HOME") || join(safeHome() || userHome(), ".local", "share"), "opencode");
 }
 export function opencodeStateDir(): string {
-  return join(env("XDG_STATE_HOME") || join(safeHome() || homedir(), ".local", "state"), "opencode");
+  return join(env("XDG_STATE_HOME") || join(safeHome() || userHome(), ".local", "state"), "opencode");
 }
 export function opencodeConfigDir(): string {
-  return env("NOOKDECK_OPENCODE_CONFIG_DIR") || join(env("XDG_CONFIG_HOME") || join(safeHome() || homedir(), ".config"), "opencode");
+  return env("NOOKDECK_OPENCODE_CONFIG_DIR") || join(env("XDG_CONFIG_HOME") || join(safeHome() || userHome(), ".config"), "opencode");
 }
 
 /** OPENCODE_DB (absolute, or relative to the data dir; ":memory:" is ignored) else opencode.db / opencode-<channel>.db. */
@@ -72,7 +73,7 @@ export function opencodePath(): string | null {
   if (forced) return existsSync(forced) ? forced : null;
   const onPath = Bun.which("opencode", { PATH: process.env.PATH ?? "" });
   if (onPath) return onPath;
-  const home = safeHome() || homedir();
+  const home = safeHome() || userHome();
   const exe = platform.id === "win32" ? [".exe", ".cmd"] : [""];
   const dirs = [
     join(home, ".opencode", "bin"), join(home, ".local", "bin"), join(home, ".bun", "bin"), join(home, ".npm-global", "bin"), join(home, ".volta", "bin"),

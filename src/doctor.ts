@@ -1,5 +1,6 @@
+import { userHome } from "./home";
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
+
 import { join } from "node:path";
 import { t } from "./i18n";
 import { platform as osPlatform } from "./platform";
@@ -312,7 +313,7 @@ export function formatReport(r: DoctorReport, opts: { color?: boolean } = {}): s
 
 const APP_PATHS: Record<string, string[]> = {
   "com.apple.Music": ["/System/Applications/Music.app", "/Applications/Music.app"],
-  "com.spotify.client": ["/Applications/Spotify.app", join(homedir(), "Applications", "Spotify.app")],
+  "com.spotify.client": ["/Applications/Spotify.app", join(userHome(), "Applications", "Spotify.app")],
 };
 
 let ax: any;
@@ -489,6 +490,6 @@ export function realProbes(version: string): Probes {
     desktop: () => (platform === "win32" ? { station: winStation(), idle: winIdle() } : { station: null, idle: null }),
     helperPing: async () => { try { return (await winHelperPing()) === "pong"; } catch { return false; } },
     fileExists: (f) => existsSync(f),
-    claudeCredentialsFile: () => join(process.env.NOOKDECK_CLAUDE_DIR ?? join(homedir(), ".claude"), ".credentials.json"),
+    claudeCredentialsFile: () => join(process.env.NOOKDECK_CLAUDE_DIR ?? join(userHome(), ".claude"), ".credentials.json"),
   };
 }

@@ -1,5 +1,6 @@
+import { userHome } from "../home";
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
+
 import { join } from "node:path";
 import { platform } from "../platform";
 import { safeHome } from "./types";
@@ -8,7 +9,7 @@ import { safeHome } from "./types";
  * The directories CLIs usually live in but a service's short PATH (launchd, a scheduled task) lacks.
  * Used by findCli and also to widen the PATH the macOS service starts with.
  */
-export function cliDirs(home: string = safeHome() || homedir(), id: string = platform.id, env: Record<string, string | undefined> = process.env): string[] {
+export function cliDirs(home: string = safeHome() || userHome(), id: string = platform.id, env: Record<string, string | undefined> = process.env): string[] {
   if (id === "win32") {
     const roaming = env.APPDATA ?? join(home, "AppData", "Roaming");
     return [join(roaming, "npm"), join(home, ".bun", "bin"), join(home, ".local", "bin")];

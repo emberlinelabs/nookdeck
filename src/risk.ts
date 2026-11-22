@@ -1,5 +1,6 @@
+import { userHome } from "./home";
 import { isAbsolute, join, normalize, relative } from "node:path";
-import { homedir } from "node:os";
+
 import { t as tr } from "./i18n";
 
 export type Risk = "low" | "medium" | "high";
@@ -25,7 +26,7 @@ export function commandOf(input: any): string | undefined {
 
 /** Expands ~ and resolves a path against the project cwd. */
 export function resolvePath(p: string, cwd?: string): string {
-  const expanded = p === "~" ? homedir() : p.startsWith("~/") ? join(homedir(), p.slice(2)) : p;
+  const expanded = p === "~" ? userHome() : p.startsWith("~/") ? join(userHome(), p.slice(2)) : p;
   return normalize(isAbsolute(expanded) ? expanded : join(cwd ?? "/", expanded));
 }
 

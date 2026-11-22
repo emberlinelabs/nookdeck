@@ -245,11 +245,23 @@ if (argv[0] === "__ax") {
   console.log(String(argv[1] === "prompt" ? realAxPrompt() : realAxTrusted()));
   process.exit(0);
 }
+// `nookdeck install [--port N] [--yes] [--force] [--open]`: copy this program to its stable place and run it as the background service from there (Homebrew).
+if (argv[0] === "install") {
+  const inst = await import("./install");
+  const flag = (name: string) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : argv.find((a) => a.startsWith(`${name}=`))?.slice(name.length + 1); };
+  try {
+    const r = await inst.runInstall(await inst.realInstallDeps(), { port: flag("--port") !== undefined || argv.some((a) => a.startsWith("--port=")) ? parsePort(argv) : undefined, yes: argv.includes("--yes") || argv.includes("-y"), force: argv.includes("--force"), open: argv.includes("--open") });
+    process.exit(r.status === "refused" ? 1 : 0);
+  } catch (err: any) { console.error(`nookdeck install: ${err?.message ?? String(err)}`); process.exit(1); }
+}
 // `nookdeck update [--version X] [--check]`: replaces this program with the latest (or the given) release.
 if (argv[0] === "update") {
   const { runUpdate } = await import("./update");
   const flag = (name: string) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : argv.find((a) => a.startsWith(`${name}=`))?.slice(name.length + 1); };
   const port = argv.includes("--port") || argv.some((a) => a.startsWith("--port=")) ? parsePort(argv) : Number(process.env.NOOKDECK_PORT) || 7420;
+  const { brewManaged } = await import("./install");
+  const brewNote = "This copy was installed with Homebrew: run `brew upgrade nookdeck`, then `nookdeck install` (a replaced program here would not survive the next brew upgrade).";
+  if (!argv.includes("--check") && (await brewManaged(process.execPath))) { console.log(brewNote); process.exit(0); }
   try {
     await runUpdate({
       check: argv.includes("--check"), version: flag("--version"), port, tty: !!process.stdout.isTTY,
@@ -268,10 +280,11 @@ if (argv[0] === "update") {
     console.error(`nookdeck update: ${err?.message ?? String(err)}`);
     process.exit(1);
   }
+  if (argv.includes("--check") && (await brewManaged(process.execPath))) console.log(brewNote);
   process.exit(0);
 }
 if (argv[0] === "help" || argv.includes("--help") || argv.includes("-h")) {
-  console.log("Usage: nookdeck [--port N]\n       nookdeck mcp [--port N]   MCP server (stdio) to arrange the deck with an AI\n       nookdeck service install|uninstall|status|restart [--port N]   run in the background at login (macOS, Windows)\n       nookdeck hooks repoint|remove   re-point or remove the Claude/Codex hooks\n       nookdeck doctor [--open <id>] [--request <id>] [--json]   check OS permissions (asks the running agent)\n       nookdeck update [--version X] [--check]   install the latest release (or only check)\n       nookdeck --version\n       --no-qr   do not print the pairing QR code at start\n       nookdeck qr <text>   print a QR code in the terminal\n\nEnv: NOOKDECK_PORT, NOOKDECK_HOME");
+  console.log("Usage: nookdeck [--port N]\n       nookdeck mcp [--port N]   MCP server (stdio) to arrange the deck with an AI\n       nookdeck service install|uninstall|status|restart [--port N]   run in the background at login (macOS, Windows)\n       nookdeck hooks repoint|remove   re-point or remove the Claude/Codex hooks\n       nookdeck doctor [--open <id>] [--request <id>] [--json]   check OS permissions (asks the running agent)\n       nookdeck install [--port N] [--yes] [--force] [--open]   put this program in its stable place and start it at login (for Homebrew)\n       nookdeck update [--version X] [--check]   install the latest release (or only check)\n       nookdeck --version\n       --no-qr   do not print the pairing QR code at start\n       nookdeck qr <text>   print a QR code in the terminal\n\nEnv: NOOKDECK_PORT, NOOKDECK_HOME");
   process.exit(0);
 }
 

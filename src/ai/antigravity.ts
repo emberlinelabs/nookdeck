@@ -1,4 +1,5 @@
-import { homedir } from "node:os";
+
+import { userHome } from "../home";
 import { join } from "node:path";
 import { platform } from "../platform";
 import { findCli } from "./find-cli";
@@ -11,7 +12,7 @@ export const AGY_TIMEOUT_MS = 20_000;
 export function agyPath(): string | null {
   const forced = process.env.NOOKDECK_AGY;
   if (forced) return forced;
-  const home = safeHome() || homedir();
+  const home = safeHome() || userHome();
   const local = process.env.LOCALAPPDATA ?? join(home, "AppData", "Local");
   return findCli("agy", platform.id === "win32" ? [join(local, "agy", "bin")] : []);
 }

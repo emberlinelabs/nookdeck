@@ -1,6 +1,7 @@
+import { userHome } from "./home";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
-import { homedir } from "node:os";
+
 import { basename, join } from "node:path";
 import { runCapture } from "./actions";
 import { APP_ICON_RE, HOME, IMG_ICON_RE, LOBE_ICON_RE, type Layout } from "./config";
@@ -63,7 +64,7 @@ export interface LayoutAsset {
 
 const has = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
 
-export function appDirs(home = homedir()): string[] {
+export function appDirs(home = userHome()): string[] {
   return ["/Applications", "/Applications/Utilities", "/System/Applications", "/System/Applications/Utilities", "/System/Library/CoreServices", "/System/Library/CoreServices/Applications", join(home, "Applications")];
 }
 

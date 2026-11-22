@@ -1,8 +1,9 @@
+import { userHome } from "../home";
 import { platform } from "../platform";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { homedir } from "node:os";
+
 import { t } from "../i18n";
 import { safeHome, clampPercent, windowLabel, type AiSession, type ProviderQuota, type QuotaExtra, type QuotaWindow } from "./types";
 import { projectName, sessionState, MAX_SESSIONS } from "./sessions";
@@ -18,7 +19,7 @@ import { withToolState, type ToolStates } from "./states";
  * the phone only learns "Grok is waiting for you".
  */
 
-export const grokDir = (): string => process.env.GROK_HOME || join(safeHome() || homedir(), ".grok");
+export const grokDir = (): string => process.env.GROK_HOME || join(safeHome() || userHome(), ".grok");
 export const grokHookFile = (): string => join(grokDir(), "hooks", "nookdeck.json");
 /** The grok binary: NOOKDECK_GROK (authoritative, for tests), PATH, then ~/.grok/bin and the usual places (a service's PATH is short). */
 export function grokPath(): string | null {
@@ -26,7 +27,7 @@ export function grokPath(): string | null {
   if (forced) return existsSync(forced) ? forced : null;
   const onPath = Bun.which("grok", { PATH: process.env.PATH ?? "" });
   if (onPath) return onPath;
-  const home = safeHome() || homedir();
+  const home = safeHome() || userHome();
   const exe = platform.id === "win32" ? [".exe", ".cmd"] : [""];
   for (const d of [join(grokDir(), "bin"), join(home, ".local", "bin"), join(home, ".bun", "bin"), "/opt/homebrew/bin", "/usr/local/bin"]) for (const e of exe) { const f = join(d, `grok${e}`); if (existsSync(f)) return f; }
   return null;

@@ -1,3 +1,4 @@
+import { userHome } from "./home";
 import { chmod, cp, lstat, mkdir, readFile, readdir, rename, rm, symlink, writeFile, appendFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { repointHooks, serviceInstall, plistPath, type ServiceDeps, type Instance } from "./service";
@@ -217,12 +218,11 @@ async function migrateWindows(o: MigrateOptions, program: string[], newHome: str
  * unless the matching NOOKDECK_* override is set. NOOKDECK_INSTALL_HOME (setup.sh --home relocation) names another home folder.
  */
 export async function migrateFromEnv(port: number, log: (l: string) => void, o: { service?: boolean } = {}): Promise<MigrateResult> {
-  const { homedir } = await import("node:os");
   const { resolve } = await import("node:path");
   const { HOME } = await import("./config");
   const { platform } = await import("./platform");
   const svc = await import("./service");
-  const home = process.env.NOOKDECK_INSTALL_HOME ?? homedir();
+  const home = process.env.NOOKDECK_INSTALL_HOME ?? userHome();
   const isDefault = resolve(HOME) === resolve(join(home, ".nookdeck"));
   const serviceOk = isDefault || !!process.env.NOOKDECK_LAUNCH_AGENTS_DIR || !!process.env.NOOKDECK_WIN_DIR;
   return migrate({

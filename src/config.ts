@@ -1,5 +1,6 @@
+import { userHome } from "./home";
 import "./compat";
-import { homedir } from "node:os";
+
 import { join } from "node:path";
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { ICON_ALIASES } from "../web/shared/icons";
@@ -257,7 +258,7 @@ export interface Device {
   expiresAt?: string;
 }
 
-export const HOME = process.env.NOOKDECK_HOME ?? join(homedir(), ".nookdeck");
+export const HOME = process.env.NOOKDECK_HOME ?? join(userHome(), ".nookdeck");
 const LAYOUT_FILE = join(HOME, "layout.json");
 const DEVICES_FILE = join(HOME, "devices.json");
 
