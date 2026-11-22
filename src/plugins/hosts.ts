@@ -2,8 +2,9 @@
  * All code-plugin processes of the agent: creates one per enabled, granted code plugin when it is first needed, keeps them in step with
  * the store (disable, remove, update, settings change) and answers the runtime's questions (widget data, action runs, status, logs).
  */
+import { userHome } from "../home";
 import { join } from "node:path";
-import { homedir } from "node:os";
+
 import { HOME } from "../config";
 import { EVERY_DEFAULT_S, type InitResult, type Settings, type WidgetUpdate } from "./api";
 import { PluginServices } from "./capabilities";
@@ -140,5 +141,5 @@ export class PluginHosts {
   }
 
   /** Where plugin files live, for the CLI messages. */
-  static homeHint = () => join(homedir(), ".nookdeck");
+  static homeHint = () => join(userHome(), ".nookdeck");
 }

@@ -3,7 +3,7 @@
   "id": "dev.nookdeck.github-stars",
   "name": "GitHub stars",
   "version": "1.0.0",
-  "nookdeck": ">=0.3.0",
+  "nookdeck": ">=0.3.1",
   "author": "Nookdeck",
   "description": "Star count of a GitHub repository, with a short history",
   "permissions": { "network": ["api.github.com"], "storage": true },

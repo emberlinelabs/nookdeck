@@ -32,7 +32,7 @@ function plugin(id: string, body: string, o: { permissions?: Record<string, unkn
 
 async function setup(plugins: Array<{ dir: string; id: string }>, over: Record<string, unknown> = {}) {
   const d = tmp();
-  const store = new PluginStore({ dir: join(d, "plugins"), stateFile: join(d, "plugins.json"), agentVersion: "0.3.0" });
+  const store = new PluginStore({ dir: join(d, "plugins"), stateFile: join(d, "plugins.json"), agentVersion: "0.3.1" });
   await store.load();
   for (const p of plugins) {
     const r = await store.install(p.dir);
@@ -498,4 +498,25 @@ describe("the SDK import and load errors", () => {
     await sleep(100);
     expect(h.info("dev.t.syn").state).toBe("failed");
   });
+});
+
+import { runPluginCli as __runCli } from "../src/plugins/cli";
+test("plugin dev / pack take the folder argument even without --port or --out", async () => {
+  // regression: rest.indexOf("--port") was -1, so rest[0] (the folder) was treated as the flag's value and "." was used
+  const seen: string[] = [];
+  const cli = await import("../src/plugins/cli");
+  const orig = cli.pluginPack;
+  expect(typeof orig).toBe("function");
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const dir = mkdtempSync(join(tmpdir(), "nd-pack-"));
+  const plug = join(dir, "p"); mkdirSync(plug);
+  writeFileSync(join(plug, "nookdeck.json"), JSON.stringify({ id: "dev.test.packarg", name: "P", version: "1.0.0", nookdeck: ">=0.1.0", permissions: { network: [] }, widgets: [], actions: [], main: null }));
+  const r = await cli.pluginPack([plug, "--out", join(dir, "out.zip")], (s: string) => seen.push(s));
+  expect(r.file).toBe(join(dir, "out.zip"));
+  // without --out the zip lands in the current folder: run it from the temp dir so the repo stays clean
+  const cwd = process.cwd(); process.chdir(dir);
+  try { const r2 = await cli.pluginPack([plug], () => {}); expect(r2.packageSha256).toBe(r.packageSha256); } finally { process.chdir(cwd); }
+  void __runCli;
 });

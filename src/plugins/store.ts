@@ -2,13 +2,15 @@
  * Installed plugins on disk: ~/.nookdeck/plugins/<id>/<version>/ (the files) and ~/.nookdeck/plugins.json (state: enabled,
  * pinned version and sha256, granted permissions, settings). Install from a local folder or manifest file, or from an https URL.
  */
+import { userHome } from "../home";
 import { createHash } from "node:crypto";
 import { chmod, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+
 import { join, resolve } from "node:path";
 import { HOME, PLUGIN_ID_RE } from "../config";
 import { MANIFEST_MAX_BYTES, covers, describePermissions, parseManifest, parsePermissions } from "./manifest";
 import { coerce } from "./sources";
+import { TAR_MAX_COMPRESSED, TarError, readTarGz } from "./tar";
 import { materializePreview } from "./core";
 import type { Manifest, Permissions, PluginState, SettingField, Settings, StateFile } from "./types";
 
@@ -47,6 +49,16 @@ export async function readFolder(root: string): Promise<Files> {
   return files;
 }
 
+/** A GitHub repository (or tree) address: owner, repo, the ref when given, and the plugin's folder inside the repo. */
+export function githubRepo(url: string): { owner: string; repo: string; ref?: string; sub: string } | null {
+  let u: URL;
+  try { u = new URL(url); } catch { return null; }
+  if (u.hostname !== "github.com") return null;
+  const m = /^\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/tree\/([^/]+)(?:\/(.*))?)?\/?$/.exec(u.pathname);
+  if (!m) return null;
+  return { owner: m[1], repo: m[2], ref: m[3], sub: (m[4] ?? "").replace(/\/+$/, "") };
+}
+
 /** Raw manifest addresses to try for an https URL: the URL itself, or a GitHub repo page (main, then master). */
 export function manifestUrls(url: string): string[] {
   const u = new URL(url);
@@ -69,6 +81,8 @@ export interface StoreOptions {
   /** The running Nookdeck version, checked against a manifest's `nookdeck` range. */
   agentVersion?: string;
   fetch?: typeof fetch;
+  /** Test hook: where GitHub packages come from (default https://codeload.github.com). */
+  codeloadBase?: string;
   now?: () => number;
 }
 
@@ -268,6 +282,36 @@ export class PluginStore {
     return text;
   }
 
+  /** Downloads a GitHub package (codeload tar.gz) and extracts only the plugin's folder. */
+  private async fetchGithubPackage(g: { owner: string; repo: string; ref?: string; sub: string }): Promise<Files | null> {
+    const f = this.opts.fetch ?? fetch;
+    const base = this.opts.codeloadBase ?? "https://codeload.github.com";
+    for (const ref of g.ref ? [g.ref] : ["main", "master"]) {
+      const res = await f(`${base}/${g.owner}/${g.repo}/tar.gz/${ref}`, { redirect: "follow", signal: AbortSignal.timeout(60_000) });
+      if (res.status === 404) continue;
+      if (!res.ok) throw new PluginError(`could not download the plugin: the server answered ${res.status}`);
+      const len = Number(res.headers.get("content-length") ?? 0);
+      if (len > TAR_MAX_COMPRESSED) throw new PluginError("the package is larger than 10 MB");
+      // read with a cap, so a server that lies about the length cannot fill the memory
+      const chunks: Uint8Array[] = [];
+      let got = 0;
+      const reader = res.body?.getReader();
+      if (!reader) throw new PluginError("could not download the plugin");
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        got += value.length;
+        if (got > TAR_MAX_COMPRESSED) { await reader.cancel().catch(() => {}); throw new PluginError("the package is larger than 10 MB"); }
+        chunks.push(value);
+      }
+      const gz = new Uint8Array(got);
+      let o = 0;
+      for (const c of chunks) { gz.set(c, o); o += c.length; }
+      try { return readTarGz(gz, g.sub); } catch (e: any) { throw new PluginError(e instanceof TarError ? e.message : String(e?.message ?? e)); }
+    }
+    return null;
+  }
+
   private async resolveSource(source: string): Promise<{ files: Files; shown: string }> {
     const src = source.trim();
     if (!src) throw new PluginError("give a folder path or an https address");
@@ -277,11 +321,21 @@ export class PluginStore {
       try { urls = manifestUrls(src); } catch { throw new PluginError("that is not a valid web address"); }
       for (const u of urls) {
         const text = await this.fetchText(u);
-        if (text !== null) return { files: new Map([[MANIFEST_FILE, new TextEncoder().encode(text)]]), shown: src };
+        if (text === null) continue;
+        // a plugin with code needs its other files: fetch the repository package (a no-code plugin stays manifest-only, as before)
+        const g = githubRepo(src);
+        let main: unknown;
+        try { main = JSON.parse(text)?.main; } catch { /* reported later as invalid JSON */ }
+        if (g && typeof main === "string" && main) {
+          const pkg = await this.fetchGithubPackage(g);
+          if (!pkg || !pkg.has(MANIFEST_FILE)) throw new PluginError(`could not download the plugin files from that repository`);
+          return { files: pkg, shown: src };
+        }
+        return { files: new Map([[MANIFEST_FILE, new TextEncoder().encode(text)]]), shown: src };
       }
       throw new PluginError(`no ${MANIFEST_FILE} found at that address`);
     }
-    const path = resolve(src.startsWith("~") ? join(homedir(), src.slice(1)) : src);
+    const path = resolve(src.startsWith("~") ? join(userHome(), src.slice(1)) : src);
     let st;
     try { st = await stat(path); } catch { throw new PluginError("that path does not exist"); }
     if (st.isDirectory()) {
@@ -302,8 +356,8 @@ export class PluginStore {
     let manifest: Manifest;
     try { manifest = parseManifest(JSON.parse(new TextDecoder().decode(files.get(MANIFEST_FILE))), { agentVersion: this.opts.agentVersion }); }
     catch (e: any) { throw new PluginError(e instanceof SyntaxError ? `${MANIFEST_FILE} is not valid JSON: ${e.message}` : `${MANIFEST_FILE}: ${e?.message ?? e}`); }
+    if (manifest.main && files.size === 1 && /^https?:/i.test(source.trim()) && !githubRepo(source.trim())) throw new PluginError("a plugin with code cannot be installed from a single manifest address: install code plugins from a GitHub repository URL or a folder");
     if (manifest.main && !files.has(manifest.main)) throw new PluginError(`${MANIFEST_FILE}: main is "${manifest.main}", but that file is not in the plugin`);
-    if (manifest.main && /^https?:/i.test(source.trim())) throw new PluginError("a plugin with code cannot be installed from a single manifest address: use a GitHub repository, a folder or a package");
     const sha = packageHash(files);
     // a registry install must be exactly what was reviewed: nothing is written when the files differ
     if (from && (sha !== from.sha256.toLowerCase() || manifest.version !== from.version)) throw new PluginError("the plugin files do not match the reviewed version", 409);
@@ -343,7 +397,7 @@ export class PluginStore {
    * the manifest declares: this is the author's own code on the author's own computer.
    */
   async link(folder: string): Promise<{ plugin: PluginSummary; updated: boolean }> {
-    const path = resolve(folder.startsWith("~") ? join(homedir(), folder.slice(1)) : folder);
+    const path = resolve(folder.startsWith("~") ? join(userHome(), folder.slice(1)) : folder);
     let files: Files;
     try { files = await readFolder(path); } catch (e: any) { throw new PluginError(e?.code === "ENOENT" ? "that folder does not exist" : String(e?.message ?? e)); }
     if (!files.has(MANIFEST_FILE)) throw new PluginError(`there is no ${MANIFEST_FILE} in that folder`);
