@@ -1,6 +1,16 @@
+## Nookdeck 0.3.1
+
+Upgrading: run the install command below again, or `nookdeck update`.
+
+- **Plugins with code install from GitHub**, from the Store or a repository link. The whole plugin folder is downloaded and checked (size limits, no links or paths outside the folder), and Store installs stay pinned to the reviewed files. GitHub stars and Uptime ping are now in the Store.
+- **Wi-Fi first when pairing:** the pairing window and the installer QR use this computer's Wi-Fi or Ethernet address by default; the `.local` name and Tailscale are one pick away.
+- **Install links:** `http://localhost:7420/manage#plugins?add=<plugin id>` opens a Store plugin's Add dialog (nookdeck.app/plugins uses it). Nothing installs without your OK.
+- **`nookdeck install`:** puts the program in its stable place and sets up the login service, for Homebrew and other package managers.
+- Fixed: `nookdeck plugin dev <folder>` and `plugin pack <folder>` used the current folder when no flag was given; the doctor no longer crashes when the home folder cannot be found.
+
 ## Nookdeck 0.3.0: plugins with code, and a plugin Store
 
-Upgrading: run the install command below again, or `nookdeck update`. Coming from PhoneDesk? The install command moves everything over (see the 0.2.0 notes).
+Coming from PhoneDesk? The install command moves everything over (see the 0.2.0 notes).
 
 ### New
 
