@@ -90,8 +90,12 @@ const ATTRS = ['data-theme-pkg', 'data-theme-variant', 'data-pd-labels', 'data-p
 const packId = (s: Theme['source']): string => (s && typeof s.pack === 'string' ? s.pack.split('@')[0] : '')
 
 /** URL of a theme background: a package file or an uploaded image. Anything else is refused. */
+/** Demo deck (no agent): the page that embeds it supplies package files by name, and nothing is fetched from /api. */
+export const DEMO: { on: boolean; files: { [k: string]: string } } = { on: false, files: {} }
+
 export function backgroundUrl(v: string | undefined, assets?: { [value: string]: { img?: string } }): string | null {
   if (!v) return null
+  if (DEMO.on) return Object.prototype.hasOwnProperty.call(DEMO.files, v) ? DEMO.files[v] : null
   const m = /^theme:([a-z0-9][a-z0-9._-]*)\/([A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*)$/.exec(v)
   if (m && v.indexOf('..') < 0) return '/api/themes/' + m[1] + '/files/' + m[2]
   if (/^img:[A-Za-z0-9_-]+$/.test(v) && assets && assets[v] && assets[v].img) return assets[v].img as string
@@ -277,6 +281,7 @@ export function kindsCss(t: Theme | undefined, lite?: boolean): string {
 
 /** @font-face for the fonts a theme declares; urls are package files only. */
 export function fontFaceCss(t: Theme | undefined): string {
+  if (DEMO.on) return '' // the demo page injects its own @font-face from the parent's message
   if (!t || !t.fonts || !t.source) return ''
   const id = packId(t.source)
   if (!/^[a-z0-9][a-z0-9._-]*$/.test(id)) return ''

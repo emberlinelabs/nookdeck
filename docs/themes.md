@@ -196,6 +196,8 @@ The family is 1 to 40 letters, digits, spaces, `-` or `_`. Bundle the font's lic
 
 A pack does **not** run code and cannot install anything: no `node_modules`, no scripts, no remote files. Everything the theme needs is in the folder.
 
+`data-part="background"` is the layer behind everything. A pack may paint it (gradients, patterns, package images) with `background-image`, `background-color` and so on; its colour defaults to `--nd-bg`. Whenever a pack is applied the deck guarantees that layer is shown and that the panel and sheet are transparent over it, so no override is needed. `data-part="clock-card"` is the flip card of a flip clock and `data-part="clock-digit"` each half of a digit on it.
+
 ## Custom CSS (`theme.css`)
 
 For things a look cannot say (glows, pseudo-element decoration, animations) add a CSS file and set `"css": "theme.css"` in the manifest. The agent parses it with a real CSS parser when you install it, then scopes every rule under your pack, so it cannot style anything else:
@@ -237,7 +239,7 @@ What a theme can reach on the deck:
 
 | Attribute | Values |
 |---|---|
-| `data-part` | `tile`, `tile-icon`, `tile-label`, `tile-value`, `tile-sub`, `chart`, `gauge`, `button`, `header`, `page-dots`, `sheet`, `standby` |
+| `data-part` | `tile`, `tile-icon`, `tile-label`, `tile-value`, `tile-sub`, `chart`, `gauge`, `button`, `header`, `page-dots`, `sheet`, `standby`, `background`, `clock-digit`, `clock-card` |
 | `data-kind` | `button`, `clock`, `metric`, `media`, `weather`, `quota`, `entity`, `plugin`, `folder`, `header`, `standby`, `sheet` |
 | `data-state` | `on`, `off`, `playing`, `ok`, `warn`, `error` |
 | `data-size` | The tile's size in cells, like `"2x1"` |
@@ -313,3 +315,49 @@ Rules for a listed pack:
 - No logos or names of games, films or brands you do not own.
 - Previews are 16:9 pictures of the deck, rendered from a real screen.
 - Fonts and images must be free to redistribute, with their licence files in the folder.
+
+## Preview a theme without Nookdeck
+
+The real deck also builds as a **demo deck**: the same code in preview mode, with no agent, no pairing and no network, so a website can show a theme exactly as a phone would draw it.
+
+```bash
+cd web/deck && bun run build:demo      # writes web/deck/dist-demo/ (index.html + assets/, relative urls)
+```
+
+Host `dist-demo/` as static files on the same origin as the page that embeds it (an `<iframe src="demo/index.html">`). The page has a Content-Security-Policy that allows only its own files (`default-src 'none'`, `connect-src 'self'`), and a runtime guard that refuses every request to `/api`, `/ws` or another host. Sample stats, sparklines and media drift a little, deterministically.
+
+### The message
+
+The embedding page sends the iframe a message. It may send it again at any time to change the preview; only the parent window can drive the demo.
+
+```js
+frame.contentWindow.postMessage({
+  type: "nd-demo",
+  theme: { /* the variant's resolved look: look fields, kinds, fonts */ },
+  pkg: "dev.author.name",        // becomes data-theme-pkg
+  variant: "night",              // becomes data-theme-variant
+  css: "…",                      // the pack's css, already checked and scoped (see below)
+  fonts: [{ family: "Orbitron", url: "fonts/Orbitron-Bold.woff2", weight: 700 }],
+  icons: { home: "<svg viewBox=…>…</svg>" },   // optional icon pack, whole svg documents
+  files: { "theme:dev.author.name/bg.png": "bg.png" },   // urls for package files the look names
+  layout: { pages: […] },        // optional; default is a sample Overview
+  page: "overview",              // optional page id or index
+  np: "last"                     // optional: playing (default) | last | empty
+}, location.origin);
+```
+
+- The iframe tells the parent it is ready with `{ type: "nd-demo-ready" }`. The same object (base64url JSON) also works as `?d=` or `#d=` in the iframe address.
+- Every field is optional. `theme` replaces the look fields of the layout's theme; `pkg` and `variant` set the root attributes your css selects on.
+- **Urls** (`css`, `fonts`, `files`) may be relative (the demo's own files), `data:` images and fonts, `blob:`, or absolute on the demo's own origin. Anything else makes the demo ignore that css, font or file. `@import`, `@namespace`, `@charset`, `expression()` and `behavior` are refused too. css is at most 128 KB.
+- **Icons** that contain a script, `foreignObject`, an event handler or an external reference are dropped.
+
+### Getting the message from a pack
+
+`nookdeck theme demo` builds the whole message from a theme folder, with the same checks and scoping the agent uses on install:
+
+```bash
+nookdeck theme demo ./my-theme --variant night --base https://example.com/themes/my-theme > night.json
+nookdeck theme demo ./my-theme --variant day --options accent=mauve --base …
+```
+
+`--base` is where the pack's files (fonts, backgrounds, css images) are hosted; the css and the font urls in the output point there. Send the JSON as the message.

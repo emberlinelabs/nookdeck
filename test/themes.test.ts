@@ -241,9 +241,17 @@ describe("deck theming hooks", () => {
     for (const h of ['data-part="tile"', 'data-part="header"', 'data-part="page-dots"', 'data-part="sheet"', "data-kind=", "data-size=", "data-theme-pkg", "data-theme-variant"]) expect(src).toContain(h);
     for (const v of ["accent", "bg", "tile-bg", "tile-opacity", "text", "muted", "radius", "gap", "font", "number-font", "border-width", "border-color", "shadow", "tile-blur", "ok", "warn", "error", "info", "chart-1", "chart-6"]) expect(src).toContain(`--nd-${v}`);
     expect(src).toContain("theme=off");
-    const all = ["Deck.tsx", "widgets.tsx", "plugin.tsx", "entity.tsx", "charts.tsx", "metric-charts.tsx", "screen.tsx", "icon.tsx"].map((f) => readFileSync(join(import.meta.dir, "../web/deck/src", f), "utf8")).join("\n");
-    for (const part of ["tile-icon", "tile-label", "tile-value", "tile-sub", "chart", "gauge", "button", "standby"]) expect(all).toContain(`data-part="${part}"`);
+    const all = ["Deck.tsx", "widgets.tsx", "plugin.tsx", "entity.tsx", "charts.tsx", "metric-charts.tsx", "screen.tsx", "icon.tsx", "clocks.tsx"].map((f) => readFileSync(join(import.meta.dir, "../web/deck/src", f), "utf8")).join("\n");
+    for (const part of ["tile-icon", "tile-label", "tile-value", "tile-sub", "chart", "gauge", "button", "standby", "background", "clock-digit", "clock-card"]) expect(all).toContain(`data-part="${part}"`);
     expect(all).toContain("data-state={dstate}");
+    // a pack always gets the background layer and a transparent panel and sheet over it
+    const css = readFileSync(join(import.meta.dir, "../web/deck/src/deck.css"), "utf8");
+    expect(css).toMatch(/\.pd-root\[data-theme-pkg\] \.pd-bgimg \{ display: block/);
+    expect(css).toMatch(/\.pd-root\[data-theme-pkg\] \.pd-sheet, \.pd-root\[data-theme-pkg\] \.pd-panel \{ background: transparent/);
+    // every hook the docs table lists exists in the source
+    const docs = readFileSync(join(import.meta.dir, "../docs/themes.md"), "utf8");
+    const row = /\| `data-part` \| ([^\n]+) \|/.exec(docs)![1]!;
+    for (const m of row.matchAll(/`([a-z-]+)`/g)) expect(all + css).toContain(`data-part="${m[1]}"`);
   });
 });
 

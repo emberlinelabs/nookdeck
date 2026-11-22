@@ -285,12 +285,12 @@ function FlapCard(props: { text: string; w: number; h: number; font: number }) {
   const dim = { width: props.w + 'px', height: props.h + 'px', fontSize: props.font + 'px', lineHeight: props.h + 'px' }
   const flipping = st.prev !== st.cur
   const half = (cls: string, text: string, extra?: string) => (
-    <div class={'pd-fl__h ' + cls + (extra ? ' ' + extra : '')}>
+    <div class={'pd-fl__h ' + cls + (extra ? ' ' + extra : '')} data-part="clock-digit">
       <span style={dim}>{text}</span>
     </div>
   )
   return (
-    <div class="pd-fl" style={{ width: props.w + 'px', height: props.h + 'px' }} aria-hidden="true">
+    <div class="pd-fl" data-part="clock-card" style={{ width: props.w + 'px', height: props.h + 'px' }} aria-hidden="true">
       {half('pd-fl__top', st.cur)}
       {half('pd-fl__bot', flipping ? st.prev : st.cur)}
       {flipping ? (

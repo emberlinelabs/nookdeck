@@ -70,6 +70,14 @@ jobs:
       - name: Test
         run: bun run test
 
+      # the demo deck (the real deck, no agent): nookdeck.app fetches it at build time to render theme previews
+      - name: Build the demo deck (nookdeck-demo.tgz)
+        run: |
+          mkdir -p dist
+          (cd web/deck && bun install --frozen-lockfile && bun run build:demo)
+          tar -czf dist/nookdeck-demo.tgz -C web/deck/dist-demo .
+          ls -l dist/nookdeck-demo.tgz
+
       - name: Build (macOS arm64 + x64), cross-compile Windows x64
         run: |
           mkdir -p dist
@@ -99,6 +107,7 @@ jobs:
           # gzip copies (about a third of the size): the installers prefer them and unpack + verify the binary too
           for f in nookdeck-darwin-arm64 nookdeck-darwin-x64 nookdeck-windows-x64.exe phonedesk-darwin-arm64 phonedesk-darwin-x64 phonedesk-windows-x64.exe; do gzip -9 -n -k "$f"; done
           shasum -a 256 nookdeck-darwin-arm64 nookdeck-darwin-x64 nookdeck-windows-x64.exe nookdeck-darwin-arm64.gz nookdeck-darwin-x64.gz nookdeck-windows-x64.exe.gz phonedesk-darwin-arm64 phonedesk-darwin-x64 phonedesk-windows-x64.exe phonedesk-darwin-arm64.gz phonedesk-darwin-x64.gz phonedesk-windows-x64.exe.gz > SHA256SUMS
+          shasum -a 256 nookdeck-demo.tgz >> SHA256SUMS
           cat SHA256SUMS
           ls -l nookdeck-* phonedesk-*
 
@@ -130,6 +139,7 @@ jobs:
             dist/phonedesk-darwin-arm64.gz
             dist/phonedesk-darwin-x64.gz
             dist/phonedesk-windows-x64.exe.gz
+            dist/nookdeck-demo.tgz
             dist/SHA256SUMS
 
   # Nookdeck-Setup.exe (spec desktop-apps A4): the Go tray app + the agent above, in a per-user Inno Setup installer
@@ -255,7 +265,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/nookdeck-darwin-arm64 dist/nookdeck-darwin-x64 dist/nookdeck-windows-x64.exe dist/nookdeck-darwin-arm64.gz dist/nookdeck-darwin-x64.gz dist/nookdeck-windows-x64.exe.gz dist/phonedesk-darwin-arm64 dist/phonedesk-darwin-x64 dist/phonedesk-windows-x64.exe dist/phonedesk-darwin-arm64.gz dist/phonedesk-darwin-x64.gz dist/phonedesk-windows-x64.exe.gz dist/SHA256SUMS $(ls dist/Nookdeck.dmg dist/Nookdeck.dmg.sha256 dist/Nookdeck-Setup.exe 2>/dev/null) \
+          gh release create "$GITHUB_REF_NAME" dist/nookdeck-darwin-arm64 dist/nookdeck-darwin-x64 dist/nookdeck-windows-x64.exe dist/nookdeck-darwin-arm64.gz dist/nookdeck-darwin-x64.gz dist/nookdeck-windows-x64.exe.gz dist/phonedesk-darwin-arm64 dist/phonedesk-darwin-x64 dist/phonedesk-windows-x64.exe dist/phonedesk-darwin-arm64.gz dist/phonedesk-darwin-x64.gz dist/phonedesk-windows-x64.exe.gz dist/nookdeck-demo.tgz dist/SHA256SUMS $(ls dist/Nookdeck.dmg dist/Nookdeck.dmg.sha256 dist/Nookdeck-Setup.exe 2>/dev/null) \
             --repo "$GITHUB_REPOSITORY" --title "Nookdeck $GITHUB_REF_NAME" --notes-file .github/release-notes.md --generate-notes
 
   # manual runs only: every asset in one artifact, SHA256SUMS completed the way `publish` does it. Creates no release and no tag.

@@ -20,3 +20,4 @@ promo/
 
 # macOS menu bar app build output
 apps/macos/.build/
+web/deck/dist-demo/

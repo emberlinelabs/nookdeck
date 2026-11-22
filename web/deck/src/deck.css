@@ -3598,14 +3598,16 @@
   left: 0;
   z-index: 0;
   pointer-events: none;
-  -webkit-transform: scale(1.05);
-  transform: scale(1.05);
 }
 .pd-root[data-pd-bg='image'] .pd-sheet,
 .pd-root[data-pd-bg='image'] .pd-panel,
 .pd-root[data-pd-bg='gradient'] .pd-sheet,
 .pd-root[data-pd-bg='gradient'] .pd-panel { background: transparent; }
-.pd-root[data-pd-bg='image'] .pd-bgimg { display: block; }
+.pd-root[data-pd-bg='image'] .pd-bgimg { display: block; -webkit-transform: scale(1.05); transform: scale(1.05); }
+/* documented hook: with a theme pack applied the background layer is always there for the pack to paint, and the panel and sheet are transparent over it */
+.pd-root[data-theme-pkg] .pd-bgimg { display: block; background-color: var(--pd-bg); }
+.pd-root[data-pd-bg='gradient'] .pd-bgimg { background-color: transparent; }
+.pd-root[data-theme-pkg] .pd-sheet, .pd-root[data-theme-pkg] .pd-panel { background: transparent; }
 .pd-root { font-family: var(--pd-ff, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif); }
 .pd-root .pd-wv, .pd-root .pd-clock__t, .pd-root .pd-ent__v, .pd-root [data-part='tile-value'] { font-family: var(--pd-ff-num, inherit); }
 /* tile surface: opacity (colour alpha, set from JS), blur, border, shadow; each only when the theme sets it */

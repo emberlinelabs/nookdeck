@@ -13,7 +13,7 @@ import { Sheet } from "@/components/ui/knowns/sheet";
 import { Spinner } from "@/components/ui/knowns/spinner";
 import { Switch } from "@/components/ui/knowns/switch";
 import { PresetThumb } from "@/components/theme-panel";
-import { MiniStrip, VariantMini } from "@/components/variant-mini";
+import { VariantMini } from "@/components/variant-mini";
 import { ScreenThumb } from "@/components/screen-thumb";
 import { packLook, previewPage, themeWithPack, type PackChoice } from "@/lib/pack-preview";
 import { t, useLanguage } from "@/lib/i18n";
@@ -26,23 +26,6 @@ type Tab = "discover" | "installed";
 const fileUrl = (id: string, path: string) => (/^https?:\/\//.test(path) ? path : `/api/themes/${encodeURIComponent(id)}/files/${path.split("/").map(encodeURIComponent).join("/")}`);
 
 /** The variants as little colour chips: background, tile and accent of each. */
-/** Up to 4 variants as tiny cards (plain CSS), then +N. A Store entry that is not installed has no colours yet: its variant names are shown instead. */
-function VariantStrip({ pack, applied, max = 4 }: { pack: ThemePack; applied: ThemeSource | null; max?: number }) {
-  if (!pack.variants.some((v) => v.look.accent || v.look.background || v.look.tile)) {
-    return <span className="truncate text-[11.5px] text-muted-foreground">{pack.variants.slice(0, 3).map((v) => v.name).join(", ")}{pack.variants.length > 3 ? ` +${pack.variants.length - 3}` : ""}</span>;
-  }
-  return (
-    <div className="grid min-w-0 flex-1 grid-cols-4 items-center gap-1.5" aria-hidden="true">
-      {pack.variants.slice(0, max).map((v) => (
-        <span key={v.id} title={v.name} className={cn("block overflow-hidden rounded-md", isCurrent(applied, pack, v.id) && "ring-2 ring-primary")}>
-          <MiniStrip look={packLook(pack, v.id)} mode={v.mode} />
-        </span>
-      ))}
-      {pack.variants.length > max && <span className="text-[11px] text-muted-foreground">+{pack.variants.length - max}</span>}
-    </div>
-  );
-}
-
 /** The user's own screen in this pack (their first screen with tiles), or the pack's preview picture, or a small sample, when there is nothing to draw. */
 function PackShot({ layout, pack, choice, pageId, fallback }: { layout: Layout; pack: ThemePack; choice: PackChoice; pageId?: string; fallback?: string }) {
   const pp = useMemo(() => previewPage(layout, pageId), [layout, pageId]);
@@ -72,12 +55,33 @@ function PackCard({ pack, layout, applied, onOpen, busy, onPrimary }: { pack: Th
         {pack.description && <span className="line-clamp-2 text-[12.5px]">{pack.description}</span>}
       </button>
       <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-        <VariantStrip pack={pack} applied={applied} />
-        <Button size="sm" variant={pack.applied ? "secondary" : "primary"} loading={busy} onClick={onPrimary}>
-          {!pack.installed ? t("Install") : pack.applied && !pack.appliedOlder ? t("Applied") : pack.appliedOlder ? t("Re-apply") : t("Apply")}
-        </Button>
+        <span className="text-[11.5px] text-muted-foreground">{pack.installed ? t("Installed") : ""}</span>
+        {!pack.installed ? <Button size="sm" variant="primary" loading={busy} onClick={onPrimary}>{t("Install")}</Button> : <Button size="sm" variant="secondary" onClick={onOpen}>{t("Details")}</Button>}
       </div>
     </article>
+  );
+}
+
+/** Installed packs as a compact management list: version, update, details and remove. Applying happens on the Customize tab. */
+function InstalledRow({ pack, busy, onOpen, onUpdate, onRemove }: { pack: ThemePack; busy: boolean; onOpen: () => void; onUpdate: () => void; onRemove: () => void }) {
+  return (
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border px-3 py-2.5">
+      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 flex-col gap-0.5 rounded-md text-left focus-visible:outline-2 focus-visible:outline-ring" aria-label={t("Details of {name}", { name: pack.name })}>
+        <span className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[13.5px] font-medium">{pack.name}</span>
+          {pack.builtin && <Badge size="sm" tone="neutral">{t("Built-in")}</Badge>}
+          {pack.hasCss && <Badge size="sm" tone="warning">{t("Custom CSS")}</Badge>}
+          {pack.applied && <Badge size="sm" tone="success" icon={<Check />}>{t("In use")}</Badge>}
+          {pack.updateAvailable && <Badge size="sm" tone="info">{t("Update")}</Badge>}
+        </span>
+        <span className="text-[11.5px] text-muted-foreground">{pack.author ? `${pack.author} · ` : ""}v{pack.installedVersion ?? pack.version}{pack.variants.length > 1 ? ` · ${t("{n} variants", { n: pack.variants.length })}` : ""}</span>
+      </button>
+      <div className="flex items-center gap-1.5">
+        {pack.updateAvailable && <Button size="sm" variant="primary" loading={busy} onClick={onUpdate}>{t("Update")}</Button>}
+        <Button size="sm" variant="secondary" onClick={onOpen}>{t("Details")}</Button>
+        {!pack.builtin && <Button size="sm" variant="ghost" disabled={busy} onClick={onRemove}>{t("Remove")}</Button>}
+      </div>
+    </li>
   );
 }
 
@@ -293,6 +297,10 @@ export function ThemesStore({ layout, beforeApply, deeplinkId, onDeeplinkDone, o
       {notice && <Alert tone="success" onDismiss={() => setNotice(null)} action={notice.undo ? { label: t("Undo"), onClick: () => void undo() } : undefined}>{notice.text}</Alert>}
       {list.length === 0 ? (
         <Empty icon={<Palette />} title={q ? t("No theme matches") : tab === "installed" ? t("No themes installed yet") : t("No themes to show")} description={q ? t("Try another word.") : t("Themes you install show up here.")} />
+      ) : tab === "installed" ? (
+        <ul className="flex flex-col gap-2">
+          {[...list].sort((a, b) => Number(b.builtin) - Number(a.builtin) || a.name.localeCompare(b.name)).map((p) => <InstalledRow key={p.id} pack={p} busy={busy === p.id} onOpen={() => setOpenId(p.id)} onUpdate={() => void install(p, false)} onRemove={() => void remove(p)} />)}
+        </ul>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {list.map((p) => <PackCard key={p.id} pack={p} layout={layout} applied={data.applied} busy={busy === p.id} onOpen={() => setOpenId(p.id)} onPrimary={() => primary(p)} />)}

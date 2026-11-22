@@ -3,10 +3,11 @@ import { t, setLang } from './i18n'
 import { Icon, TileIcon, setIconStroke } from './icon'
 import { soundKey } from './sounds'
 import { ControlSheet } from './hass-controls'
+import { demoHist, demoStats } from './demo-lib'
 import { naturalColor, HIST_LEN, Widget, type Hist } from './widgets'
 import { DeckClient, savedDeviceName, type ClientState } from './client'
 import { setTempUnit } from './temp'
-import { shade, applyTheme, readableOn, tint, over, backdropOf, tileKind, setPalette, kindsCss, fontFaceCss, effectiveTheme } from './theme'
+import { DEMO, shade, applyTheme, readableOn, tint, over, backdropOf, tileKind, setPalette, kindsCss, fontFaceCss, effectiveTheme } from './theme'
 import { PROVIDER_COLOR } from './ai'
 import { PermissionSheet, ProcessSheet, QuestionSheet } from './sheets'
 import { ScreenLayer, ScreenSheet } from './screen'
@@ -946,6 +947,16 @@ export function Deck(props: DeckProps) {
   const liteRef = useRef(false)
   const live = useClientState(client, liteRef)
   const [, bumpLocal] = useState(0)
+  // demo deck: sample stats that drift a little, one step per 1.5 s (not with reduced motion)
+  const [demoTick, setDemoTick] = useState(0)
+  useEffect(() => {
+    if (!DEMO.on) return
+    let still = false
+    try { still = window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { /* ignore */ }
+    if (still) return
+    const id = window.setInterval(() => setDemoTick((n) => n + 1), 1500)
+    return () => window.clearInterval(id)
+  }, [])
   useEffect(() => onLocalScreen(() => bumpLocal((x) => x + 1)), [])
   const [scrOpen, setScrOpen] = useState(false)
   const [pv, setPv] = useState<{ layout: Layout | null; selectedId: string | null; np: string; clean: boolean; pluginData?: unknown }>(() => {
@@ -953,7 +964,7 @@ export function Deck(props: DeckProps) {
     const n = splitNp(q.get('np') || '')
     return { layout: null, selectedId: null, np: n.np, clean: n.clean || q.get('clean') === '1' }
   })
-  const st: ClientState = preview ? { status: 'online', layout: pv.layout, stats: SAMPLE_STATS, media: pv.np === 'last' || pv.np === 'empty' ? null : pv.np === 'next' ? SAMPLE_MEDIA2 : SAMPLE_MEDIA, lastMedia: pv.np === 'last' ? Object.assign({}, SAMPLE_MEDIA, { playing: false, at: Date.now() - 12 * 60000 }) : null, ai: SAMPLE_AI, perms: pv.np === 'permission' ? [SAMPLE_PERM] : [], questions: pv.np === 'question' ? [SAMPLE_QUESTION] : pv.np === 'question-oc' ? [SAMPLE_QUESTION_OC] : [], notice: '', sounds: pv.np === 'sound' ? sampleSounds(pv.layout) : undefined, hass: sampleHass(pv.layout, pv.np === 'ha-off'), weather: sampleWeather(pv.layout), pushed: sampleValues(pv.layout), notes: SAMPLE_NOTES, goto: pv.np === 'goto' ? { id: 'g', pageId: ((pv.layout && pv.layout.pages[1]) || { id: '' }).id, countdown: 3, reason: 'Claude needs you', at: Date.now() } : null, modeOverride: null } : live
+  const st: ClientState = preview ? { status: 'online', layout: pv.layout, stats: DEMO.on ? demoStats(demoTick) : SAMPLE_STATS, media: pv.np === 'last' || pv.np === 'empty' ? null : pv.np === 'next' ? SAMPLE_MEDIA2 : SAMPLE_MEDIA, lastMedia: pv.np === 'last' ? Object.assign({}, SAMPLE_MEDIA, { playing: false, at: Date.now() - 12 * 60000 }) : null, ai: SAMPLE_AI, perms: pv.np === 'permission' ? [SAMPLE_PERM] : [], questions: pv.np === 'question' ? [SAMPLE_QUESTION] : pv.np === 'question-oc' ? [SAMPLE_QUESTION_OC] : [], notice: '', sounds: pv.np === 'sound' ? sampleSounds(pv.layout) : undefined, hass: sampleHass(pv.layout, pv.np === 'ha-off'), weather: sampleWeather(pv.layout), pushed: sampleValues(pv.layout), notes: SAMPLE_NOTES, goto: pv.np === 'goto' ? { id: 'g', pageId: ((pv.layout && pv.layout.pages[1]) || { id: '' }).id, countdown: 3, reason: 'Claude needs you', at: Date.now() } : null, modeOverride: null } : live
   const hass: HassState | undefined = st.hass
   // a real state update replaces the optimistic one
   useEffect(() => {
@@ -1006,7 +1017,7 @@ export function Deck(props: DeckProps) {
     push(hs.tx, st.stats.net ? st.stats.net.tx : 0)
     push(hs.load, (st.stats.load && st.stats.load[0]) || 0)
   }
-  const hist = preview ? SAMPLE_HIST : histRef.current
+  const hist = preview ? (DEMO.on ? demoHist(demoTick) : SAMPLE_HIST) : histRef.current
   const onMedia = (c: MediaCommand, app?: string) => {
     if (preview) return
     return client.media(c, app).then((r) => {
@@ -1839,7 +1850,7 @@ export function Deck(props: DeckProps) {
       const src = eff && themeKey && themeKey.source
       const variant = src ? (src.auto ? (root.getAttribute('data-pd-theme') === 'light' ? src.auto.light : src.auto.dark) : src.variant) : undefined
       const pk = src ? src.pack.split('@')[0] : ''
-      const href = src && /^[a-z0-9][a-z0-9._-]*$/.test(pk) ? '/api/themes/' + pk + '/css' + (variant && /^[a-z0-9][a-z0-9_-]*$/.test(variant) ? '?variant=' + variant : '') + (src.pack.indexOf('@') > 0 ? (variant ? '&' : '?') + 'v=' + encodeURIComponent(src.pack.split('@')[1]) : '') : ''
+      const href = !DEMO.on && src && /^[a-z0-9][a-z0-9._-]*$/.test(pk) ? '/api/themes/' + pk + '/css' + (variant && /^[a-z0-9][a-z0-9_-]*$/.test(variant) ? '?variant=' + variant : '') + (src.pack.indexOf('@') > 0 ? (variant ? '&' : '?') + 'v=' + encodeURIComponent(src.pack.split('@')[1]) : '') : ''
       if (href) {
         if (!link) { link = document.createElement('link'); link.id = 'pd-theme-css'; link.rel = 'stylesheet'; document.head.appendChild(link) }
         if (link.getAttribute('href') !== href) link.setAttribute('href', href)
@@ -1888,7 +1899,7 @@ export function Deck(props: DeckProps) {
 
   return (
     <div class={'pd-root' + (preview ? ' pd-root--preview' : '') + (rotated ? ' pd-root--rot' : '') + (Math.min(vp.w, vp.h) <= 340 ? ' pd-root--sm' : '') + (lite ? ' pd-lite' : '') + (hmode !== 'full' ? ' pd-hdr--' + hmode : '')} ref={rootRef} data-pd-theme="dark" style={rootStyle}>
-      <div class="pd-bgimg" aria-hidden="true" />
+      <div class="pd-bgimg" data-part="background" aria-hidden="true" />
       {st.reloading ? <div class="pd-veil">{t('Reloading…')}</div> : null}
       <div class={'pd-sheet' + (closing ? ' pd-sheet--closing' : '')} data-part="sheet">
         <div class="pd-panel" role="dialog" aria-label="Nookdeck">
