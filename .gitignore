@@ -14,3 +14,9 @@ web/*/dist/
 .mcp.json
 src/platform/mra-embed.gen.ts
 build/
+
+# Local promo video workspace
+promo/
+
+# macOS menu bar app build output
+apps/macos/.build/
