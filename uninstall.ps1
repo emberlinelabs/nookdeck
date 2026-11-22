@@ -14,15 +14,16 @@
 #   $env:NOOKDECK_PURGE=1    also delete the data folder
 #   $env:NOOKDECK_YES=1      ask nothing
 #   $env:NOOKDECK_DRY_RUN=1  list what would go, change nothing
+#   $env:NOOKDECK_NO_ANALYTICS=1  send no anonymous "uninstalled" count (DO_NOT_TRACK=1 does the same)
 #
 # Test hook: NOOKDECK_INSTALL_HOME (same meaning as in setup.ps1).
 
 # The same switches work on a saved copy (.\uninstall.ps1 -Purge); a switch OR its environment twin turns the option on.
-param([switch]$Purge, [switch]$Yes, [switch]$DryRun)
+param([switch]$Purge, [switch]$Yes, [switch]$DryRun, [switch]$NoAnalytics)
 
 function Uninstall-Nookdeck {
   [CmdletBinding()]
-  param([switch]$Purge, [switch]$Yes, [switch]$DryRun)
+  param([switch]$Purge, [switch]$Yes, [switch]$DryRun, [switch]$NoAnalytics)
   $ErrorActionPreference = 'Stop'
   $repo = 'howznguyen/nookdeck'
 
@@ -35,6 +36,31 @@ function Uninstall-Nookdeck {
   function Good([string]$m) { Put "  $($G.ok) $m" 'Green' }
   function Warn([string]$m) { Put "  $($G.warn) $m" 'Yellow' }
   function Stage([int]$n, [string]$title) { Write-Host ''; Put "[$n/4] $title" 'Cyan' }
+
+  # Anonymous count: the machine kind (os, Windows build, arch) and that it was uninstalled. Never a host name, user name, path, IP or token.
+  # Off with -NoAnalytics, NOOKDECK_NO_ANALYTICS=1 or DO_NOT_TRACK=1, for a dry run, a local test (INSTALL_HOME) and the test suite.
+  # Fire and forget: a hidden process, 3 seconds at most, every error swallowed.
+  $analyticsUrl = if ($env:NOOKDECK_ANALYTICS_URL) { $env:NOOKDECK_ANALYTICS_URL } else { 'https://nookdeck.app/api/event' }
+  $analytics = (-not $NoAnalytics) -and (-not $DryRun) -and ($env:NOOKDECK_NO_ANALYTICS -ne '1') -and ($env:DO_NOT_TRACK -ne '1') -and (
+    [bool]$env:NOOKDECK_ANALYTICS_URL -or (-not $env:NOOKDECK_INSTALL_HOME -and -not $env:NOOKDECK_TEST_SANDBOX))
+  function Track-Uninstalled {
+    $Sync = $true
+    if (-not $analytics) { return }
+    try {
+      $ver = [Environment]::OSVersion.Version
+      $clean = { param($v) $c = ([string]$v -replace '[^A-Za-z0-9_ .,:+()/-]', ''); if ($c.Length -gt 64) { $c = $c.Substring(0, 64) }; $c }
+      $body = [ordered]@{ name = 'uninstall_finished'; os = 'windows'; os_version = (& $clean "$($ver.Major).$($ver.Minor).$($ver.Build)"); arch = 'x64'; installer = 'uninstall.ps1' }
+      $json = ($body | ConvertTo-Json -Compress)
+      if ($Sync) {
+        # the last event waits (2 s at most): a closing session would kill a background process
+        Invoke-RestMethod -Uri $analyticsUrl -Method Post -ContentType 'application/json' -Body $json -TimeoutSec 2 | Out-Null
+      } else {
+        $env:NOOKDECK_A_BODY = $json
+        $cmd = 'try { Invoke-RestMethod -Uri ''' + ($analyticsUrl -replace "'", '') + ''' -Method Post -ContentType ''application/json'' -Body $env:NOOKDECK_A_BODY -TimeoutSec 3 | Out-Null } catch { }'
+        Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList @('-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', ('"' + $cmd + '"')) | Out-Null
+      }
+    } catch { } finally { Remove-Item Env:NOOKDECK_A_BODY -ErrorAction SilentlyContinue }
+  }
   function Ask([string]$question, [bool]$default) {
     $hint = if ($default) { '[Y/n]' } else { '[y/N]' }
     if ($Yes -or -not [Environment]::UserInteractive -or [Console]::IsInputRedirected) { Say "$question $hint $($G.arrow) $(if ($default) { 'yes' } else { 'no' }) (default)"; return $default }
@@ -72,6 +98,7 @@ function Uninstall-Nookdeck {
   # ------------------------------------------------------------ the plan
   Write-Host ''
   Put '  Nookdeck  uninstaller for Windows' 'Cyan'
+  if ($analytics) { Say 'Sends an anonymous uninstall count to nookdeck.app (opt out: NOOKDECK_NO_ANALYTICS=1)' }
   Write-Host ''
   Say 'This will remove:'
   Say "  - the scheduled task and the program ($exe)"
@@ -128,8 +155,9 @@ function Uninstall-Nookdeck {
   }
   Write-Host ''
   Put "  $($G.ok) Nookdeck is gone." 'Green'
+  Track-Uninstalled
 }
 
 if ($env:NOOKDECK_SETUP_NORUN -ne '1') {
-  Uninstall-Nookdeck -Purge:($Purge.IsPresent -or $env:NOOKDECK_PURGE -eq '1') -Yes:($Yes.IsPresent -or $env:NOOKDECK_YES -eq '1') -DryRun:($DryRun.IsPresent -or $env:NOOKDECK_DRY_RUN -eq '1')
+  Uninstall-Nookdeck -Purge:($Purge.IsPresent -or $env:NOOKDECK_PURGE -eq '1') -Yes:($Yes.IsPresent -or $env:NOOKDECK_YES -eq '1') -DryRun:($DryRun.IsPresent -or $env:NOOKDECK_DRY_RUN -eq '1') -NoAnalytics:($NoAnalytics.IsPresent -or $env:NOOKDECK_NO_ANALYTICS -eq '1' -or $env:DO_NOT_TRACK -eq '1')
 }

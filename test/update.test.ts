@@ -6,7 +6,7 @@ import { gzipSync } from "node:zlib";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { assetName, bare, cmpVersions, latestTag, runUpdate, UpdateChecker } from "../src/update";
+import { assetName, bare, cmpVersions, hasStableSignature, latestTag, runUpdate, UpdateChecker } from "../src/update";
 import { explainBusyPort } from "../src/busy";
 import { defaultLayout } from "../src/config";
 
@@ -235,5 +235,37 @@ describe("a busy port and unknown commands", () => {
       expect(err).toContain("is already running on port");
       expect(err).not.toContain("at ");
     } finally { app.stop(); }
+  });
+});
+
+describe("signature: a certificate signature is never replaced by an ad-hoc one", () => {
+  const fake = (verify: number, dr: string) => { const calls: string[][] = []; return { calls, run: async (argv: string[]) => { calls.push(argv); return argv.includes("--verify") ? { code: verify, out: "" } : argv.includes("-r-") ? { code: 0, out: dr } : { code: 0, out: "" }; } }; };
+  const DR_CERT = 'designated => identifier "dev.nookdeck.agent" and certificate root = H"abc"';
+  const DR_APPLE = "designated => anchor apple generic";
+  const DR_ADHOC = 'designated => cdhash H"abc"';
+  test("hasStableSignature: valid + certificate/anchor = yes; cdhash only, or not valid = no", async () => {
+    expect(await hasStableSignature("f", fake(0, DR_CERT).run)).toBe(true);
+    expect(await hasStableSignature("f", fake(0, 'designated => identifier "x" and certificate leaf = H"a"').run)).toBe(true);
+    expect(await hasStableSignature("f", fake(0, DR_APPLE).run)).toBe(true);
+    expect(await hasStableSignature("f", fake(0, DR_ADHOC).run)).toBe(false);
+    expect(await hasStableSignature("f", fake(1, DR_CERT).run)).toBe(false); // broken signature: sign again
+  });
+  const mac = process.platform === "darwin";
+  const rel = () => {
+    const dir = tmp(); const asset = assetName();
+    const body = `#!/bin/sh\necho "nookdeck 9.9.9 (fake)"\n`;
+    writeFileSync(join(dir, asset), body);
+    writeFileSync(join(dir, "SHA256SUMS"), `${sha(body)}  ${asset}\n`);
+    return dir;
+  };
+  const target = () => { const d = tmp(); const f = join(d, "nookdeck"); writeFileSync(f, `#!/bin/sh\necho "nookdeck 0.1.1 (old)"\n`); chmodSync(f, 0o755); return f; };
+  const withBase = async (base: string, fn: () => Promise<unknown>) => { process.env.NOOKDECK_RELEASE_BASE = base; try { await fn(); } finally { delete process.env.NOOKDECK_RELEASE_BASE; } };
+  test.skipIf(!mac)("nookdeck update leaves a certificate-signed download alone, and signs an unsigned one ad hoc", async () => {
+    const a = fake(0, DR_CERT);
+    await withBase(rel(), () => runUpdate({ version: "9.9.9", current: "0.1.1", target: target(), out: () => {}, codesign: a.run }));
+    expect(a.calls.some((c) => c.includes("--force"))).toBe(false);
+    const b = fake(1, "");
+    await withBase(rel(), () => runUpdate({ version: "9.9.9", current: "0.1.1", target: target(), out: () => {}, codesign: b.run }));
+    expect(b.calls.some((c) => c.includes("--force") && c.includes("-s") && c.includes("-"))).toBe(true);
   });
 });

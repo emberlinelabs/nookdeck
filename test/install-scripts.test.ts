@@ -565,3 +565,241 @@ describe("setup.ps1: the pre-rename release fallback (static)", () => {
     expect(ps).toContain("(?:nookdeck|phonedesk) (\\S+)");
   });
 });
+
+describe.skipIf(!mac)("setup.sh: signature and the port of our own agent", () => {
+  /** A fake `codesign` first on PATH: records its calls, answers verify / -d -r- the way the test says. */
+  function fakeCodesign(mode: "cert" | "adhoc") {
+    const dir = mkdtempSync(join(sandbox, "fakebin-"));
+    const log = join(dir, "codesign.log");
+    const dr = mode === "cert" ? 'designated => identifier "dev.nookdeck.agent" and certificate root = H"abc"' : 'designated => cdhash H"abc"';
+    writeFileSync(join(dir, "codesign"), `#!/bin/bash\necho "$*" >> "${log}"\ncase "$*" in *--verify*) exit ${mode === "cert" ? 0 : 1};; *"-r-"*) echo '${dr}'; exit 0;; *) exit 0;; esac\n`);
+    chmodSync(join(dir, "codesign"), 0o755);
+    return { dir, log };
+  }
+  const flags = ["--yes", "--no-autostart", "--no-start", "--no-open", "--no-path"];
+
+  test("a binary signed with the release certificate is not re-signed", () => {
+    const cs = fakeCodesign("cert");
+    const home = newHome();
+    const r = sh("setup.sh", flags, env(home, makeRelease(), { PATH: `${cs.dir}:${process.env.PATH}` }));
+    expect(r.exitCode, out(r)).toBe(0);
+    expect(out(r)).toContain("signed by the release identity");
+    expect(out(r)).not.toContain("signed ad hoc");
+    expect(readFileSync(cs.log, "utf8")).not.toContain("--force");
+  });
+  test("an unsigned or broken one is signed ad hoc, as before", () => {
+    const cs = fakeCodesign("adhoc");
+    const r = sh("setup.sh", flags, env(newHome(), makeRelease(), { PATH: `${cs.dir}:${process.env.PATH}` }));
+    expect(r.exitCode, out(r)).toBe(0);
+    expect(out(r)).toContain("signed ad hoc for this Mac");
+    expect(readFileSync(cs.log, "utf8")).toContain("--force -s -");
+  });
+  test("the old launchd job of a PhoneDesk install is stopped by the script, its port kept, and migrate runs without a service step", () => {
+    const home = newHome();
+    const agents = join(home, "Library", "LaunchAgents");
+    mkdirSync(agents, { recursive: true });
+    mkdirSync(join(home, ".phonedesk"), { recursive: true });
+    writeFileSync(join(home, ".phonedesk", "devices.json"), "{}");
+    writeFileSync(join(agents, "dev.phonedesk.agent.plist"), "<array>\n    <string>/x/phonedesk</string>\n    <string>--port</string>\n    <string>7455</string>\n  </array>\n");
+    const launch = join(home, "launchctl.log");
+    writeFileSync(join(home, "lc"), `#!/bin/bash\necho "$*" >> "${launch}"\n`); chmodSync(join(home, "lc"), 0o755);
+    const r = sh("setup.sh", ["--yes", "--no-autostart", "--no-start", "--no-open", "--no-path", "--dry-run"], env(home, makeRelease(), { NOOKDECK_LAUNCHCTL: join(home, "lc") }));
+    // a dry run changes nothing
+    expect(r.exitCode, out(r)).toBe(0);
+    expect(existsSync(join(agents, "dev.phonedesk.agent.plist"))).toBe(true);
+    const real = sh("setup.sh", ["--yes", "--no-autostart", "--no-start", "--no-open", "--no-path"], env(home, makeRelease(), { NOOKDECK_LAUNCHCTL: join(home, "lc") }));
+    expect(real.exitCode, out(real)).toBe(0);
+    expect(readFileSync(launch, "utf8")).toContain("bootout");
+    expect(readFileSync(launch, "utf8")).toContain("dev.phonedesk.agent");
+    expect(existsSync(join(agents, "dev.phonedesk.agent.plist"))).toBe(false);
+    expect(existsSync(join(agents, "dev.phonedesk.agent.plist.nookdeck-old"))).toBe(true); // kept, not deleted
+    expect(out(real)).toContain("keeping the port of your old install: 7455");
+    expect(readFileSync(join(home, ".nookdeck", "devices.json"), "utf8")).toBe("{}");
+    expect(readFileSync(launch, "utf8")).not.toContain("dev.nookdeck.agent"); // the new service is not started before the new program is in place
+  });
+  test("our own agent holding the port is restarted, not an error", async () => {
+    const release = makeRelease();
+    const home = newHome();
+    const port = await freePort();
+    // setup once to put the program in place and start it
+    const first = sh("setup.sh", ["--yes", "--no-autostart", "--no-open", "--port", String(port)], env(home, release));
+    expect(first.exitCode, out(first)).toBe(0);
+    // another release: not "up to date", so setup replaces the program while the old agent may still be listening
+    const second = sh("setup.sh", ["--yes", "--no-autostart", "--no-open", "--port", String(port)], env(home, makeRelease({ variant: "two" })));
+    expect(second.exitCode, out(second)).toBe(0);
+    expect(out(second)).not.toContain("is taken by");
+  });
+});
+
+describe("setup.ps1: the same port rule (static)", () => {
+  const ps = readFileSync(join(root, "setup.ps1"), "utf8");
+  test("our own program on the port is stopped and the rest of setup goes on; migrate runs in two steps", () => {
+    expect(ps).toContain("$hp.Path -ieq $exe");
+    expect(ps.indexOf("Stop-Process -Id $hp.Id")).toBeLessThan(ps.indexOf('Fail "port $Port is taken by $who"'));
+    expect(ps).toContain("@('migrate', '--no-service', '--port'");
+    expect(ps).toContain("Run-Bin $exe @('migrate', '--port'");
+  });
+});
+
+describe.skipIf(!mac)("installers: the anonymous install count", () => {
+  const URL_ = "http://analytics.test/api/event";
+  /** A fake `curl` first on PATH: logs each call (one line) and exits with `code`, after `sleep` seconds. */
+  function fakeCurl(code = 0, sleep = 0) {
+    const dir = mkdtempSync(join(sandbox, "fakecurl-"));
+    const log = join(dir, "curl.log");
+    writeFileSync(join(dir, "curl"), `#!/bin/bash\necho "$*" >> "${log}"\n${sleep ? `sleep ${sleep}\n` : ""}exit ${code}\n`);
+    chmodSync(join(dir, "curl"), 0o755);
+    return { dir, log, path: `${dir}:${process.env.PATH}` };
+  }
+  const calls = (log: string) => (existsSync(log) ? readFileSync(log, "utf8").split("\n").filter(Boolean) : []);
+  const bodies = (log: string) => calls(log).map((l) => JSON.parse(/--data (\{.*\}) http/.exec(l)![1]!));
+  async function waitFor(log: string, n: number) { for (let i = 0; i < 60 && calls(log).length < n; i++) await Bun.sleep(50); }
+  const flags = ["--yes", "--no-autostart", "--no-start", "--no-open", "--no-path"];
+  const ALLOWED = new Set(["name", "os", "os_version", "arch", "installer", "version", "from_version", "mode", "step", "reason"]);
+  const VALUE = /^[\w .,:+()/-]{1,64}$/;
+  const withUrl = (home: string, release: string, c: { path: string }, extra: Record<string, string> = {}) => env(home, release, { PATH: c.path, NOOKDECK_ANALYTICS_URL: URL_, ...extra });
+
+  test("a fresh install sends install_started and install_finished with only the allowed fields", async () => {
+    const c = fakeCurl();
+    const home = newHome();
+    const r = sh("setup.sh", flags, withUrl(home, makeRelease(), c));
+    expect(r.exitCode, out(r)).toBe(0);
+    expect(out(r)).toContain("Sends an anonymous install count to nookdeck.app (opt out: NOOKDECK_NO_ANALYTICS=1)");
+    await waitFor(c.log, 2);
+    const [a, b] = bodies(c.log);
+    expect(a).toMatchObject({ name: "install_started", os: "macos", installer: "setup.sh" });
+    expect(a!.arch).toMatch(/^(arm64|x64)$/);
+    expect(a!.os_version).toMatch(/^\d+(\.\d+)*$/);
+    expect(b).toMatchObject({ name: "install_finished", mode: "fresh", installer: "setup.sh" });
+    expect(b!.version).toMatch(/^\d+\.\d+\.\d+/);
+    expect(b!.from_version).toBeUndefined();
+    for (const body of [a!, b!]) for (const [k, v] of Object.entries(body)) { expect(ALLOWED.has(k), k).toBe(true); expect(String(v), k).toMatch(VALUE); }
+    // nothing that identifies the machine or the person
+    const all = calls(c.log).join("\n");
+    for (const secret of [home, join(home, "fake-home"), require("node:os").hostname(), require("node:os").userInfo().username]) expect(all).not.toContain(secret);
+    expect(all).toContain(`-m 3`);
+    expect(all).toContain(URL_);
+  });
+
+  test("a second install with another release says upgrade, with the previous version", async () => {
+    const c = fakeCurl();
+    const home = newHome();
+    sh("setup.sh", flags, withUrl(home, makeRelease(), c));
+    await waitFor(c.log, 2);
+    const r = sh("setup.sh", [...flags, "--force"], withUrl(home, makeRelease({ variant: "b" }), c));
+    expect(r.exitCode, out(r)).toBe(0);
+    await waitFor(c.log, 4);
+    const last = bodies(c.log).at(-1)!;
+    expect(last).toMatchObject({ name: "install_finished", mode: "upgrade" });
+    expect(String(last.from_version)).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  test("an install over PhoneDesk says migrated", async () => {
+    const c = fakeCurl();
+    const home = newHome();
+    mkdirSync(join(home, ".phonedesk"), { recursive: true });
+    writeFileSync(join(home, ".phonedesk", "devices.json"), "{}");
+    const r = sh("setup.sh", flags, withUrl(home, makeRelease(), c));
+    expect(r.exitCode, out(r)).toBe(0);
+    await waitFor(c.log, 2);
+    expect(bodies(c.log).at(-1)).toMatchObject({ name: "install_finished", mode: "migrated" });
+  });
+
+  test("a failure sends install_failed with the step and a short code, never the message or a path", async () => {
+    const c = fakeCurl();
+    const home = newHome();
+    const r = sh("setup.sh", flags, withUrl(home, makeRelease({ tamper: true }), c));
+    expect(r.exitCode).toBe(1);
+    await waitFor(c.log, 2);
+    const f = bodies(c.log).find((b) => b.name === "install_failed")!;
+    expect(f).toMatchObject({ step: "fetch", reason: "checksum" });
+    expect(JSON.stringify(f)).not.toContain(home);
+    expect(Object.keys(f).every((k) => ALLOWED.has(k))).toBe(true);
+  });
+
+  test("opt-outs send nothing and print no notice: --no-analytics, NOOKDECK_NO_ANALYTICS=1, DO_NOT_TRACK=1", async () => {
+    for (const [args, extra] of [[["--no-analytics"], {}], [[], { NOOKDECK_NO_ANALYTICS: "1" }], [[], { DO_NOT_TRACK: "1" }]] as Array<[string[], Record<string, string>]>) {
+      const c = fakeCurl();
+      const r = sh("setup.sh", [...flags, ...args], withUrl(newHome(), makeRelease(), c, extra));
+      expect(r.exitCode, out(r)).toBe(0);
+      expect(out(r)).not.toContain("anonymous install count");
+      await Bun.sleep(300);
+      expect(calls(c.log)).toEqual([]);
+    }
+  });
+
+  test("local tests, dry runs and the test suite send nothing by default", async () => {
+    const c = fakeCurl();
+    // RELEASE_BASE and INSTALL_HOME are set by env(): no NOOKDECK_ANALYTICS_URL, so nothing goes out
+    const r = sh("setup.sh", flags, env(newHome(), makeRelease(), { PATH: c.path }));
+    expect(r.exitCode, out(r)).toBe(0);
+    const d = sh("setup.sh", [...flags, "--dry-run"], withUrl(newHome(), makeRelease(), c));
+    expect(d.exitCode, out(d)).toBe(0);
+    const t = sh("setup.sh", flags, withUrl(newHome(), makeRelease(), c, { NOOKDECK_TEST_SANDBOX: "1" }));
+    expect(t.exitCode, out(t)).toBe(0);
+    await Bun.sleep(300);
+    expect(calls(c.log).filter((l) => l.includes(URL_))).toHaveLength(2); // only the NOOKDECK_TEST_SANDBOX run still sends, because the URL override wins
+  });
+
+  test("an endpoint that fails, or hangs, does not fail or slow down the install", () => {
+    for (const c of [fakeCurl(7), fakeCurl(28, 2)]) {
+      const t0 = Date.now();
+      const r = sh("setup.sh", flags, withUrl(newHome(), makeRelease(), c));
+      expect(r.exitCode, out(r)).toBe(0);
+      expect(Date.now() - t0).toBeLessThan(6000);
+    }
+  });
+
+  test("uninstall.sh sends uninstall_finished (not on a dry run, not when opted out)", async () => {
+    const c = fakeCurl();
+    const home = newHome();
+    expect(sh("setup.sh", flags, env(home, makeRelease())).exitCode).toBe(0);
+    const dry = sh("uninstall.sh", ["--yes", "--dry-run"], withUrl(home, "", c));
+    expect(dry.exitCode, out(dry)).toBe(0);
+    const off = sh("uninstall.sh", ["--yes", "--no-analytics"], withUrl(home, "", c));
+    expect(off.exitCode, out(off)).toBe(0);
+    await Bun.sleep(200);
+    expect(calls(c.log)).toEqual([]);
+    expect(sh("setup.sh", flags, env(home, makeRelease())).exitCode).toBe(0);
+    const r = sh("uninstall.sh", ["--yes"], withUrl(home, "", c));
+    expect(r.exitCode, out(r)).toBe(0);
+    await waitFor(c.log, 1);
+    expect(bodies(c.log)[0]).toMatchObject({ name: "uninstall_finished", os: "macos", installer: "uninstall.sh" });
+  });
+});
+
+// no PowerShell here: pin the shape of the Windows scripts by reading them (a PC run checks the behaviour)
+describe("setup.ps1 / uninstall.ps1: the anonymous install count (static)", () => {
+  const setup = readFileSync(join(root, "setup.ps1"), "utf8");
+  const un = readFileSync(join(root, "uninstall.ps1"), "utf8");
+  test("opt-outs, skips, notice, no secret and a short timeout", () => {
+    for (const src of [setup, un]) {
+      expect(src).toContain("NOOKDECK_NO_ANALYTICS");
+      expect(src).toContain("DO_NOT_TRACK");
+      expect(src).toContain("-NoAnalytics");
+      expect(src).toContain("-TimeoutSec 3");
+      expect(src).toContain("catch { }");
+      expect(src).toContain("NOOKDECK_TEST_SANDBOX");
+      expect(src).toContain("NOOKDECK_INSTALL_HOME");
+      expect(src).toContain("https://nookdeck.app/api/event");
+      expect(src).not.toMatch(/\$env:(COMPUTERNAME|USERNAME|USERPROFILE)[^\n]*(body|Body)/);
+    }
+    expect(setup).toContain("NOOKDECK_RELEASE_BASE");
+    expect(setup).toContain("Sends an anonymous install count to nookdeck.app (opt out: NOOKDECK_NO_ANALYTICS=1)");
+    expect(un).toContain("Sends an anonymous uninstall count to nookdeck.app (opt out: NOOKDECK_NO_ANALYTICS=1)");
+  });
+  test("the events and fields of the setup script", () => {
+    expect(setup).toContain("Track 'install_started'");
+    expect(setup).toContain("Track 'install_finished' @{ mode = $mode; version = (VerOf $S.newVersion); from_version = (VerOf $S.oldVersion) } $true");
+    expect(setup).toContain("Track 'install_failed' @{ step = $S.cur; reason = (Reason-Code $what) } $true");
+    expect(setup).toContain("os = 'windows'");
+    expect(setup).toContain("installer = 'setup.ps1'");
+    expect(setup).toContain("'migrated'");
+    expect(un).toContain("name = 'uninstall_finished'");
+    expect(un).toContain("installer = 'uninstall.ps1'");
+    // the failure reason is a code, not the message
+    expect(setup).toContain("function Reason-Code");
+    // the dry-run and the early return of the uninstaller never send
+    expect(un.indexOf("if ($DryRun) { Warn 'dry run")).toBeLessThan(un.indexOf("Track-Uninstalled\n}"));
+  });
+});

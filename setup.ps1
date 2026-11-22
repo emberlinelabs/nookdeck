@@ -19,6 +19,7 @@
 #   $env:NOOKDECK_NO_FIREWALL=1    do not offer the firewall rule
 #   $env:NOOKDECK_NO_PATH=1        leave PATH alone
 #   $env:NOOKDECK_DRY_RUN=1        fetch and verify, say what would change, change nothing
+#   $env:NOOKDECK_NO_ANALYTICS=1   send no anonymous install count (DO_NOT_TRACK=1 does the same)
 #
 # Prefer parameters? Save the file, set $env:NOOKDECK_SETUP_NORUN=1, dot-source it, then call
 #   Install-Nookdeck -Yes -Port 7421
@@ -32,14 +33,14 @@
 # The same switches work on a saved copy (.\setup.ps1 -NoOpen -Port 7421); a switch OR its environment twin turns the option on.
 param(
   [switch]$Yes, [string]$Version = '', [int]$Port = 0, [switch]$NoAutostart, [switch]$NoStart,
-  [switch]$NoOpen, [switch]$NoFirewall, [switch]$NoPath, [switch]$DryRun, [switch]$Force
+  [switch]$NoOpen, [switch]$NoFirewall, [switch]$NoPath, [switch]$DryRun, [switch]$Force, [switch]$NoAnalytics
 )
 
 function Install-Nookdeck {
   [CmdletBinding()]
   param(
     [switch]$Yes, [string]$Version = '', [int]$Port = 7420, [switch]$NoAutostart, [switch]$NoStart,
-    [switch]$NoOpen, [switch]$NoFirewall, [switch]$NoPath, [switch]$DryRun, [switch]$Force
+    [switch]$NoOpen, [switch]$NoFirewall, [switch]$NoPath, [switch]$DryRun, [switch]$Force, [switch]$NoAnalytics
   )
   $ErrorActionPreference = 'Stop'
   $ProgressPreference = 'SilentlyContinue' # the progress bar makes Invoke-WebRequest crawl in Windows PowerShell 5.1
@@ -53,7 +54,7 @@ function Install-Nookdeck {
     asset = $asset; legacy = $false; newVersion = $null; oldVersion = $null; upToDate = $false; dryDone = $false
     alreadyRunning = $false; svcBefore = $false; svcKeep = $false; autostart = $false
     binState = 'already set'; pathState = 'skipped'; svcState = 'skipped'; fwState = 'skipped'
-    pathAdded = $false; pairing = $null
+    pathAdded = $false; pairing = $null; cur = 'start'; handover = $false
   }
 
   # ------------------------------------------------------------ terminal look
@@ -68,8 +69,46 @@ function Install-Nookdeck {
   function Say([string]$m) { Put "  $m" '' }
   function Good([string]$m) { Put "  $($G.ok) $m" 'Green' }
   function Warn([string]$m) { Put "  $($G.warn) $m" 'Yellow' }
-  function Stage([int]$n, [string]$title) { Write-Host ''; Put "[$n/$stages] $title" 'Cyan' }
+  # ------------------------------------------------------------ anonymous install count
+  # Sends the kind of machine (os, Windows build, arch) and what happened to nookdeck.app. Never a host name, user name, path, IP, PIN or token.
+  # Off with -NoAnalytics, NOOKDECK_NO_ANALYTICS=1 or DO_NOT_TRACK=1; never for a dry run, a local test (RELEASE_BASE / INSTALL_HOME) or the
+  # test suite. NOOKDECK_ANALYTICS_URL points it elsewhere and overrides those skips. Fire and forget: a hidden process, 3 seconds at most,
+  # every error swallowed.
+  $analyticsUrl = if ($env:NOOKDECK_ANALYTICS_URL) { $env:NOOKDECK_ANALYTICS_URL } else { 'https://nookdeck.app/api/event' }
+  $analytics = (-not $NoAnalytics) -and (-not $DryRun) -and ($env:NOOKDECK_NO_ANALYTICS -ne '1') -and ($env:DO_NOT_TRACK -ne '1') -and (
+    [bool]$env:NOOKDECK_ANALYTICS_URL -or (-not $env:NOOKDECK_RELEASE_BASE -and -not $env:NOOKDECK_INSTALL_HOME -and -not $env:NOOKDECK_TEST_SANDBOX))
+  function Clean-Value([string]$v) { $c = ($v -replace '[^A-Za-z0-9_ .,:+()/-]', ''); if ($c.Length -gt 64) { $c = $c.Substring(0, 64) }; return $c }
+  function Reason-Code([string]$what) { # a short code for a failure message: never the message itself (it may hold a path)
+    if ($what -match 'could not fetch|could not reach|latest release|GitHub') { return 'network' }
+    if ($what -match 'checksum|SHA256SUMS|no entry') { return 'checksum' }
+    if ($what -match 'does not run') { return 'not_runnable' }
+    if ($what -match 'is taken by') { return 'port_taken' }
+    if ($what -match 'cancelled') { return 'cancelled' }
+    if ($what -match 'administrator|elevat') { return 'admin' }
+    return 'error'
+  }
+  function Track([string]$name, [hashtable]$extra, [bool]$Sync = $false) {
+    if (-not $analytics) { return }
+    try {
+      $ver = [Environment]::OSVersion.Version
+      $body = [ordered]@{ name = $name; os = 'windows'; os_version = (Clean-Value "$($ver.Major).$($ver.Minor).$($ver.Build)"); arch = 'x64'; installer = 'setup.ps1' }
+      if ($extra) { foreach ($k in @($extra.Keys | Sort-Object)) { $v = Clean-Value ([string]$extra[$k]); if ($v) { $body[$k] = $v } } }
+      $json = ($body | ConvertTo-Json -Compress)
+      if ($Sync) {
+        # the last event waits (2 s at most): a closing session would kill a background process
+        Invoke-RestMethod -Uri $analyticsUrl -Method Post -ContentType 'application/json' -Body $json -TimeoutSec 2 | Out-Null
+      } else {
+        $env:NOOKDECK_A_BODY = $json
+        $cmd = 'try { Invoke-RestMethod -Uri ''' + ($analyticsUrl -replace "'", '') + ''' -Method Post -ContentType ''application/json'' -Body $env:NOOKDECK_A_BODY -TimeoutSec 3 | Out-Null } catch { }'
+        Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList @('-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', ('"' + $cmd + '"')) | Out-Null
+      }
+    } catch { } finally { Remove-Item Env:NOOKDECK_A_BODY -ErrorAction SilentlyContinue }
+  }
+  function Stage([int]$n, [string]$title) {
+    $S.cur = @('', 'detect', 'release', 'fetch', 'install', 'service', 'start')[$n]
+    Write-Host ''; Put "[$n/$stages] $title" 'Cyan' }
   function Fail([string]$what, [string]$why) {
+    Track 'install_failed' @{ step = $S.cur; reason = (Reason-Code $what) } $true
     Write-Host ''
     Put "$($G.bad) $what" 'Red'
     if ($why) { Put "  $why" '' }
@@ -408,7 +447,9 @@ function Install-Nookdeck {
       Say "found an existing PhoneDesk install ($oldHome): moving it to Nookdeck"
       Get-Process -Name phonedesk -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
       Start-Sleep -Milliseconds 700
-      $code = Run-Bin $dl @('migrate', '--port', "$Port")
+      $S.handover = $true
+      # data, hooks and alias now; the startup entry, firewall rule and PATH entry once the new program is in place (Place-Binary below)
+      $code = Run-Bin $dl @('migrate', '--no-service', '--port', "$Port")
       if ($code -eq 0) { Good 'your PhoneDesk data, startup entry and hooks were moved to Nookdeck' }
       else { Warn "the migration reported a problem; your PhoneDesk data is untouched in $oldHome" }
     }
@@ -444,6 +485,10 @@ function Install-Nookdeck {
       Move-Item -LiteralPath $staged -Destination $exe -Force
       "raw=$(Sum-For $asset) installed=$(Sha $exe)" | Set-Content -LiteralPath $releaseFile -Encoding ascii
       Good "installed $($S.newVersion)"
+      if ($S.handover) {
+        # the old startup entry, firewall rule and PATH entry are replaced by the new program's own migration (idempotent)
+        if ((Run-Bin $exe @('migrate', '--port', "$Port")) -ne 0) { Warn 'the startup entry / firewall / PATH cleanup reported a problem; run: nookdeck migrate' }
+      }
     }
 
     # ============================================================ phase 4b: link cli (PATH)
@@ -503,6 +548,16 @@ function Install-Nookdeck {
       if ($S.upToDate -and (Agent-Line $Port) -eq $S.newVersion) { $S.alreadyRunning = $true; Say "agent already running on port $Port"; return }
       $hp = $null; try { $hp = Get-Process -Id $holder.OwningProcess -ErrorAction Stop } catch { }
       $who = if ($hp) { "$($hp.ProcessName) (pid $($hp.Id)$(if ($hp.Path) { ', ' + $hp.Path }))" } else { "process $($holder.OwningProcess)" }
+      # our own program (an older copy, or one the startup task started): stop it, it is started again below
+      if ($hp -and $hp.Path -and ($hp.Path -ieq $exe)) {
+        Say "stopping the Nookdeck agent that holds port $Port (pid $($hp.Id)), it is started again below"
+        Stop-Process -Id $hp.Id -Force -ErrorAction SilentlyContinue
+        for ($i = 0; $i -lt 20; $i++) {
+          Start-Sleep -Milliseconds 300
+          $still = $null; try { $still = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop | Select-Object -First 1 } catch { }
+          if (-not $still) { return }
+        }
+      }
       Fail "port $Port is taken by $who" "Free it with Stop-Process -Id $($holder.OwningProcess) - or install on another port with `$env:NOOKDECK_PORT=7421. The program is in place at $exe; nothing was started."
     }
     function Wire-Service {
@@ -577,7 +632,19 @@ function Install-Nookdeck {
       Write-Host ('  {0,-9} {1}' -f 'Service', $S.svcState)
       Write-Host ('  {0,-9} {1}' -f 'Firewall', $S.fwState)
       if (-not $NoStart -and $S.pairing) {
-        Write-Host ('  {0,-9} {1}' -f 'Phone', $S.pairing.url)
+        # one Phone line per address a phone could use, the default first (nookdeck pair --plain prints: mark, url, label)
+        $shown = $false
+        try {
+          $plain = @(& $exe pair --plain --port $Port 2>$null | Where-Object { $_ -and $_ -notmatch '^PIN' })
+          foreach ($ln in $plain) {
+            $f = $ln -split "`t"
+            if ($f.Count -lt 2) { continue }
+            $label = if ($f.Count -ge 3 -and $f[2]) { " ($($f[2]))" } else { '' }
+            Write-Host ('  {0,-9} {1}{2}{3}' -f $(if ($shown) { '' } else { 'Phone' }), $f[1], $label, $(if ($shown) { '' } else { ' (default)' }))
+            $shown = $true
+          }
+        } catch { }
+        if (-not $shown) { Write-Host ('  {0,-9} {1}' -f 'Phone', $S.pairing.url) }
         Write-Host ('  {0,-9} {1}' -f 'PIN', $S.pairing.pin)
         Write-Host ('  {0,-9} {1}' -f 'Manage', "http://localhost:$Port/manage/")
       }
@@ -596,8 +663,10 @@ function Install-Nookdeck {
 
     # ============================================================ main
     Show-Banner
+    if ($analytics) { Say 'Sends an anonymous install count to nookdeck.app (opt out: NOOKDECK_NO_ANALYTICS=1)' }
     $dl = $null
     Detect-Platform
+    Track 'install_started' @{}
     Resolve-Release
     $dl = Join-Path $S.tmp $asset
     Fetch-Binary
@@ -607,6 +676,8 @@ function Install-Nookdeck {
     Wire-Service
     Launch-Agent
     Show-Summary
+    $mode = if ($S.handover) { 'migrated' } elseif ($S.oldVersion) { 'upgrade' } else { 'fresh' }
+    Track 'install_finished' @{ mode = $mode; version = (VerOf $S.newVersion); from_version = (VerOf $S.oldVersion) } $true
   } finally {
     if ($S.tmp -and (Test-Path -LiteralPath $S.tmp)) { Remove-Item -LiteralPath $S.tmp -Recurse -Force -ErrorAction SilentlyContinue }
   }
@@ -619,5 +690,6 @@ if ($env:NOOKDECK_SETUP_NORUN -ne '1') {
     -Port $(if ($Port -gt 0) { $Port } elseif ($env:NOOKDECK_PORT) { [int]$env:NOOKDECK_PORT } else { 7420 }) `
     -NoAutostart:(& $on $NoAutostart.IsPresent 'NOOKDECK_NO_AUTOSTART') -NoStart:(& $on $NoStart.IsPresent 'NOOKDECK_NO_START') `
     -NoOpen:(& $on $NoOpen.IsPresent 'NOOKDECK_NO_OPEN') -NoFirewall:(& $on $NoFirewall.IsPresent 'NOOKDECK_NO_FIREWALL') `
-    -NoPath:(& $on $NoPath.IsPresent 'NOOKDECK_NO_PATH') -DryRun:(& $on $DryRun.IsPresent 'NOOKDECK_DRY_RUN') -Force:(& $on $Force.IsPresent 'NOOKDECK_FORCE')
+    -NoPath:(& $on $NoPath.IsPresent 'NOOKDECK_NO_PATH') -DryRun:(& $on $DryRun.IsPresent 'NOOKDECK_DRY_RUN') -Force:(& $on $Force.IsPresent 'NOOKDECK_FORCE') `
+    -NoAnalytics:((& $on $NoAnalytics.IsPresent 'NOOKDECK_NO_ANALYTICS') -or (& $on $false 'DO_NOT_TRACK'))
 }

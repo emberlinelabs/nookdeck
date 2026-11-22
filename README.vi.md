@@ -196,7 +196,7 @@ Nếu điện thoại không trả lời kịp, Claude Code hỏi trong terminal
 vào `~/.codex/hooks.json`.
 
 Quota chỉ đọc: Nookdeck đọc phiên đăng nhập Claude Code đã lưu sẵn (không bao giờ làm mới), file session cục bộ của
-Codex và server cục bộ của Antigravity. Mọi kết nối ra ngoài được liệt kê trong [PRIVACY.md](PRIVACY.md).
+Codex và server cục bộ của Antigravity. Mọi kết nối ra ngoài được liệt kê trong [PRIVACY.md](PRIVACY.md). Ứng dụng không gửi telemetry; chỉ trình cài đặt và website đếm lượt cài (ẩn danh, tắt bằng `NOOKDECK_NO_ANALYTICS=1`, xem [Thống kê cài đặt](PRIVACY.md#install-statistics-website-and-installer)).
 
 ## Quyền macOS
 

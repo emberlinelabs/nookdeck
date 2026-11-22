@@ -216,7 +216,7 @@ async function migrateWindows(o: MigrateOptions, program: string[], newHome: str
  * NOOKDECK_HOME (a second instance, a test) keeps its data where it is and leaves services and the real hook files alone,
  * unless the matching NOOKDECK_* override is set. NOOKDECK_INSTALL_HOME (setup.sh --home relocation) names another home folder.
  */
-export async function migrateFromEnv(port: number, log: (l: string) => void): Promise<MigrateResult> {
+export async function migrateFromEnv(port: number, log: (l: string) => void, o: { service?: boolean } = {}): Promise<MigrateResult> {
   const { homedir } = await import("node:os");
   const { resolve } = await import("node:path");
   const { HOME } = await import("./config");
@@ -226,7 +226,7 @@ export async function migrateFromEnv(port: number, log: (l: string) => void): Pr
   const isDefault = resolve(HOME) === resolve(join(home, ".nookdeck"));
   const serviceOk = isDefault || !!process.env.NOOKDECK_LAUNCH_AGENTS_DIR || !!process.env.NOOKDECK_WIN_DIR;
   return migrate({
-    platform: platform.id, home, winLocal: process.env.LOCALAPPDATA, data: isDefault, service: serviceOk && (platform.id === "darwin" || platform.id === "win32"),
+    platform: platform.id, home, winLocal: process.env.LOCALAPPDATA, data: isDefault, service: o.service !== false && serviceOk && (platform.id === "darwin" || platform.id === "win32"),
     svc: svc.realServiceDeps(() => {}), program: svc.defaultProgram(), hookFiles: svc.hookTargets().files, instance: svc.currentInstance(port), log,
   });
 }

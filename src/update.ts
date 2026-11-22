@@ -23,6 +23,17 @@ export function cmpVersions(a: string, b: string): number {
   return 0;
 }
 
+/**
+ * True when the program carries a valid signature made with a certificate (or Apple's): its designated requirement then stays the
+ * same from release to release and macOS keeps the Accessibility grant. Such a file must never be re-signed ad hoc (that would
+ * replace the requirement with a cdhash that changes with every release).
+ */
+export async function hasStableSignature(file: string, runner: (argv: string[]) => Promise<{ code: number; out: string }> = run): Promise<boolean> {
+  if ((await runner(["codesign", "--verify", "--strict", file])).code !== 0) return false;
+  const r = await runner(["codesign", "-d", "-r-", file]);
+  return /certificate (leaf|root)|anchor apple/.test(r.out);
+}
+
 export const currentVersion = (): string => pkg.version;
 
 export interface LookupOptions { fetch?: typeof fetch; githubUrl?: string; apiUrl?: string; retrySeconds?: number; log?: (s: string) => void; sleep?: (ms: number) => Promise<void> }
@@ -128,6 +139,8 @@ export interface UpdateOptions extends LookupOptions {
   /** The version the agent on the port reports (null: not answering). */
   agentVersion?: (port: number) => Promise<string | null>;
   verifyMs?: number;
+  /** Runs codesign (tests pass a fake). */
+  codesign?: (argv: string[]) => Promise<{ code: number; out: string }>;
 }
 
 /**
@@ -193,8 +206,10 @@ export async function runUpdate(o: UpdateOptions = {}): Promise<UpdateResult> {
   try {
     if (platform.id === "darwin") {
       await run(["xattr", "-d", "com.apple.quarantine", staged]);
-      const cs = await run(["codesign", "--force", "-s", "-", staged]);
-      if (cs.code !== 0) out("could not sign the new program (codesign failed); it may not start");
+      if (!(await hasStableSignature(staged, o.codesign ?? run))) {
+        const cs = await (o.codesign ?? run)(["codesign", "--force", "-s", "-", staged]);
+        if (cs.code !== 0) out("could not sign the new program (codesign failed); it may not start");
+      }
     }
     const v = await run([staged, "--version"]);
     const reported = /^nookdeck (\S+)/m.exec(v.out)?.[1];

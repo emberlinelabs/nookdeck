@@ -18,6 +18,7 @@
 #       --no-path       leave PATH alone (default: ~/.local/bin symlink, else one
 #                       marked line in ~/.zshrc / ~/.bash_profile)
 #       --dry-run       fetch and verify, say what would change, change nothing
+#       --no-analytics  send no anonymous install count (NOOKDECK_NO_ANALYTICS=1 or DO_NOT_TRACK=1 do the same)
 #   -h, --help          show this text
 #
 # Test hooks (not for everyday use)
@@ -33,6 +34,7 @@ yes=0; version="${NOOKDECK_VERSION:-}"; version="${version#v}"; port=7420
 autostart=1; start=1; open_page=1; dry=0; add_path=1; force=0
 if [ "${NOOKDECK_FORCE:-}" = 1 ]; then force=1; fi
 tmp=""
+analytics=0; a_want=1; cur_step=start; handover_done=0
 
 # ---------------------------------------------------------------- terminal look
 # Brand cyan #22d3ee: truecolor when the terminal says so, else the nearest 256-colour (45). NO_COLOR and pipes get plain text.
@@ -50,8 +52,46 @@ case "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" in C|POSIX) G_OK="ok"; G_WARN="!"; G_BA
 say()   { printf '  %s\n' "$*"; }
 good()  { printf '  %s%s%s %s\n' "$C_GOOD" "$G_OK" "$C_OFF" "$*"; }
 warn()  { printf '  %s%s%s %s\n' "$C_WARN" "$G_WARN" "$C_OFF" "$*"; }
-stage() { printf '\n%s[%s/%s]%s %s%s%s\n' "$C_BRAND" "$1" "$STAGES" "$C_OFF" "$C_BOLD" "$2" "$C_OFF"; }
+stage() {
+  case "$1" in 1) cur_step=detect ;; 2) cur_step=release ;; 3) cur_step=fetch ;; 4) cur_step=install ;; 5) cur_step=service ;; 6) cur_step=start ;; esac
+  printf '\n%s[%s/%s]%s %s%s%s\n' "$C_BRAND" "$1" "$STAGES" "$C_OFF" "$C_BOLD" "$2" "$C_OFF"; }
+# ---------------------------------------------------------------- anonymous install count (opt out: --no-analytics, NOOKDECK_NO_ANALYTICS=1, DO_NOT_TRACK=1)
+# Sends the kind of machine (os, os version, arch) and what happened, to nookdeck.app. Never a host name, user name, path, IP, PIN or token.
+# Fire and forget: 3 seconds at most, in the background, every error swallowed.
+a_clean() { printf '%s' "$1" | tr -cd 'A-Za-z0-9_ .,:+()/-' | cut -c1-64; }
+track() { # track NAME [key=value ...]
+  [ "$analytics" = 1 ] || return 0
+  command -v curl >/dev/null 2>&1 || return 0
+  local body kv k v ev="$1"
+  body="{\"name\":\"$(a_clean "$1")\",\"os\":\"macos\",\"os_version\":\"$(a_clean "$a_osver")\",\"arch\":\"$(a_clean "$a_arch")\",\"installer\":\"${a_installer:-setup.sh}\""
+  shift
+  for kv in "$@"; do
+    k="${kv%%=*}"; v="${kv#*=}"
+    [ -n "$k" ] && [ -n "$v" ] || continue
+    body="$body,\"$(a_clean "$k")\":\"$(a_clean "$v")\""
+  done
+  body="$body}"
+  case "$ev" in
+    install_started) ( curl -sS -m 3 -X POST -H 'content-type: application/json' --data "$body" "$analytics_url" >/dev/null 2>&1 & ) >/dev/null 2>&1 || true ;;
+    # the last event waits (2 s at most): a closing terminal or ssh session would kill a background curl
+    *) curl -sS -m 2 -X POST -H 'content-type: application/json' --data "$body" "$analytics_url" >/dev/null 2>&1 || true ;;
+  esac
+  return 0
+}
+reason_code() { # a short code for a failure message: never the message itself (it may hold a path)
+  case "$1" in
+    *"could not fetch"*|*"could not reach"*|*"latest release"*|*"GitHub"*) echo network ;;
+    *checksum*|*SHA256SUMS*|*"no entry"*) echo checksum ;;
+    *"does not run"*) echo not_runnable ;;
+    *"is taken by"*) echo port_taken ;;
+    *cancelled*) echo cancelled ;;
+    *"macOS-only"*) echo unsupported_os ;;
+    *root*) echo root ;;
+    *) echo error ;;
+  esac
+}
 fail() { # fail "what failed" ["why / what to try"]
+  track install_failed "step=$cur_step" "reason=$(reason_code "$1")"
   printf '\n%s%s %s%s\n' "$C_BAD" "$G_BAD" "$1" "$C_OFF" >&2
   if [ -n "${2:-}" ]; then printf '  %s\n' "$2" >&2; fi
   printf '\n  Need help? https://github.com/%s/issues\n' "$REPO" >&2
@@ -76,6 +116,7 @@ while [ $# -gt 0 ]; do
     --no-open) open_page=0 ;;
     --no-path) add_path=0 ;;
     --force) force=1 ;;
+    --no-analytics) a_want=0 ;;
     --version) shift; [ $# -gt 0 ] || fail "--version needs a value" "Example: --version 0.1.1"; version="${1#v}" ;;
     --version=*) version="${1#--version=}"; version="${version#v}" ;;
     --port) shift; [ $# -gt 0 ] || fail "--port needs a value" "Example: --port 7421"; port="$1" ;;
@@ -88,6 +129,18 @@ done
 case "$port" in ''|*[!0-9]*) fail "--port must be a number" ;; esac
 if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then fail "--port must be between 1 and 65535"; fi
 if [ "$(id -u)" = 0 ] && [ -z "${NOOKDECK_INSTALL_HOME:-}" ]; then fail "refusing to run as root" "Run it as your own user, without sudo."; fi
+
+# Anonymous install count: on unless opted out; never for a dry run, a local test (RELEASE_BASE / INSTALL_HOME) or the test suite.
+# NOOKDECK_ANALYTICS_URL points it elsewhere (the tests use it to see the payload) and then overrides the test skips.
+analytics_url="${NOOKDECK_ANALYTICS_URL:-https://nookdeck.app/api/event}"
+for v in "${NOOKDECK_NO_ANALYTICS:-}" "${DO_NOT_TRACK:-}"; do case "$v" in 1|true|TRUE|yes) a_want=0 ;; esac; done
+if [ "$a_want" = 1 ] && [ "$dry" = 0 ]; then
+  if [ -n "${NOOKDECK_ANALYTICS_URL:-}" ] || { [ -z "${NOOKDECK_RELEASE_BASE:-}" ] && [ -z "${NOOKDECK_INSTALL_HOME:-}" ] && [ -z "${NOOKDECK_TEST_SANDBOX:-}" ]; }; then analytics=1; fi
+fi
+if [ "$analytics" = 1 ]; then
+  a_osver="$(sw_vers -productVersion 2>/dev/null || true)"
+  case "$(uname -m)" in arm64|aarch64) a_arch=arm64 ;; *) a_arch=x64 ;; esac
+fi
 
 # Prompts read from /dev/tty, so they still work when this file is piped in by curl.
 tty_ok=0
@@ -218,6 +271,12 @@ agent_line() {
 }
 
 # Who listens on a TCP port: "pid<TAB>command", empty when free (or lsof is missing).
+# A valid signature made with a certificate (or Apple's): never touched, re-signing would replace it with a cdhash-only one.
+stable_signature() {
+  codesign --verify --strict "$1" >/dev/null 2>&1 || return 1
+  codesign -d -r- "$1" 2>&1 | grep -Eq 'certificate (leaf|root)|anchor apple'
+}
+
 port_owner() {
   local pid
   have lsof || return 0
@@ -345,9 +404,11 @@ verify_binary() {
   raw_sha="$(hash_file "$tmp/$asset")"
   chmod 755 "$tmp/$asset"
   if have xattr; then xattr -d com.apple.quarantine "$tmp/$asset" 2>/dev/null || true; fi
-  # CI signs ad hoc; sign again so the signature is valid for this exact file on this Mac
+  # A release signed with a certificate keeps that signature: its designated requirement is the same for every release, which is
+  # what keeps the Accessibility grant across updates. Only a program without a valid certificate signature is signed ad hoc.
   if have codesign; then
-    if codesign --force -s - "$tmp/$asset" >/dev/null 2>&1; then good "signed ad hoc for this Mac"
+    if stable_signature "$tmp/$asset"; then good "signed by the release identity ${C_DIM}(kept as it is)${C_OFF}"
+    elif codesign --force -s - "$tmp/$asset" >/dev/null 2>&1; then good "signed ad hoc for this Mac"
     else warn "codesign failed; the program may refuse to start"; fi
   fi
   new_version="$("$tmp/$asset" --version 2>/dev/null | head -n1)" || new_version=""
@@ -363,17 +424,28 @@ legacy_handover() {
   [ -d "$old" ] && [ ! -L "$old" ] && [ ! -e "$data_dir" ] || return 0
   if [ "$legacy_asset" = 1 ]; then
     # a 0.1.x program has no `migrate`: copy the data here (the old folder stays) and tell it to use the new place
+    handover_done=1
     say "found an existing PhoneDesk install ($old): copying its data to $data_dir"
     cp -Rp "$old" "$data_dir" || { rm -rf "$data_dir"; warn "could not copy $old; your PhoneDesk data is untouched"; return 0; }
     return 0
   fi
+  handover_done=1
   say "found an existing PhoneDesk install ($old): moving it to Nookdeck"
   # the old agent must let go of its files first
   if [ -f "$old/agent.pid" ]; then
     local op; op="$(cat "$old/agent.pid" 2>/dev/null || true)"
     case "$op" in ''|*[!0-9]*) ;; *) kill "$op" 2>/dev/null || true; sleep 1 ;; esac
   fi
-  if run_bin "$tmp/$asset" migrate --port "$port"; then good "your PhoneDesk data, login service and hooks were moved to Nookdeck"
+  # the old login job goes now (it would restart the old agent); the new one is registered below by wire_service with the new program
+  local oldplist="$agents_dir/dev.phonedesk.agent.plist" oldport
+  if [ -f "$oldplist" ]; then
+    oldport="$(sed -n '/<string>--port<\/string>/{n;s/.*<string>\([0-9][0-9]*\)<\/string>.*/\1/p;}' "$oldplist" | head -n1)"
+    "${NOOKDECK_LAUNCHCTL:-launchctl}" bootout "gui/$(id -u)/dev.phonedesk.agent" >/dev/null 2>&1 || true
+    mv -f "$oldplist" "$oldplist.nookdeck-old"
+    good "stopped the old PhoneDesk login service ${C_DIM}(its plist is kept as dev.phonedesk.agent.plist.nookdeck-old)${C_OFF}"
+    if [ -n "$oldport" ] && [ "$port" = 7420 ] && [ "$oldport" != 7420 ]; then port="$oldport"; say "keeping the port of your old install: $port"; fi
+  fi
+  if run_bin "$tmp/$asset" migrate --no-service --port "$port"; then good "your PhoneDesk data, login service and hooks were moved to Nookdeck"
   else warn "the migration reported a problem; your PhoneDesk data is untouched in $old"; fi
 }
 
@@ -469,6 +541,16 @@ preflight_port() { # something else on the port would answer the health check be
     already_running=1; say "agent already running on port $port"; return 0
   fi
   pid="${owner%%$'\t'*}"; cmd="${owner#*$'\t'}"
+  # our own program (an older copy, or one a login job started): restart it instead of failing
+  case "$cmd" in
+    "$bin"*)
+      say "stopping the Nookdeck agent that holds port $port (pid $pid), it is started again below"
+      "${NOOKDECK_LAUNCHCTL:-launchctl}" bootout "gui/$(id -u)/dev.nookdeck.agent" >/dev/null 2>&1 || true
+      kill "$pid" 2>/dev/null || true
+      local i; for i in 1 2 3 4 5 6 7 8 9 10; do [ -z "$(port_owner "$port")" ] && return 0; sleep 0.5; done
+      kill -9 "$pid" 2>/dev/null || true; sleep 1
+      [ -z "$(port_owner "$port")" ] && return 0 ;;
+  esac
   fail "port $port is taken by process $pid ($cmd)" "Free it with: kill $pid   - or install on another port with --port 7421. The program is in place at $bin; nothing was started."
 }
 
@@ -539,7 +621,19 @@ summary() {
     pin="$(printf '%s' "$pairing" | sed -n 's/.*"pin"[[:space:]]*:[[:space:]]*"\{0,1\}\([0-9]*\)"\{0,1\}.*/\1/p')"
     url="$(printf '%s' "$pairing" | sed -n 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
     url_local="$(printf '%s' "$pairing" | sed -n 's/.*"urlLocal"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
-    printf '  %-9s %s\n' Phone "${url:-http://<this-mac>:$port}" PIN "${pin:-see the logs}" Manage "http://localhost:$port/manage/"
+    local lines="" tag u lbl label_shown=0
+    # one Phone line per address a phone could use, the default first (nookdeck pair --plain prints: mark, url, label)
+    lines="$("$bin" pair --plain --port "$port" 2>/dev/null | grep -v '^PIN' || true)"
+    if [ -n "$lines" ]; then
+      while IFS=$'\t' read -r tag u lbl; do
+        [ -n "$u" ] || continue
+        if [ "$label_shown" = 0 ]; then printf '  %-9s %s%s\n' Phone "$u" "  ${lbl:+($lbl) }${C_DIM}(default)${C_OFF}"; label_shown=1
+        else printf '  %-9s %s%s\n' "" "$u" "${lbl:+  ($lbl)}"; fi
+      done <<<"$lines"
+      printf '  %-9s %s\n' PIN "${pin:-see the logs}" Manage "http://localhost:$port/manage/"
+    else
+      printf '  %-9s %s\n' Phone "${url:-http://<this-mac>:$port}" PIN "${pin:-see the logs}" Manage "http://localhost:$port/manage/"
+    fi
     printf '%s  ───────────────────────────────────────%s\n' "$C_BRAND" "$C_OFF"
     if [ -t 1 ] && [ -n "$pin" ] && [ -n "$url" ]; then printf '\n'; "$bin" qr "${url_local:-$url}" 2>/dev/null || true; fi
     say "On a phone on the same Wi-Fi, open the Phone address and type the PIN (or scan the code)."
@@ -563,7 +657,9 @@ summary() {
 
 # ================================================================ main
 banner
+if [ "$analytics" = 1 ]; then say "${C_DIM}Sends an anonymous install count to nookdeck.app (opt out: NOOKDECK_NO_ANALYTICS=1)${C_OFF}"; fi
 detect_platform
+track install_started
 resolve_release
 fetch_binary
 verify_binary
@@ -571,3 +667,5 @@ place_binary
 wire_service
 launch
 summary
+if [ "$handover_done" = 1 ]; then a_mode=migrated; elif [ -n "$old_version" ]; then a_mode=upgrade; else a_mode=fresh; fi
+track install_finished "mode=$a_mode" "version=$(ver_of "$new_version")" "from_version=$(ver_of "$old_version")"

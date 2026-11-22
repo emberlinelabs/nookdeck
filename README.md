@@ -199,7 +199,7 @@ If no phone answers in time, Claude Code asks in the terminal as usual. For Code
 `~/.codex/hooks.json`.
 
 Quotas are read-only: Nookdeck reads the sign-in Claude Code already stored (never refreshes it), Codex's local
-session files and Antigravity's local server. See [PRIVACY.md](PRIVACY.md) for every outbound connection.
+session files and Antigravity's local server. See [PRIVACY.md](PRIVACY.md) for every outbound connection. The app sends no telemetry; only the installer and the website count installs (anonymous, opt out with `NOOKDECK_NO_ANALYTICS=1`, see [Install statistics](PRIVACY.md#install-statistics-website-and-installer)).
 
 ## Permissions
 

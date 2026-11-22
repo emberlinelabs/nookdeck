@@ -16,13 +16,14 @@
 #   --purge       also delete ~/.nookdeck and the Home Assistant token Nookdeck keeps in the Keychain
 #   -y, --yes     ask nothing
 #   --dry-run     list what would go, change nothing
+#   --no-analytics  send no anonymous "uninstalled" count (NOOKDECK_NO_ANALYTICS=1 or DO_NOT_TRACK=1 do the same)
 #   -h, --help    show this text
 #
 # Test hook: NOOKDECK_INSTALL_HOME works below this directory instead of $HOME.
 set -euo pipefail
 
 REPO="howznguyen/nookdeck"
-purge=0; yes=0; dry=0
+purge=0; yes=0; dry=0; a_want=1; analytics=0
 
 C_BRAND=""; C_BOLD=""; C_GOOD=""; C_WARN=""; C_BAD=""; C_OFF=""
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ]; then
@@ -47,16 +48,44 @@ fail() {
 }
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Anonymous count (opt out: --no-analytics, NOOKDECK_NO_ANALYTICS=1, DO_NOT_TRACK=1): os, os version, arch and the fact that it was uninstalled.
+# Never a host name, user name, path, IP or token. Fire and forget: 3 seconds at most, in the background, errors swallowed.
+a_clean() { printf '%s' "$1" | tr -cd 'A-Za-z0-9_ .,:+()/-' | cut -c1-64; }
+track() { # track NAME
+  [ "$analytics" = 1 ] || return 0
+  have curl || return 0
+  local body
+  body="{\"name\":\"$(a_clean "$1")\",\"os\":\"macos\",\"os_version\":\"$(a_clean "$a_osver")\",\"arch\":\"$(a_clean "$a_arch")\",\"installer\":\"uninstall.sh\"}"
+  case "$1" in
+    __never__) ( curl -sS -m 3 -X POST -H 'content-type: application/json' --data "$body" "$analytics_url" >/dev/null 2>&1 & ) >/dev/null 2>&1 || true ;;
+    # the last event waits (2 s at most): a closing terminal or ssh session would kill a background curl
+    *) curl -sS -m 2 -X POST -H 'content-type: application/json' --data "$body" "$analytics_url" >/dev/null 2>&1 || true ;;
+  esac
+  return 0
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --purge) purge=1 ;;
     -y|--yes) yes=1 ;;
     --dry-run) dry=1 ;;
+    --no-analytics) a_want=0 ;;
     -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) fail "unrecognised flag: $1" "Run with --help to see the flags." ;;
   esac
   shift
 done
+
+analytics_url="${NOOKDECK_ANALYTICS_URL:-https://nookdeck.app/api/event}"
+for v in "${NOOKDECK_NO_ANALYTICS:-}" "${DO_NOT_TRACK:-}"; do case "$v" in 1|true|TRUE|yes) a_want=0 ;; esac; done
+if [ "$a_want" = 1 ] && [ "$dry" = 0 ]; then
+  if [ -n "${NOOKDECK_ANALYTICS_URL:-}" ] || { [ -z "${NOOKDECK_INSTALL_HOME:-}" ] && [ -z "${NOOKDECK_TEST_SANDBOX:-}" ]; }; then analytics=1; fi
+fi
+if [ "$analytics" = 1 ]; then
+  a_osver="$(sw_vers -productVersion 2>/dev/null || true)"
+  case "$(uname -m)" in arm64|aarch64) a_arch=arm64 ;; *) a_arch=x64 ;; esac
+  say "Sends an anonymous uninstall count to nookdeck.app (opt out: NOOKDECK_NO_ANALYTICS=1)"
+fi
 
 tty_ok=0
 if (: </dev/tty) 2>/dev/null; then tty_ok=1; fi
@@ -180,3 +209,4 @@ drop_hooks
 drop_path
 drop_files
 printf '\n%s  ✓ Nookdeck is gone.%s\n' "$C_GOOD" "$C_OFF"
+if [ "$dry" = 0 ]; then track uninstall_finished; fi

@@ -183,7 +183,7 @@ macOS 会在磁贴第一次发送按键时请求**辅助功能**权限。
 
 如果手机没有及时回应，Claude Code 会照常在终端中询问。对于 Codex，权限 hook 写入 `~/.codex/hooks.json`。
 
-额度是只读的：Nookdeck 读取 Claude Code 已保存的登录凭据（从不刷新它）、Codex 的本地会话文件以及 Antigravity 的本地服务器。所有对外连接见 [PRIVACY.md](PRIVACY.md)。
+额度是只读的：Nookdeck 读取 Claude Code 已保存的登录凭据（从不刷新它）、Codex 的本地会话文件以及 Antigravity 的本地服务器。所有对外连接见 [PRIVACY.md](PRIVACY.md)。应用本身不发送遥测数据；只有安装程序和网站会统计安装次数（匿名，可用 `NOOKDECK_NO_ANALYTICS=1` 关闭，见[安装统计](PRIVACY.md#install-statistics-website-and-installer)）。
 
 ## 权限
 

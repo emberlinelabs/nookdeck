@@ -1,8 +1,8 @@
 # Privacy
 
 Nookdeck is a small agent that runs on your computer and serves a web page to phones on your own network.
-It has **no account, no cloud service, no analytics, no telemetry and no update check**. Nothing is sent to the
-Nookdeck authors. This page lists every connection the agent makes or accepts, and what it reads locally, so you can
+The app itself (the agent, the phone page and the management page) has **no account, no cloud service, no analytics and no telemetry**, and sends nothing to the
+Nookdeck authors. The only counting is on the website and in the installer, described in [Install statistics](#install-statistics-website-and-installer). This page lists every connection the agent makes or accepts, and what it reads locally, so you can
 verify it (the code is in `src/`).
 
 ## Outbound connections (the agent calls out)
@@ -55,6 +55,16 @@ or `~/.codex/hooks.json` are removed with the "Remove" buttons on the integratio
 Phones on your network receive the layout, system stats, now playing, quota percentages, session names, weather,
 Home Assistant entity states for the tiles you placed, and pending prompts. They never receive your Home Assistant
 URL or token, your webhook key, or the Claude token.
+
+## Install statistics (website and installer)
+
+This is separate from the app, and it happens only when you install, update or uninstall.
+
+- **What.** When you fetch `https://nookdeck.app/scripts/install` (or `install.ps1`, `uninstall`, `uninstall.ps1`), the website records one event. The installer also sends a started, finished or failed event with: the OS name and version, the CPU architecture, the Nookdeck version, whether it was a fresh install, an upgrade or a migration, and, for a failure, the failed step and a short error code.
+- **Where.** Our own self-hosted [OpenPanel](https://openpanel.dev) instance (`analytics.knowns.dev`). For the install-script count, the nookdeck.app server sends the event on your behalf, and OpenPanel derives country, region and city from the IP address without storing it as a field. No hostname, username, file path, PIN or token is ever sent.
+- **Opt out.** Set `NOOKDECK_NO_ANALYTICS=1` (or `DO_NOT_TRACK=1`), or pass `--no-analytics` (macOS) or `-NoAnalytics` (Windows) to the installer. Installing from the raw GitHub URL skips the website count.
+- **Landing page.** Page views and a few clicks are counted by the same OpenPanel instance, from your browser, with no cookies. Your browser connects to `analytics.knowns.dev` directly, so that server sees your IP address as any web server does. OpenPanel uses it to work out the country, region and city and does not keep it as a field. The website source is public at [github.com/howznguyen/nookdeck-web](https://github.com/howznguyen/nookdeck-web).
+- **The app.** The Nookdeck app (agent, phone page and management page) still sends nothing to us.
 
 ## Questions
 
