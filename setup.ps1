@@ -29,6 +29,12 @@
 #   PHONEDESK_GITHUB_URL / PHONEDESK_API_URL   point the "newest release" lookup at a local server
 #   PHONEDESK_RETRY_SECONDS  scales the pause between lookup rounds
 
+# The same switches work on a saved copy (.\setup.ps1 -NoOpen -Port 7421); a switch OR its environment twin turns the option on.
+param(
+  [switch]$Yes, [string]$Version = '', [int]$Port = 0, [switch]$NoAutostart, [switch]$NoStart,
+  [switch]$NoOpen, [switch]$NoFirewall, [switch]$NoPath, [switch]$DryRun, [switch]$Force
+)
+
 function Install-PhoneDesk {
   [CmdletBinding()]
   param(
@@ -572,10 +578,11 @@ function Install-PhoneDesk {
 }
 
 if ($env:PHONEDESK_SETUP_NORUN -ne '1') {
+  $on = { param([bool]$flag, [string]$name) $flag -or ([Environment]::GetEnvironmentVariable($name) -eq '1') }
   Install-PhoneDesk `
-    -Yes:($env:PHONEDESK_YES -eq '1') -Version ([string]$env:PHONEDESK_VERSION) `
-    -Port $(if ($env:PHONEDESK_PORT) { [int]$env:PHONEDESK_PORT } else { 7420 }) `
-    -NoAutostart:($env:PHONEDESK_NO_AUTOSTART -eq '1') -NoStart:($env:PHONEDESK_NO_START -eq '1') `
-    -NoOpen:($env:PHONEDESK_NO_OPEN -eq '1') -NoFirewall:($env:PHONEDESK_NO_FIREWALL -eq '1') `
-    -NoPath:($env:PHONEDESK_NO_PATH -eq '1') -DryRun:($env:PHONEDESK_DRY_RUN -eq '1') -Force:($env:PHONEDESK_FORCE -eq '1')
+    -Yes:(& $on $Yes.IsPresent 'PHONEDESK_YES') -Version $(if ($Version) { $Version } else { [string]$env:PHONEDESK_VERSION }) `
+    -Port $(if ($Port -gt 0) { $Port } elseif ($env:PHONEDESK_PORT) { [int]$env:PHONEDESK_PORT } else { 7420 }) `
+    -NoAutostart:(& $on $NoAutostart.IsPresent 'PHONEDESK_NO_AUTOSTART') -NoStart:(& $on $NoStart.IsPresent 'PHONEDESK_NO_START') `
+    -NoOpen:(& $on $NoOpen.IsPresent 'PHONEDESK_NO_OPEN') -NoFirewall:(& $on $NoFirewall.IsPresent 'PHONEDESK_NO_FIREWALL') `
+    -NoPath:(& $on $NoPath.IsPresent 'PHONEDESK_NO_PATH') -DryRun:(& $on $DryRun.IsPresent 'PHONEDESK_DRY_RUN') -Force:(& $on $Force.IsPresent 'PHONEDESK_FORCE')
 }

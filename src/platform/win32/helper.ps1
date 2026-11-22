@@ -284,18 +284,16 @@ function Gpu-Static {
   @{ name = $name; total = $total }
 }
 function Cmd-GpuRead {
-  $util = $null; $used = $null
+  # one counter call for every engine type; the helper only returns the non-zero samples (the busiest adapter is worked out in
+  # src/platform/win32/gpu.ts: per adapter and engine type the instances add up, then the max over engine types, like Task Manager)
+  $engines = $null; $used = $null
   try {
-    $e = (Get-Counter -Counter '\GPU Engine(*engtype_3D)\Utilization Percentage' -ErrorAction Stop).CounterSamples
-    $by = @{}
-    foreach ($s in $e) {
-      # instance: pid_123_luid_0x00000000_0x0000A5B2_phys_0_eng_0_engtype_3D ; sum per adapter (luid), cap 100
-      $luid = if ($s.InstanceName -match 'luid_(0x[0-9A-Fa-f]+_0x[0-9A-Fa-f]+)') { $Matches[1] } else { 'x' }
-      $by[$luid] = [double]$by[$luid] + [double]$s.CookedValue
+    $engines = @()
+    foreach ($s in (Get-Counter -Counter '\GPU Engine(*)\Utilization Percentage' -ErrorAction Stop).CounterSamples) {
+      if ([double]$s.CookedValue -gt 0) { $engines += , @([string]$s.InstanceName, [double]$s.CookedValue) }
     }
-    foreach ($v in $by.Values) { $c = [Math]::Min(100.0, $v); if ($null -eq $util -or $c -gt $util) { $util = $c } }
-  } catch { }
-  if ($null -eq $util) { return $null }
+  } catch { $engines = $null }
+  if ($null -eq $engines) { return $null }
   try {
     $m = (Get-Counter -Counter '\GPU Adapter Memory(*)\Dedicated Usage' -ErrorAction Stop).CounterSamples
     $bm = @{}
@@ -303,7 +301,7 @@ function Cmd-GpuRead {
     foreach ($v in $bm.Values) { if ($null -eq $used -or $v -gt $used) { $used = $v } }
   } catch { }
   if (-not $script:gpuStatic) { $script:gpuStatic = Gpu-Static }
-  $o = @{ util = [Math]::Round($util, 1) }
+  $o = @{ engines = $engines }
   if ($null -ne $used) { $o['memUsed'] = $used }
   if ($script:gpuStatic.total) { $o['memTotal'] = $script:gpuStatic.total }
   if ($script:gpuStatic.name) { $o['name'] = $script:gpuStatic.name }

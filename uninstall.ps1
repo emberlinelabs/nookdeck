@@ -17,6 +17,9 @@
 #
 # Test hook: PHONEDESK_INSTALL_HOME (same meaning as in setup.ps1).
 
+# The same switches work on a saved copy (.\uninstall.ps1 -Purge); a switch OR its environment twin turns the option on.
+param([switch]$Purge, [switch]$Yes, [switch]$DryRun)
+
 function Uninstall-PhoneDesk {
   [CmdletBinding()]
   param([switch]$Purge, [switch]$Yes, [switch]$DryRun)
@@ -128,5 +131,5 @@ function Uninstall-PhoneDesk {
 }
 
 if ($env:PHONEDESK_SETUP_NORUN -ne '1') {
-  Uninstall-PhoneDesk -Purge:($env:PHONEDESK_PURGE -eq '1') -Yes:($env:PHONEDESK_YES -eq '1') -DryRun:($env:PHONEDESK_DRY_RUN -eq '1')
+  Uninstall-PhoneDesk -Purge:($Purge.IsPresent -or $env:PHONEDESK_PURGE -eq '1') -Yes:($Yes.IsPresent -or $env:PHONEDESK_YES -eq '1') -DryRun:($DryRun.IsPresent -or $env:PHONEDESK_DRY_RUN -eq '1')
 }

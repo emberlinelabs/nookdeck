@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { gpuFromHelper, gpuUtilFromEngines } from "../src/platform/win32/gpu";
 import { cleanGpu, cpuDelta, parseVmStat, readCpuTimes, startStats, type Stats } from "../src/stats.ts";
 
 const VM = `Mach Virtual Memory Statistics: (page size of 16384 bytes)
@@ -87,4 +88,26 @@ test("cleanGpu clamps utilisation and drops bad optional fields", () => {
   expect(cleanGpu({ util: 12.34, memUsed: 441860096.4, memTotal: 8e9, temp: 61.2, name: " Apple M1 Pro " })).toEqual({ util: 12.3, memUsed: 441860096, memTotal: 8e9, temp: 61, name: "Apple M1 Pro" });
   expect(cleanGpu({ util: 5, memUsed: 9e9, memTotal: 8e9 })).toEqual({ util: 5, memUsed: 8e9, memTotal: 8e9 });
   expect(cleanGpu({ util: 5, memUsed: "n/a", memTotal: 0, temp: 0, name: "  " })).toEqual({ util: 5 });
+});
+
+const L1 = "luid_0x00000000_0x0000A5B2";
+const L2 = "luid_0x00000000_0x0000B6C3";
+test("Windows GPU: instances add up per engine type, then the max over engine types (Task Manager), per adapter", () => {
+  expect(gpuUtilFromEngines([])).toBe(0);
+  // video decode alone drives the figure (the 3D engine is idle)
+  expect(gpuUtilFromEngines([[`pid_1_${L1}_phys_0_eng_0_engtype_VideoDecode`, 22], [`pid_2_${L1}_phys_0_eng_0_engtype_VideoDecode`, 8], [`pid_1_${L1}_phys_0_eng_1_engtype_3D`, 5]])).toBe(30);
+  // 3D 40 (two processes) beats copy 15: not summed across engine types
+  expect(gpuUtilFromEngines([[`pid_1_${L1}_phys_0_eng_0_engtype_3D`, 25], [`pid_2_${L1}_phys_0_eng_0_engtype_3D`, 15], [`pid_1_${L1}_phys_0_eng_2_engtype_Copy`, 15]])).toBe(40);
+  // a sum above 100 is capped; the busiest adapter wins
+  expect(gpuUtilFromEngines([[`pid_1_${L1}_phys_0_eng_0_engtype_3D`, 80], [`pid_2_${L1}_phys_0_eng_0_engtype_3D`, 70], [`pid_3_${L2}_phys_0_eng_0_engtype_Compute_0`, 55]])).toBe(100);
+  expect(gpuUtilFromEngines([[`pid_1_${L1}_phys_0_eng_0_engtype_3D`, 10], [`pid_3_${L2}_phys_0_eng_0_engtype_Compute_0`, 55]])).toBe(55);
+  // junk: no adapter, no engine type, NaN, zero
+  expect(gpuUtilFromEngines([["total", 50], [`pid_1_${L1}_phys_0_eng_0`, 50], [`pid_1_${L1}_eng_0_engtype_3D`, Number.NaN], [`pid_1_${L1}_eng_0_engtype_3D`, 0]])).toBe(0);
+});
+test("gpuFromHelper turns the helper reply into GPU input, undefined without counters", () => {
+  expect(gpuFromHelper(null)).toBeUndefined();
+  expect(gpuFromHelper({})).toBeUndefined();
+  expect(gpuFromHelper({ engines: [[`pid_1_${L1}_phys_0_eng_0_engtype_3D`, 12.5]], memUsed: 1e9, memTotal: 8e9, name: "GPU", temp: 60 })).toEqual({ util: 12.5, memUsed: 1e9, memTotal: 8e9, name: "GPU", temp: 60 });
+  expect(gpuFromHelper({ engines: [] })).toEqual({ util: 0 });
+  expect(gpuFromHelper({ engines: [`pid_1_${L1}_phys_0_eng_0_engtype_3D`, 7] })).toEqual({ util: 7 }); // a one-sample list flattened by PowerShell 5.1
 });
