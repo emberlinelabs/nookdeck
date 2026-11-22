@@ -11,7 +11,7 @@ import { PROVIDER_COLOR } from './ai'
 import { PermissionSheet, ProcessSheet, QuestionSheet } from './sheets'
 import { ScreenLayer, ScreenSheet } from './screen'
 import { swapPreview } from './swap'
-import { samplePlugin } from './plugin-logic'
+import { coreTileOf, previewSlot } from './plugin-logic'
 import type { PluginSlot } from './plugin-logic'
 import { headerMode, keepAwakeOn, liteOn, onLocalScreen } from './screen-logic'
 import type { PermissionRequest, QuestionRequest, WeatherData, PushedValue, Notice, GotoReq, HassEntity, HassState, IconAssets, AiData, Item, Layout, Media, MediaCommand, Orientation, Page, Stats, TileStyle } from './types'
@@ -539,6 +539,8 @@ function Tile(props: {
       cls += ' pd-tile--wtint'
     }
   }
+  // a core.quota / core.weather plugin tile looks exactly like the legacy quota / weather tile
+  const core = item.kind === 'widget' && item.widget === 'plugin' ? coreTileOf(item.plugin, props.plug || null) : null
   const small = Math.min(props.tw, props.th) < MIN_LABEL_CELL
   const showLabel = props.tt.showLabels && !item.hideLabel && !small
 
@@ -586,7 +588,7 @@ function Tile(props: {
         onContextMenu={holdable ? (ev: Event) => ev.preventDefault() : undefined}
       >
         <Widget
-          kind={item.widget || 'clock'}
+          kind={core ? core.kind : item.widget || 'clock'}
           stats={stats}
           hist={props.hist}
           media={props.media}
@@ -599,26 +601,26 @@ function Tile(props: {
           showLabel={props.tt.showLabels && !item.hideLabel}
           color={wColor}
           textColor={item.textColor || (wInk ? wColor : undefined)}
-          provider={item.provider}
+          provider={core ? core.provider : item.provider}
           clock={item.clock}
           metric={item.metric}
-          quota={item.quota}
+          quota={core ? core.quota : item.quota}
           entity={item.entity}
-          weather={item.weather}
+          weather={core ? core.weather : item.weather}
           entPend={props.entPend}
           onStep={props.onStep ? (dl: number) => props.onStep && props.onStep(page, item, dl) : undefined}
           onLight={props.onLight ? (op: string, v: unknown) => props.onLight && props.onLight(page, item, op, v) : undefined}
           push={item.push}
-          wxData={props.wxData}
+          wxData={core && core.wx ? core.wx : props.wxData}
           pushed={props.pushed}
-          plug={props.plug}
+          plug={core ? undefined : props.plug}
           label={item.label}
           notes={props.notes}
           hassEnt={props.hassEnt}
           hassForceOn={props.hassForceOn}
           hassConnected={props.hassConnected}
           assets={props.assets}
-          ai={props.ai}
+          ai={core && core.ai ? core.ai : props.ai}
           waitingProjects={props.waitingProjects}
           preview={props.preview}
           onMedia={props.onMedia}
@@ -895,7 +897,7 @@ export function Deck(props: DeckProps) {
   const [, bumpLocal] = useState(0)
   useEffect(() => onLocalScreen(() => bumpLocal((x) => x + 1)), [])
   const [scrOpen, setScrOpen] = useState(false)
-  const [pv, setPv] = useState<{ layout: Layout | null; selectedId: string | null; np: string; clean: boolean }>(() => {
+  const [pv, setPv] = useState<{ layout: Layout | null; selectedId: string | null; np: string; clean: boolean; pluginData?: unknown }>(() => {
     const q = new URLSearchParams(location.search)
     const n = splitNp(q.get('np') || '')
     return { layout: null, selectedId: null, np: n.np, clean: n.clean || q.get('clean') === '1' }
@@ -1033,7 +1035,7 @@ export function Deck(props: DeckProps) {
       // assets may sit inside the layout or next to it (same contract as the live 'layout' message)
       const lay = d.layout && d.assets && typeof d.assets === 'object' && !d.layout.assets ? Object.assign({}, d.layout, { assets: d.assets }) : d.layout
       const n = d.np !== undefined ? splitNp(String(d.np)) : null
-      setPv((s) => ({ layout: lay || null, selectedId: d.selectedId || null, np: n ? n.np : s.np, clean: n ? n.clean || s.clean : s.clean }))
+      setPv((s) => ({ pluginData: d.pluginData && typeof d.pluginData === 'object' ? d.pluginData : null, layout: lay || null, selectedId: d.selectedId || null, np: n ? n.np : s.np, clean: n ? n.clean || s.clean : s.clean }))
       if (d.pageId) {
         const i = ((d.layout && d.layout.pages) || []).findIndex((p: Page) => p.id === d.pageId)
         if (i >= 0) window.setTimeout(() => scrollTo(i), 0)
@@ -1910,7 +1912,7 @@ export function Deck(props: DeckProps) {
                             hassConnected={hass ? hass.connected : true}
                             wxData={st.weather ? st.weather[it.id] : undefined}
                             pushed={it.push && st.pushed ? st.pushed[it.push.key] : undefined}
-                            plug={it.widget === 'plugin' ? (preview ? samplePlugin(it.plugin ? it.plugin.widget : it.id) : st.plugins ? st.plugins[it.id] : null) : undefined}
+                            plug={it.widget === 'plugin' ? (preview ? previewSlot(pv.pluginData, it.id, it.plugin ? it.plugin.widget : it.id, it.plugin ? it.plugin.id : undefined) : st.plugins ? st.plugins[it.id] : null) : (it.widget === 'weather' || it.widget === 'quota') && !preview && st.plugins ? st.plugins[it.id] : undefined}
                             notes={st.notes}
                             entPend={it.entity ? pend[it.entity.id] : undefined}
                             onEntity={(pg, itm) => setSheet({ page: pg, item: itm })}

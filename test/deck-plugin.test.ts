@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { friendlyError, mergePlugins, parsePluginItem, safeImageUrl, samplePlugin, validatePlugin } from "../web/deck/src/plugin-logic";
+import { coreTileOf, friendlyError, mergePlugins, parsePluginItem, quotaOptionsOf, weatherOptionsOf, safeImageUrl, samplePlugin, validatePlugin } from "../web/deck/src/plugin-logic";
 
 describe("plugin renderer validation", () => {
   test("stat", () => {
@@ -63,6 +63,10 @@ describe("plugin renderer validation", () => {
 describe("plugin messages", () => {
   test("{error}, missing render and junk are null, never throw", () => {
     expect(parsePluginItem({ error: "boom" })).toEqual({ error: "boom" });
+    // a core plugin's own renderer (the legacy weather / quota tiles): only the fact is kept, the built-in tile uses its own data
+    expect(parsePluginItem({ render: "custom:weather", data: { temp: 20 } })).toEqual({ custom: "weather", data: { temp: 20 } });
+    expect(parsePluginItem({ render: "custom:quota" })).toEqual({ custom: "quota" });
+    expect(parsePluginItem({ render: "custom:quota", error: "plugin disabled" })).toEqual({ error: "plugin disabled" });
     expect(parsePluginItem({ render: "stat", data: { value: 1 }, error: "x" })).toEqual({ error: "x" });
     expect(parsePluginItem(null)).toEqual({ error: "" });
     expect(parsePluginItem(undefined)).toEqual({ error: "" });
@@ -112,5 +116,86 @@ describe("plugin messages", () => {
       const s = samplePlugin(n);
       expect(validatePlugin(s.render, s.data)).not.toBeNull();
     }
+  });
+});
+
+describe("previewSlot (manage preview data)", () => {
+  const { previewSlot, samplePlugin } = require("../web/deck/src/plugin-logic");
+  test("uses the data sent for the tile, validated", () => {
+    const s = previewSlot({ t: { render: "stat", data: { value: 5, unit: "x" } } }, "t", "w");
+    expect(s).toEqual({ render: "stat", data: { value: 5, unit: "x" } });
+  });
+  test("invalid data gives the neutral error tile, not a throw", () => {
+    expect(previewSlot({ t: { render: "stat", data: { nope: 1 } } }, "t", "w")).toEqual({ error: "invalid data" });
+    expect(previewSlot({ t: 5 }, "t", "w")).toEqual({ error: "invalid data" });
+  });
+  test("another tile, no data or inherited keys keep the sample", () => {
+    expect(previewSlot({ t: { render: "stat", data: { value: 1 } } }, "other", "w")).toEqual({ error: "no preview|" });
+    expect(previewSlot({ t: { error: "plugin disabled" } }, "t", "w")).toEqual({ error: "plugin disabled" });
+    expect(previewSlot(undefined, "t", "w")).toEqual({ error: "no preview|" });
+    expect(previewSlot({}, "toString", "w")).toEqual({ error: "no preview|" });
+  });
+});
+
+describe("core plugin tiles draw the legacy quota / weather tile", () => {
+  const quota = { id: "claude", name: "Claude", windows: [{ id: "five_hour", label: "5h", usedPercent: 34 }], updatedAt: 1 };
+  const slot = (c: string, data: unknown) => parsePluginItem({ render: "custom:" + c, data });
+  test("core.quota: the provider block becomes the AI data, the flat settings become the quota options", () => {
+    const c = coreTileOf({ id: "core.quota", widget: "quota", settings: { provider: "claude", chart: "rings", windows: "five_hour, seven_day", showReset: false, account: "me@x" } }, slot("quota", quota));
+    expect(c).toMatchObject({ kind: "quota", provider: "claude", quota: { chart: "rings", windows: ["five_hour", "seven_day"], showReset: false, account: "me@x" } });
+    expect(c!.ai!.providers[0]).toBe(quota);
+    expect(c!.ai!.sessions).toEqual([]);
+    // no settings: the provider comes from the data, options are empty
+    expect(coreTileOf({ id: "core.quota", widget: "quota" }, slot("quota", { ...quota, id: "codex" }))).toMatchObject({ provider: "codex", quota: {} });
+  });
+  test("core.weather: the answer is used as is, the settings become weather options", () => {
+    const wx = { now: { temp: 20 }, hourly: [], daily: [], location: "Hue" };
+    const c = coreTileOf({ id: "core.weather", widget: "weather", settings: { source: "open-meteo", locationName: "Hue", lat: 16.4, lon: 107.6, show: "daily", units: "metric" } }, slot("weather", wx));
+    expect(c).toMatchObject({ kind: "weather", weather: { source: "open-meteo", location: { name: "Hue", lat: 16.4, lon: 107.6 }, show: "daily", units: "metric" } });
+    expect(c!.wx).toBe(slot("weather", wx) && c!.wx);
+  });
+  test("community plugins can never use custom:*, and a mismatched widget or junk data is refused", () => {
+    expect(coreTileOf({ id: "dev.evil.x", widget: "quota" }, slot("quota", quota))).toBeNull();
+    expect(coreTileOf({ id: "dev.core.x", widget: "quota" }, slot("quota", quota))).toBeNull();
+    expect(coreTileOf({ id: "core.quota", widget: "weather" }, slot("quota", quota))).toBeNull();
+    expect(coreTileOf({ id: "core.quota", widget: "quota" }, slot("quota", { nope: 1 }))).toBeNull();
+    expect(coreTileOf({ id: "core.weather", widget: "weather" }, slot("weather", { nope: 1 }))).toBeNull();
+    expect(coreTileOf({ id: "core.quota", widget: "quota" }, parsePluginItem({ error: "plugin disabled" }))).toBeNull();
+    expect(coreTileOf({ id: "core.quota", widget: "quota" }, parsePluginItem({ render: "stat", data: { value: 1 } }))).toBeNull();
+    expect(coreTileOf(undefined, slot("quota", quota))).toBeNull();
+    expect(coreTileOf({ id: "core.quota", widget: "quota" }, null)).toBeNull();
+  });
+  test("option parsing ignores junk", () => {
+    expect(quotaOptionsOf({ chart: "pie", windows: "  ", showReset: "no", account: 5 })).toEqual({});
+    expect(quotaOptionsOf({ windows: "main" })).toEqual({ windows: "main" });
+    expect(weatherOptionsOf({ source: "x", lat: 1 })).toEqual({});
+  });
+});
+
+describe("previewSlot for core plugin tiles", () => {
+  const { previewSlot, coreTileOf } = require("../web/deck/src/plugin-logic");
+  const quota = { id: "claude", name: "Claude", plan: "Max", windows: [{ id: "seven_day", label: "7 days", usedPercent: 34 }] };
+  test("data sent for a core.* tile (custom:quota / custom:weather) is kept and draws the legacy tile", () => {
+    const s = previewSlot({ t: { render: "custom:quota", data: quota } }, "t", "quota", "core.quota");
+    expect(s).toEqual({ custom: "quota", data: quota });
+    expect(coreTileOf({ id: "core.quota", widget: "quota" }, s)).toMatchObject({ kind: "quota", provider: "claude" });
+  });
+  test("community ids stay refused, also with sample data", () => {
+    expect(previewSlot({ t: { render: "custom:quota", data: quota } }, "t", "quota", "dev.evil.x")).toEqual({ error: "invalid data" });
+    expect(previewSlot({ t: { render: "custom:quota", data: quota } }, "t", "quota")).toEqual({ error: "invalid data" });
+    const s = previewSlot({}, "t", "quota", "dev.evil.x");
+    expect(s).not.toHaveProperty("custom");
+    expect(coreTileOf({ id: "dev.evil.x", widget: "quota" }, { custom: "quota", data: quota })).toBeNull();
+  });
+  test("a core tile with no data sent gets a demo sample that the legacy tile accepts", () => {
+    const q = previewSlot(undefined, "t", "quota", "core.quota");
+    expect(coreTileOf({ id: "core.quota", widget: "quota" }, q)).toMatchObject({ kind: "quota", provider: "claude" });
+    expect(JSON.stringify(q)).toContain("Max");
+    const w = previewSlot(undefined, "t", "weather", "core.weather");
+    const ct = coreTileOf({ id: "core.weather", widget: "weather" }, w);
+    expect(ct).toMatchObject({ kind: "weather" });
+    expect(ct.wx.now.temp).toBe(31);
+    expect(ct.wx.location).toBe("Home");
+    expect(ct.wx.hourly.length).toBeGreaterThan(2);
   });
 });

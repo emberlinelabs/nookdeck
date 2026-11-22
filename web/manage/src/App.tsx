@@ -24,6 +24,7 @@ import { setPlatform, usePlatform } from "@/lib/platform";
 import { needsAttention, useDoctor } from "@/lib/doctor";
 import { mergeLayouts } from "@/lib/layout-merge";
 import { PluginsPanel } from "@/components/plugins-panel";
+import { placePluginTile } from "@/lib/palette";
 import { PluginsOverview } from "@/components/plugins-overview";
 import { WeatherPage } from "@/components/weather-page";
 import { HassCard } from "@/components/hass-card";
@@ -355,9 +356,11 @@ export default function App() {
           {tab === "screen" && <ScreenPanel layout={layout} pageId={layout.pages[safePageIdx]!.id} update={update} orientation={orientation} onOrientation={setOrientation} />}
           {tab === "rules" && <div className="flex flex-col gap-4"><RulesPanel layout={layout} update={update} /><WebhookCard /></div>}
           {tab === "sounds" && <SoundsPanel />}
-          {tab === "plugins" && <PluginsOverview update={update} />}
+          {tab === "plugins" && <PluginsOverview update={update} layout={layout} onSaveLayout={() => { window.setTimeout(() => void saveRef.current(), 80); }}
+            onAddTile={(p, widgetId, pi) => { const r = placePluginTile(layout, pi, p, widgetId); if ("error" in r) return r.error; update(() => r.layout); setPageIdx(pi); setItemId(r.itemId); setTab("screens"); return null; }} />}
           {(AI_TOOL_IDS as readonly string[]).includes(tab.replace("plugin/", "")) && tab.startsWith("plugin/") && <IntegrationsPanel key={tab} tool={tab.slice(7) as AiProvider} />}
           {tab === "plugin/hass" && <div className="max-w-3xl"><HassCard /></div>}
+          {tab === "plugin/quota" && <div className="max-w-3xl"><PluginsPanel key={tab} update={update} layout={layout} only="core.quota" /></div>}
           {tab === "plugin/weather" && <WeatherPage layout={layout} update={update} onGoScreens={() => setTab("screens")} />}
           {tab.startsWith("plugin/") && !BUILTIN_PLUGINS.some((p) => `plugin/${p.id}` === tab) && <div className="max-w-3xl"><PluginsPanel key={tab} update={update} only={tab.slice(7)} /></div>}
           {tab === "permissions" && <PermissionsPanel {...doctor} />}

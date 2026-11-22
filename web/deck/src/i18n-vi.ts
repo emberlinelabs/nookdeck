@@ -215,6 +215,7 @@ export const VI: { [en: string]: string } = {
   "Nothing to show": "Không có gì để hiển thị",
   "OK": "Ổn",
   "Warning": "Cảnh báo",
+  "No preview": "Chưa có xem trước",
   "Plugin missing": "Thiếu plugin",
   "Plugin off": "Plugin đang tắt",
   "Needs approval": "Cần được duyệt",

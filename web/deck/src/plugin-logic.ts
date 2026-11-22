@@ -1,4 +1,5 @@
 /** Pure validation for plugin tiles. No DOM, no deck imports: the agent sends {render, data} and the deck never trusts it. */
+import type { AiData, AiProviderInfo, QuotaChart, QuotaOptions, WeatherData, WeatherOptions } from './types'
 
 export type PluginRender = 'stat' | 'gauge' | 'text' | 'list' | 'chart' | 'image' | 'status'
 export const PLUGIN_RENDERS: PluginRender[] = ['stat', 'gauge', 'text', 'list', 'chart', 'image', 'status']
@@ -110,11 +111,14 @@ export function validatePlugin(render: unknown, data: unknown): PluginEntry | nu
 
 /** An error tile: `error` is the agent's text (may be empty when the data was just invalid). */
 export interface PluginError { error: string }
-export type PluginSlot = PluginEntry | PluginError | null
+/** A core plugin's own renderer (custom:weather, custom:quota): the deck draws its built-in tile from its own data, so only its errors matter here. */
+export interface PluginCustom { custom: string; data?: { [k: string]: unknown } }
+export type PluginSlot = PluginEntry | PluginError | PluginCustom | null
 
 /** One wire item: {render, data} is validated; {error} keeps its text; anything else (missing, junk) is the empty error. */
 export function parsePluginItem(x: unknown): PluginSlot {
   if (isObj(x) && x.error !== undefined) return { error: typeof x.error === 'string' ? x.error.slice(0, 200) : '' }
+  if (isObj(x) && typeof x.render === 'string' && x.render.slice(0, 7) === 'custom:') return isObj(x.data) ? { custom: x.render.slice(7, 40), data: x.data } : { custom: x.render.slice(7, 40) }
   const v = isObj(x) ? validatePlugin(x.render, x.data) : null
   return v || { error: '' }
 }
@@ -143,6 +147,49 @@ export function mergePlugins(cur: { [tileId: string]: PluginSlot } | undefined, 
   return out
 }
 
+/** Manage preview of one tile: the data the parent sent for this tile (checked like live data), else a sample by widget name. */
+export function previewSlot(pluginData: unknown, tileId: string, widget: string, pluginId?: string): PluginSlot {
+  void widget
+  const core = pluginId !== undefined && pluginId.slice(0, 5) === 'core.'
+  if (isObj(pluginData) && Object.prototype.hasOwnProperty.call(pluginData, tileId)) {
+    const one = pluginData[tileId]
+    // a plain state from the parent (plugin missing / off / no preview): shown as such
+    if (isObj(one) && typeof one.error === 'string') return { error: one.error.slice(0, 200) }
+    // a core quota / weather sample (custom:*) is only kept for a core.* plugin: coreTileOf then draws the real legacy tile
+    if (isObj(one) && typeof one.render === 'string' && one.render.slice(0, 7) === 'custom:') return core ? parsePluginItem(one) : { error: 'invalid data' }
+    const ok = isObj(one) ? validatePlugin(one.render, one.data) : null
+    return ok || { error: 'invalid data' }
+  }
+  if (core && widget === 'quota') return { custom: 'quota', data: sampleQuota() }
+  if (core && widget === 'weather') return { custom: 'weather', data: sampleWeather() }
+  // nothing from the parent: no invented values, just "no preview"
+  return { error: 'no preview|' }
+}
+
+/** Demo data in the shape of the agent's quota block (never a real account). */
+function sampleQuota(): { [k: string]: unknown } {
+  const now = Date.now()
+  return { id: 'claude', name: 'Claude', plan: 'Max', updatedAt: now, windows: [
+    { id: 'five_hour', label: '5 hours', usedPercent: 62, windowMinutes: 300, resetsAt: now + 140 * 60000 },
+    { id: 'seven_day', label: '7 days', usedPercent: 34, windowMinutes: 10080, resetsAt: now + 3300 * 60000 },
+  ] }
+}
+
+/** Demo data in the shape of the agent's weather answer. */
+function sampleWeather(): { [k: string]: unknown } {
+  const now = Date.now()
+  const p = (n: number) => (n < 10 ? '0' : '') + n
+  const day = (d: Date) => d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+  const hours: [number, string, number, string][] = [[31, 'Partly cloudy', 2, 'cloud-sun'], [32, 'Partly cloudy', 2, 'cloud-sun'], [31, 'Cloudy', 3, 'cloud'], [29, 'Cloudy', 3, 'cloud'], [28, 'Light rain', 61, 'rain'], [27, 'Light rain', 61, 'rain']]
+  const days: [number, number, string, number, string][] = [[25, 33, 'Partly cloudy', 2, 'cloud-sun'], [24, 31, 'Light rain', 61, 'rain'], [24, 32, 'Mostly clear', 1, 'sun']]
+  return {
+    now: { temp: 31, feels: 34, condition: 'Partly cloudy', code: 2, icon: 'cloud-sun', humidity: 62, wind: 11, isDay: true },
+    hourly: hours.map((h, i) => { const d = new Date(now + (i + 1) * 3600000); return { time: day(d) + 'T' + p(d.getHours()) + ':00', temp: h[0], condition: h[1], code: h[2], icon: h[3] } }),
+    daily: days.map((x, i) => ({ date: day(new Date(now + i * 86400000)), min: x[0], max: x[1], condition: x[2], code: x[3], icon: x[4] })),
+    source: 'open-meteo', location: 'Home', units: 'metric', tempUnit: 'c', updatedAt: now,
+  }
+}
+
 /** Data used for the manage preview, so plugin tiles are not all error tiles there. Cycles the renderers by widget name. */
 export function samplePlugin(widget: string): PluginEntry {
   let h = 0
@@ -155,4 +202,64 @@ export function samplePlugin(widget: string): PluginEntry {
   if (r === 'chart') return { render: 'chart', data: { points: [3, 5, 4, 7, 6, 9, 8, 11, 10, 13], label: 'Requests', unit: '/s' } }
   if (r === 'image') return { render: 'text', data: { title: 'Image', body: 'Shown in the live deck.' } }
   return { render: 'status', data: { state: 'ok', label: 'All good' } }
+}
+
+// ---- core plugin tiles ----
+// A plugin-kind tile whose plugin id starts with "core." and whose item is custom:quota or custom:weather is drawn with the same
+// quota / weather tile as the legacy widgets, from the item's data and the tile's settings. Community plugins never get this.
+
+const QUOTA_CHARTS: QuotaChart[] = ['auto', 'bars', 'rings', 'gauge', 'meter', 'number', 'history']
+
+/** The flat tile settings (string / number / boolean) back to the quota options the legacy tile takes. */
+export function quotaOptionsOf(s: { [k: string]: unknown } | undefined): QuotaOptions {
+  const o: QuotaOptions = {}
+  const v = s || {}
+  if (typeof v.chart === 'string' && QUOTA_CHARTS.indexOf(v.chart as QuotaChart) >= 0) o.chart = v.chart as QuotaChart
+  if (v.windows === 'all' || v.windows === 'main') o.windows = v.windows
+  else if (typeof v.windows === 'string' && v.windows.trim()) {
+    const ids = v.windows.split(',').map((x) => x.trim()).filter((x) => !!x)
+    if (ids.length) o.windows = ids
+  }
+  if (v.showReset === false) o.showReset = false
+  if (typeof v.account === 'string' && v.account) o.account = v.account
+  return o
+}
+
+/** The flat tile settings back to the weather options of the legacy tile. */
+export function weatherOptionsOf(s: { [k: string]: unknown } | undefined): WeatherOptions {
+  const o: WeatherOptions = {}
+  const v = s || {}
+  if (v.source === 'auto' || v.source === 'hass' || v.source === 'open-meteo') o.source = v.source
+  if (typeof v.entity === 'string' && v.entity) o.entity = v.entity
+  if (typeof v.lat === 'number' && typeof v.lon === 'number') o.location = { name: typeof v.locationName === 'string' ? v.locationName : '', lat: v.lat, lon: v.lon }
+  if (v.show === 'now' || v.show === 'hourly' || v.show === 'daily' || v.show === 'auto') o.show = v.show
+  if (v.units === 'metric' || v.units === 'imperial') o.units = v.units
+  return o
+}
+
+export interface CoreTile {
+  kind: 'quota' | 'weather'
+  provider?: string
+  quota?: QuotaOptions
+  weather?: WeatherOptions
+  /** quota: the one provider block, shaped like the deck's AI data */
+  ai?: AiData
+  /** weather: the agent's weather answer */
+  wx?: WeatherData
+}
+
+/** What to draw for a plugin tile, or null when it is not a core quota / weather tile (then it goes through the community renderers). */
+export function coreTileOf(plugin: { id: string; widget: string; settings?: { [k: string]: unknown } } | undefined, slot: PluginSlot): CoreTile | null {
+  if (!plugin || !slot || !('custom' in slot) || !slot.data || plugin.id.slice(0, 5) !== 'core.') return null
+  const s = plugin.settings
+  if (slot.custom === 'quota' && plugin.widget === 'quota') {
+    const d = slot.data
+    if (typeof d.id !== 'string') return null
+    return { kind: 'quota', provider: typeof (s && s.provider) === 'string' ? String(s && s.provider) : d.id, quota: quotaOptionsOf(s), ai: { providers: [d as unknown as AiProviderInfo], sessions: [] } }
+  }
+  if (slot.custom === 'weather' && plugin.widget === 'weather') {
+    if (!isObj(slot.data.now) && typeof slot.data.error !== 'string') return null
+    return { kind: 'weather', weather: weatherOptionsOf(s), wx: slot.data as unknown as WeatherData }
+  }
+  return null
 }

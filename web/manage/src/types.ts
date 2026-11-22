@@ -424,7 +424,77 @@ export interface PluginPermissions {
   keyboard: boolean;
   storage: boolean;
 }
+/** One plugin of the community registry (GET /api/plugins/registry). Entries carry no tiles or buttons: see RegistryManifest. */
+export interface RegistryEntry {
+  id: string;
+  name: string;
+  version: string;
+  /** The plugin's repository (https). */
+  repo: string;
+  author?: string;
+  description?: string;
+  /** https URL or an icon name; the card falls back to a puzzle piece. */
+  icon?: string;
+  /** A picture of the plugin, used when a tile has no sample data. */
+  screenshot?: string;
+  tier?: string;
+  /** tier "verified" (or the registry's own verified flag). */
+  verified: boolean;
+  /** What the registry says it asks for, when it says; the manifest is the authority. */
+  permissions?: PluginPermissions;
+  installed: boolean;
+  installedVersion?: string;
+  updateAvailable: boolean;
+  /** Set by the page: installed from a link or folder, not from the Store, so the Store version is a switch, not an update. */
+  fromLink?: boolean;
+}
+export interface RegistryResult {
+  plugins: RegistryEntry[];
+  /** The agent could not reach the registry and sent its saved copy. */
+  stale: boolean;
+  fetchedAt?: number;
+}
+export interface TileDef {
+  id: string;
+  name: string;
+  render: string;
+  /** "2x1"; the first is the default. */
+  sizes?: string[];
+  /** Sample data for the renderer, shown on the card. */
+  preview?: unknown;
+}
+/** GET /api/plugins/registry/:id/manifest: what a not-yet-installed plugin adds and asks for. */
+export interface RegistryManifest {
+  id: string;
+  name: string;
+  version: string;
+  registryVersion?: string;
+  permissions: PluginPermissions;
+  permissionLines: string[];
+  widgets: TileDef[];
+  actions: { id: string; name: string }[];
+  main: string | null;
+}
+
+/** Process state of a code plugin (the agent runs each in its own process). */
+export type PluginProcessState = "running" | "stopped" | "crashed" | "failed";
+export interface PluginProcess {
+  state: PluginProcessState;
+  pid?: number;
+  /** Crashes in a row since the last good run. */
+  restarts?: number;
+  /** Epoch ms when the current process started. */
+  startedAt?: number;
+  lastError?: string;
+}
 export interface PluginInfo {
+  /** Reviewed through the registry (not just installed from a link). */
+  reviewed?: boolean;
+  registryVersion?: string;
+  /** The plugin has code (its manifest sets "main"); only those have a process. */
+  code?: boolean;
+  /** Ships with Nookdeck (core.weather ...): cannot be removed, is never "unreviewed", has no install source. */
+  builtin?: boolean;
   id: string;
   name: string;
   version: string;
@@ -441,7 +511,7 @@ export interface PluginInfo {
   error?: string;
   permissions: PluginPermissions;
   granted: PluginPermissions;
-  widgets: { id: string; name: string; render: string; sizes: string[]; settings: PluginField[] }[];
+  widgets: { id: string; name: string; render: string; sizes: string[]; settings: PluginField[]; preview?: unknown }[];
   actions: { id: string; name: string; settings: PluginField[] }[];
   themes: { id: string; name: string; theme: Theme }[];
   layouts: { id: string; name: string; layout: Layout }[];

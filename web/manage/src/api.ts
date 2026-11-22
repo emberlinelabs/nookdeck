@@ -1,6 +1,6 @@
 import { t } from "./lib/i18n";
 import { asPlatform, type Platform } from "./lib/platform";
-import { AI_PROVIDERS, type IconCatalog, type MacApp, type Sound, type HassConfig, type HassEntity, type HassService, type GeoPlace, type WebhookInfo, type AiProvider, type DeviceInfo, type About, type UpdateInfo, type DoctorItem, type DoctorStatus, type Integration, type Layout, type Pairing, type PluginInfo, type PluginField, type PluginPermissions, type Theme, type HassStatus } from "./types";
+import { AI_PROVIDERS, type IconCatalog, type MacApp, type Sound, type HassConfig, type HassEntity, type HassService, type GeoPlace, type WebhookInfo, type AiProvider, type DeviceInfo, type About, type UpdateInfo, type DoctorItem, type DoctorStatus, type Integration, type Layout, type Pairing, type PluginInfo, type RegistryEntry, type RegistryManifest, type RegistryResult, type PluginProcess, type PluginProcessState, type PluginField, type PluginPermissions, type Theme, type HassStatus } from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -9,6 +9,8 @@ export class ApiError extends Error {
     this.status = status;
   }
 }
+
+export const PLUGINS_CHANGED = "nookdeck:plugins-changed";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
@@ -35,6 +37,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const msg = data && typeof data === "object" && "error" in data ? String((data as { error: unknown }).error) : `${res.status} ${res.statusText}`;
     throw new ApiError(msg, res.status);
   }
+  // One shared signal: every view of the plugin list (sidebar, pages) reads again after any plugin change.
+  if (method !== "GET" && method !== "HEAD" && path.startsWith("/api/plugins")) window.dispatchEvent(new Event(PLUGINS_CHANGED));
   return data as T;
 }
 
@@ -137,6 +141,49 @@ export function normalizePermissions(raw: unknown): PluginPermissions {
   };
 }
 
+const manifestCache = new Map<string, Promise<RegistryManifest | null>>();
+function normalizeRegistryManifest(raw: unknown): RegistryManifest | null {
+  const r = rec(raw);
+  const id = str(r.id);
+  if (!id) return null;
+  return {
+    id, name: str(r.name) ?? id, version: str(r.version) ?? "", registryVersion: str(r.registryVersion),
+    permissions: normalizePermissions(r.permissions),
+    permissionLines: (Array.isArray(r.permissionLines) ? r.permissionLines : []).filter((x): x is string => typeof x === "string"),
+    widgets: (Array.isArray(r.widgets) ? r.widgets : []).flatMap((x: unknown) => { const o = rec(x); const i = str(o.id); return i ? [{ id: i, name: str(o.name) ?? i, render: str(o.render) ?? "", sizes: (Array.isArray(o.sizes) ? o.sizes : []).filter((s): s is string => typeof s === "string"), preview: o.preview }] : []; }),
+    actions: (Array.isArray(r.actions) ? r.actions : []).flatMap((x: unknown) => { const o = rec(x); const i = str(o.id); return i ? [{ id: i, name: str(o.name) ?? i }] : []; }),
+    main: typeof r.main === "string" ? r.main : null,
+  };
+}
+export function normalizeRegistryEntry(raw: unknown): RegistryEntry | null {
+  const r = rec(raw);
+  const id = str(r.id);
+  if (!id) return null;
+  return {
+    id, name: str(r.name) ?? id, version: str(r.version) ?? "", repo: str(r.repo) ?? "", author: str(r.author), description: str(r.description), icon: str(r.icon),
+    screenshot: str(r.screenshot), tier: str(r.tier), verified: r.tier === "verified" || r.verified === true,
+    permissions: r.permissions && typeof r.permissions === "object" ? normalizePermissions(r.permissions) : undefined,
+    installed: r.installed === true, installedVersion: str(r.installedVersion), updateAvailable: r.updateAvailable === true,
+  };
+}
+
+/** Until the agent has the process endpoints, open the page with ?mockprocess to see the UI with made-up data. */
+const mockProcess = (): boolean => typeof window !== "undefined" && /[?&]mockprocess\b/.test(window.location.search);
+const mockStates = new Map<string, { state: PluginProcessState; since: number; lines: string[] }>();
+function mockEntry(id: string) {
+  let e = mockStates.get(id);
+  if (!e) {
+    const crashed = id.length % 2 === 0;
+    e = { state: crashed ? "crashed" : "running", since: Date.now() - 125_000, lines: Array.from({ length: 60 }, (_, i) => `2026-11-23T09:${String(i % 60).padStart(2, "0")}:00Z fetched stars (${100 + i})`) };
+    if (crashed) e.lines.push("TypeError: Cannot read properties of undefined (reading 'stargazers_count')", "    at provide (src/index.ts:21:34)", "plugin exited with code 1");
+    mockStates.set(id, e);
+  }
+  return e;
+}
+const mockState = (id: string): PluginProcess => { const e = mockEntry(id); return { state: e.state, pid: e.state === "running" ? 4242 : undefined, restarts: e.state === "crashed" ? 2 : 0, startedAt: e.since }; };
+const mockLogs = (id: string): string[] => mockEntry(id).lines;
+const mockSet = (id: string, state: PluginProcessState): void => { const e = mockEntry(id); e.state = state; e.since = Date.now(); e.lines.push(`${new Date().toISOString()} ${state === "running" ? "restarted by you" : "stopped by you"}`); };
+
 export function normalizePlugin(raw: unknown): PluginInfo | null {
   const r = rec(raw);
   const id = str(r.id);
@@ -150,8 +197,12 @@ export function normalizePlugin(raw: unknown): PluginInfo | null {
     icon: str(r.icon),
     author: str(r.author),
     source: str(r.source),
+    reviewed: r.reviewed === true ? true : undefined,
+    registryVersion: str(r.registryVersion),
+    code: typeof r.main === "string" || mockProcess() ? true : undefined,
     enabled: r.enabled === true,
-    unreviewed: r.unreviewed !== false,
+    builtin: r.builtin === true ? true : undefined,
+    unreviewed: r.builtin === true ? false : r.unreviewed !== false,
     needsApproval: r.needsApproval === true,
     error: str(r.error),
     permissions: normalizePermissions(r.permissions),
@@ -159,7 +210,7 @@ export function normalizePlugin(raw: unknown): PluginInfo | null {
     widgets: (Array.isArray(r.widgets) ? r.widgets : []).flatMap((x: unknown) => {
       const w = rec(x);
       const wid = str(w.id);
-      return wid ? [{ id: wid, name: str(w.name) ?? wid, render: str(w.render) ?? "", sizes: (Array.isArray(w.sizes) ? w.sizes : []).filter((s): s is string => typeof s === "string"), settings: normalizeFields(w.settings) }] : [];
+      return wid ? [{ id: wid, name: str(w.name) ?? wid, render: str(w.render) ?? "", sizes: (Array.isArray(w.sizes) ? w.sizes : []).filter((s): s is string => typeof s === "string"), settings: normalizeFields(w.settings), preview: w.preview }] : [];
     }),
     actions: (Array.isArray(r.actions) ? r.actions : []).flatMap((x: unknown) => {
       const a = rec(x);
@@ -368,6 +419,79 @@ export const api = {
   grantPlugin: (id: string, permissions: PluginPermissions) => request<unknown>(`/api/plugins/${encodeURIComponent(id)}/grant`, json("POST", { permissions })),
   setPluginEnabled: (id: string, enabled: boolean) => request<unknown>(`/api/plugins/${encodeURIComponent(id)}/enabled`, json("POST", { enabled })),
   putPluginSettings: (id: string, settings: Record<string, unknown>) => request<unknown>(`/api/plugins/${encodeURIComponent(id)}/settings`, json("PUT", settings)),
+  /** The community registry. null when this agent has no registry endpoint (older agent); throws when the agent has nothing to show (502). */
+  getRegistry: async (refresh = false): Promise<RegistryResult | null> => {
+    try {
+      const o = rec(await request<unknown>(`/api/plugins/registry${refresh ? "?refresh=1" : ""}`));
+      const list = Array.isArray(o.plugins) ? o.plugins : [];
+      return { plugins: list.flatMap((x: unknown) => normalizeRegistryEntry(x) ?? []), stale: o.stale === true, fetchedAt: typeof o.fetchedAt === "number" ? o.fetchedAt : undefined };
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
+  },
+  /** What a registry plugin adds and asks for (tiles with sample data). Cached for the session; null when unavailable. */
+  getRegistryManifest: (id: string): Promise<RegistryManifest | null> => {
+    let p = manifestCache.get(id);
+    if (!p) {
+      p = request<unknown>(`/api/plugins/registry/${encodeURIComponent(id)}/manifest`).then(normalizeRegistryManifest, () => null);
+      manifestCache.set(id, p);
+      p.then((m) => { if (!m) manifestCache.delete(id); });
+    }
+    return p;
+  },
+  /** README of a registry plugin, raw markdown; "" when it has none. */
+  getRegistryReadme: async (id: string): Promise<string> => {
+    let res: Response;
+    try { res = await fetch(`/api/plugins/registry/${encodeURIComponent(id)}/readme`); } catch { throw new ApiError(t("Cannot reach the Nookdeck agent"), 0); }
+    if (res.status === 404) return "";
+    if (res.status === 413) return t("The description is too long to show here. Read it in the plugin's repository.");
+    if (!res.ok) throw new ApiError(`${res.status} ${res.statusText}`, res.status);
+    return res.text();
+  },
+  /** Installs a registry plugin; it comes back disabled until its permissions are granted. */
+  installFromRegistry: async (id: string): Promise<PluginInfo> => {
+    try {
+      const p = normalizePlugin(await request<unknown>("/api/plugins/install-from-registry", json("POST", { id })));
+      if (!p) throw new ApiError(t("The agent did not return a plugin"), 0);
+      return p;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) throw new ApiError(t("Not installed, for your safety: the plugin's files do not match the version Nookdeck reviewed. Try again later, or tell the plugin's author."), 409);
+      throw e;
+    }
+  },
+  /** Updates an installed registry plugin. It may come back needsApproval when it now asks for more. */
+  updatePlugin: async (id: string): Promise<PluginInfo> => {
+    try {
+      const p = normalizePlugin(await request<unknown>(`/api/plugins/${encodeURIComponent(id)}/update`, json("POST")));
+      if (!p) throw new ApiError(t("The agent did not return a plugin"), 0);
+      return p;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) throw new ApiError(t("Not updated: this plugin did not come from the Store, or the version is not newer. If the files changed after review, Nookdeck refuses them for your safety."), 409);
+      throw e;
+    }
+  },
+  /** Process state of a code plugin. null when the agent has no process endpoints (older agent). */
+  getPluginProcess: async (id: string): Promise<PluginProcess | null> => {
+    if (mockProcess()) return mockState(id);
+    try {
+      const o = rec(await request<unknown>(`/api/plugins/${encodeURIComponent(id)}/process`));
+      const state = (["running", "stopped", "crashed", "failed"] as const).find((s) => s === o.state);
+      return state ? { state, pid: typeof o.pid === "number" ? o.pid : undefined, restarts: typeof o.restarts === "number" ? o.restarts : undefined, startedAt: typeof o.startedAt === "number" ? o.startedAt : undefined, lastError: str(o.lastError) } : null;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
+  },
+  /** The last `n` log lines of a code plugin. */
+  getPluginLogs: async (id: string, n = 50): Promise<string[]> => {
+    if (mockProcess()) return mockLogs(id).slice(-n);
+    const o = await request<unknown>(`/api/plugins/${encodeURIComponent(id)}/logs?lines=${n}`);
+    const list = Array.isArray(o) ? o : rec(o).lines;
+    return (Array.isArray(list) ? list : []).filter((x): x is string => typeof x === "string").slice(-n);
+  },
+  restartPlugin: async (id: string): Promise<void> => { if (mockProcess()) { mockSet(id, "running"); return; } await request<unknown>(`/api/plugins/${encodeURIComponent(id)}/restart`, json("POST")); },
+  stopPlugin: async (id: string): Promise<void> => { if (mockProcess()) { mockSet(id, "stopped"); return; } await request<unknown>(`/api/plugins/${encodeURIComponent(id)}/stop`, json("POST")); },
   deletePlugin: (id: string) => request<unknown>(`/api/plugins/${encodeURIComponent(id)}`, { method: "DELETE" }),
   getLayout: () => request<Layout>("/api/layout"),
   putLayout: (layout: Layout) => request<unknown>("/api/layout", json("PUT", layout)),

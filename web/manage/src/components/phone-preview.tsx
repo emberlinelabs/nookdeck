@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { api } from "@/api";
+import { api, PLUGINS_CHANGED } from "@/api";
 import { IconAlertTriangle as Warn, IconDeviceMobile as Iphone, IconRotateClockwise as RotateRight, IconDeviceTablet as Tablet } from "@tabler/icons-react";
 import { SegmentedControl } from "@/components/ui/knowns/segmented-control";
 import { Select } from "@/components/ui/knowns/select";
 import { Input } from "@/components/ui/knowns/input";
 import { CUSTOM_MAX, CUSTOM_MIN, SCREEN_PRESETS, useScreenSize } from "@/lib/screen-size";
 import { t, useLanguage } from "@/lib/i18n";
+import { previewPluginData } from "@/lib/plugin-ui";
+import type { PluginInfo } from "@/types";
 import type { Layout } from "@/types";
 
 export interface PreviewController {
@@ -121,14 +123,24 @@ export function PhonePreview({ layout, override, ghost, controller, pageId, sele
   const base = override ?? layout;
   const assets = usePreviewAssets(base);
   const shown = useMemo(() => (Object.keys(assets).length ? { ...base, assets: { ...(base.assets ?? {}), ...assets } } : base), [base, assets]);
-  const latest = useRef({ layout: shown, pageId, selectedId });
-  latest.current = { layout: shown, pageId, selectedId };
+  // The installed plugins: their sample data is what plugin tiles show here (never invented values).
+  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  useEffect(() => {
+    let live = true;
+    const load = () => { api.getPlugins().then((p) => live && setPlugins(p), () => undefined); };
+    load();
+    window.addEventListener(PLUGINS_CHANGED, load);
+    return () => { live = false; window.removeEventListener(PLUGINS_CHANGED, load); };
+  }, []);
+  const pluginData = useMemo(() => previewPluginData(shown, plugins), [shown, plugins]);
+  const latest = useRef({ layout: shown, pageId, selectedId, pluginData });
+  latest.current = { layout: shown, pageId, selectedId, pluginData };
 
   const post = useCallback(() => {
     const w = frame.current?.contentWindow;
     if (!w) return;
-    const { layout, pageId, selectedId } = latest.current;
-    w.postMessage({ type: "pd-preview", layout, pageId, selectedId }, DECK_ORIGIN);
+    const { layout, pageId, selectedId, pluginData } = latest.current;
+    w.postMessage({ type: "pd-preview", layout, pageId, selectedId, pluginData }, DECK_ORIGIN);
   }, []);
 
   useEffect(() => {
@@ -153,7 +165,7 @@ export function PhonePreview({ layout, override, ghost, controller, pageId, sele
 
   useEffect(() => {
     if (ready) post();
-  }, [ready, shown, pageId, selectedId, post]);
+  }, [ready, shown, pageId, selectedId, pluginData, post]);
 
   useLayoutEffect(() => {
     const el = box.current;

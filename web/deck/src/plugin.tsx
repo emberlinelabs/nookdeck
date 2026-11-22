@@ -31,14 +31,16 @@ export function PluginTile(props: PluginTileProps) {
   const th = props.th
   const pad = tw >= 170 ? 14 : 10
   const col = props.textColor || undefined
-  if (!e || 'error' in e) {
+  if (!e || 'error' in e || 'custom' in e) {
     const msg = e && 'error' in e ? e.error : ''
-    const fr = friendlyError(msg)
+    // "no preview|Name · Kind": the manage preview has no sample data for this tile
+    const np = msg.indexOf('no preview|') === 0 ? msg.slice(11) : null
+    const fr = np === null ? friendlyError(msg) : null
     return (
       <div class="pd-vl pd-pl pd-pl--err" style={{ padding: pad + 'px' }}>
         <Icon name="plug-off" size={Math.max(16, Math.min(28, Math.floor(th * 0.3)))} />
-        <span class="pd-pl__e">{fr ? t(fr) : t('Plugin unavailable')}</span>
-        {msg && !fr && th >= 80 ? <span class="pd-pl__m">{msg}</span> : null}
+        <span class="pd-pl__e">{np !== null ? t('No preview') : fr ? t(fr) : t('Plugin unavailable')}</span>
+        {np ? <span class="pd-pl__m">{np}</span> : msg && !fr && np === null && th >= 80 ? <span class="pd-pl__m">{msg}</span> : null}
       </div>
     )
   }

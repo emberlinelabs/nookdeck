@@ -1,7 +1,8 @@
 import { isIconName } from "@shared/icons";
 import { t } from "@/lib/i18n";
 import { pluginSizes } from "@/lib/plugins";
-import type { Action, AiProvider, HassEntity, Item, MacApp, PluginInfo, Sound, WidgetKind } from "@/types";
+import { findFree, randomId, takenIds, uniquePageId } from "@/lib/layout";
+import type { Layout, Action, AiProvider, HassEntity, Item, MacApp, PluginInfo, Sound, WidgetKind } from "@/types";
 
 export type PaletteGroup = "widget" | "media" | "sound" | "home" | "app" | "keys" | "system" | "plugin";
 
@@ -163,6 +164,24 @@ export function pluginEntries(plugins: PluginInfo[]): PaletteEntry[] {
       make: () => button(a.name, "sparkles", { type: "plugin", plugin: p.id, action: a.id, settings: defaults(a.settings) }),
     })),
   ]);
+}
+
+/** Puts a widget of a plugin on a page at the first free spot. `error` says why it did not fit. */
+export function placePluginTile(layout: Layout, pageIdx: number, plugin: PluginInfo, widgetId: string): { layout: Layout; itemId: string } | { error: string } {
+  // pageIdx one past the last screen means "a new screen".
+  if (pageIdx === layout.pages.length) {
+    const name = t("Screen {n}", { n: pageIdx + 1 });
+    layout = { ...layout, pages: [...layout.pages, { id: uniquePageId(name, layout.pages), name, columns: 8, rows: 3, items: [] }] };
+  }
+  const page = layout.pages[pageIdx];
+  const entry = pluginEntries([plugin]).find((e) => e.key === `pl-${plugin.id}-w-${widgetId}`);
+  if (!page || !entry) return { error: t("This tile cannot be placed.") };
+  const [w, h] = entry.size;
+  const at = findFree(page, w, h);
+  if (!at) return { error: t("No free space big enough on this screen. Pick another screen or make room first.") };
+  const bp = entry.make();
+  const item = { ...bp, id: randomId("w", takenIds(layout, page, bp)), ...at, ...(w > 1 || h > 1 ? { w, h } : {}) } as Item;
+  return { layout: { ...layout, pages: layout.pages.map((pg, i) => (i === pageIdx ? { ...pg, items: [...pg.items, item] } : pg)) }, itemId: item.id };
 }
 
 const defaults = (fields: PluginInfo["widgets"][number]["settings"]): Record<string, unknown> =>

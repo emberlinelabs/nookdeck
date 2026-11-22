@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { IconAlarm as Alarm, IconBolt as Bolt, IconBraces as Braces, IconDevices as Devices, IconInfoCircle as Info, IconLayoutGrid as Grid, IconPalette as Palette, IconPuzzle as Puzzle, IconShieldCheck as Shield, IconVolume as Volume } from "@tabler/icons-react";
+import { IconAlarm as Alarm, IconBolt as Bolt, IconChevronDown as Chevron, IconBraces as Braces, IconDevices as Devices, IconInfoCircle as Info, IconLayoutGrid as Grid, IconPalette as Palette, IconPuzzle as Puzzle, IconShieldCheck as Shield, IconVolume as Volume } from "@tabler/icons-react";
 import { Tooltip } from "@/components/ui/knowns/tooltip";
 import { SegmentedControl } from "@/components/ui/knowns/segmented-control";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarHeader, SidebarItem, useSidebar } from "@/components/ui/knowns/blocks/sidebar/sidebar";
@@ -60,6 +60,28 @@ function useFold(name: string): [boolean, (o: boolean) => void] {
   return [open, (o) => { setOpen(o); try { window.localStorage.setItem(key, o ? "1" : "0"); } catch { /* not remembered */ } }];
 }
 
+/** Fold state of a sub-group: remembered once the user changes it; until then it follows `fallback`. */
+function useSubFold(name: string, fallback: boolean): [boolean, (o: boolean) => void] {
+  const key = `nookdeck.sidebar.${name}Open`;
+  const [saved, setSaved] = useState<boolean | null>(() => { try { const v = window.localStorage.getItem(key); return v === "1" ? true : v === "0" ? false : null; } catch { return null; } });
+  return [saved ?? fallback, (o) => { setSaved(o); try { window.localStorage.setItem(key, o ? "1" : "0"); } catch { /* not remembered */ } }];
+}
+
+/** A small foldable list inside the Plugins group. Folded, it still shows the current page (`pinned`) so you see where you are. */
+function SubGroup({ label, count, open, onOpen, active, pinned, children }: { label: string; count: number; open: boolean; onOpen: (o: boolean) => void; active: boolean; pinned: ReactNode; children: ReactNode }) {
+  return (
+    <div role="group" aria-label={label} className="flex flex-col gap-0.5">
+      <button type="button" aria-expanded={open} onClick={() => onOpen(!open)}
+        className={`flex h-6 items-center gap-1 rounded-md px-1.5 text-left text-[10.5px] font-semibold uppercase tracking-wider transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring ${active && !open ? "text-foreground" : "text-muted-foreground/80"}`}>
+        <Chevron aria-hidden="true" className={`size-3 flex-none transition-transform ${open ? "" : "-rotate-90"}`} />
+        <span className="truncate">{label} ({count})</span>
+        {active && !open && <span aria-hidden="true" className="ml-auto size-1.5 flex-none rounded-full bg-primary" />}
+      </button>
+      {open ? children : pinned}
+    </div>
+  );
+}
+
 const LANGS: { value: Language; label: string }[] = [{ value: "en", label: "EN" }, { value: "vi", label: "VI" }, { value: "zh", label: "中文" }];
 
 function VersionChip({ about, onAbout }: { about: About; onAbout: () => void }) {
@@ -84,6 +106,15 @@ export function AppSidebar({ tab, onTab, attention, about, repo, lang, onLang, o
   const [actionsOpen, setActionsOpen] = useFold("actions");
   const [pluginsOpen, setPluginsOpen] = useFold("plugins");
   const [systemOpen, setSystemOpen] = useFold("system");
+  const [builtinOpen, setBuiltinOpen] = useSubFold("pluginsBuiltin", false);
+  const [communityOpen, setCommunityOpen] = useSubFold("pluginsCommunity", community.length <= 5);
+  const builtinActive = BUILTIN_PLUGINS.some((p) => tab === `plugin/${p.id}`);
+  const communityActive = community.some((p) => tab === `plugin/${p.id}`);
+  const COMMUNITY_MAX = 6;
+  // More than 6: the first 5 and "Show all"; the current page stays visible even when it is further down.
+  const communityShown = community.length > COMMUNITY_MAX ? community.filter((p, i) => i < 5 || tab === `plugin/${p.id}`) : community;
+  const builtinRows = BUILTIN_PLUGINS;
+  const builtinRow = (p: (typeof BUILTIN_PLUGINS)[number]) => row({ value: `plugin/${p.id}`, label: p.name, icon: <Icon name={p.icon} size={16} /> }, true);
   const folds: Record<string, [boolean, (o: boolean) => void]> = { Layout: [layoutOpen, setLayoutOpen], Actions: [actionsOpen, setActionsOpen] };
   const row = (x: Section, raw = false) => (
     <div key={x.value} id={`tab-${x.value}`}>
@@ -119,11 +150,20 @@ export function AppSidebar({ tab, onTab, attention, about, repo, lang, onLang, o
           <SidebarGroup label={t("Plugins")} collapsible open={pluginsOpen} onOpenChange={setPluginsOpen} active={tab === "plugins" || tab.startsWith("plugin/")} count={pluginsOpen ? undefined : BUILTIN_PLUGINS.length + community.length}>
             {row({ value: "plugins", label: "All plugins", icon: <Puzzle /> })}
             {!rail && (
-              <div className="ml-4 flex flex-col gap-0.5 border-l pl-1.5">
-                <div className="px-2 pt-1 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground/80">{t("Built-in")}</div>
-                {BUILTIN_PLUGINS.map((p) => row({ value: `plugin/${p.id}`, label: p.name, icon: <Icon name={p.icon} size={16} /> }, true))}
-                {community.length > 0 && <div className="px-2 pt-2 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground/80">{t("Community plugins")}</div>}
-                {community.map((p) => row({ value: `plugin/${p.id}`, label: p.name, icon: <Puzzle /> }, true))}
+              <div className="ml-4 flex flex-col gap-1 border-l pl-1.5">
+                <SubGroup label={t("Built-in")} count={BUILTIN_PLUGINS.length} open={builtinOpen} onOpen={setBuiltinOpen} active={builtinActive}
+                  pinned={builtinActive ? builtinRows.filter((p) => tab === `plugin/${p.id}`).map((p) => builtinRow(p)) : null}>
+                  {builtinRows.map((p) => builtinRow(p))}
+                </SubGroup>
+                {community.length > 0 && (
+                  <SubGroup label={t("Community")} count={community.length} open={communityOpen} onOpen={setCommunityOpen} active={communityActive}
+                    pinned={communityActive ? community.filter((p) => tab === `plugin/${p.id}`).map((p) => row({ value: `plugin/${p.id}`, label: p.name, icon: <Puzzle /> }, true)) : null}>
+                    {communityShown.map((p) => row({ value: `plugin/${p.id}`, label: p.name, icon: <Puzzle /> }, true))}
+                    {community.length > COMMUNITY_MAX && (
+                      <button type="button" onClick={() => onTab("plugins")} className="h-7 rounded-md px-2 text-left text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">{t("Show all ({n})", { n: community.length })}</button>
+                    )}
+                  </SubGroup>
+                )}
               </div>
             )}
           </SidebarGroup>

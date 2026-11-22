@@ -7,6 +7,7 @@ export const BUILTIN_PLUGINS = [
   { id: "opencode", name: "OpenCode", icon: "opencode", desc: "Sessions and cost on the phone" },
   { id: "hass", name: "Home Assistant", icon: "home", desc: "Lights, switches, scenes and sensors" },
   { id: "weather", name: "Weather", icon: "sun", desc: "Forecast tiles and the temperature unit" },
+  { id: "quota", name: "AI usage", icon: "gauge", desc: "How much of your AI usage window is left" },
 ] as const;
 export type BuiltinId = (typeof BUILTIN_PLUGINS)[number]["id"];
 export const AI_TOOL_IDS = ["claude", "codex", "grok", "antigravity", "opencode"] as const;

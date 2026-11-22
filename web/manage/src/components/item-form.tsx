@@ -32,7 +32,7 @@ import { useSounds } from "@/lib/sounds";
 import { FieldInput } from "@/components/plugins-panel";
 import { pluginSizes, useEnabledPlugins } from "@/lib/plugins";
 import type { PluginField, PluginInfo, PluginRef } from "@/types";
-import { ACTION_TYPES, AI_PROVIDERS, WIDGET_KINDS, METRIC_WIDGETS, type MetricWidget, type EntityOptions, type GeoPlace, type PushOptions, type WeatherOptions, type MacApp, type Action, type ActionType, type AiProvider, type Item, type Page, type WidgetKind } from "@/types";
+import { ACTION_TYPES, AI_PROVIDERS, WIDGET_KINDS, METRIC_WIDGETS, type MetricWidget, type EntityOptions, type GeoPlace, type PushOptions, type WeatherOptions, type QuotaOptions, type MacApp, type Action, type ActionType, type AiProvider, type Item, type Page, type WidgetKind } from "@/types";
 
 export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onDelete, onResize, onWidgetKind, onMoveToPage }: {
   item: Item;
@@ -600,6 +600,59 @@ function PluginWidgetForm({ item, plugins, onChange }: { item: Extract<Item, { k
   const found = findPluginWidget(plugins, ref);
   if (!ref) return <Alert tone="warning" icon={<AlertTriangle className="size-4" />}>{t("This tile has no plugin set.")}</Alert>;
   if (!found) return <Alert tone="warning" icon={<AlertTriangle className="size-4" />}>{t("The plugin {id} is missing or off. The tile shows a placeholder until it is back.", { id: ref.id })}</Alert>;
+  const flat = ref.settings ?? {};
+  const put = (settings: Record<string, string | number | boolean>) => onChange({ ...ref, settings });
+  // The two core plugins keep the richer editors of the legacy tiles; their values stay flat (string, number, boolean).
+  if (ref.id === "core.quota") {
+    const provider = (typeof flat.provider === "string" && flat.provider ? flat.provider : "claude") as AiProvider;
+    const w = typeof flat.windows === "string" && flat.windows ? flat.windows : "all";
+    const q: QuotaOptions = {
+      ...(typeof flat.chart === "string" && flat.chart ? { chart: flat.chart as QuotaOptions["chart"] } : {}),
+      ...(w === "all" ? {} : { windows: w === "main" ? "main" as const : w.split(",").map((x) => x.trim()).filter(Boolean) }),
+      ...(flat.showReset === false ? { showReset: false } : {}),
+    };
+    const fromQuota = (n: QuotaOptions | undefined, prov: AiProvider) => {
+      const out: Record<string, string | number | boolean> = { ...flat, provider: prov };
+      delete out.chart; delete out.windows; delete out.showReset;
+      if (n?.chart) out.chart = n.chart;
+      if (n?.windows) out.windows = Array.isArray(n.windows) ? n.windows.join(",") : n.windows;
+      if (n?.showReset === false) out.showReset = false;
+      return out;
+    };
+    return (
+      <>
+        <p className="text-xs text-muted-foreground">{found.plugin.name} · {found.widget.name}</p>
+        <QuotaOptionsForm provider={provider} value={Object.keys(q).length ? q : undefined} onChange={(n) => put(fromQuota(n, provider))} />
+        <Field label={t("AI tool")} id="f-provider" hint={t("Which tool's quota this tile shows.")}>
+          <Select id="f-provider" value={provider} onChange={(e) => { const out = fromQuota(Object.keys(q).length ? q : undefined, e.target.value as AiProvider); delete out.account; put(out); }}
+            options={AI_PROVIDERS.map((x) => ({ value: x, label: PROVIDER_LABEL[x] ?? x }))} />
+        </Field>
+      </>
+    );
+  }
+  if (ref.id === "core.weather") {
+    const wo: WeatherOptions = {
+      ...(typeof flat.source === "string" && flat.source ? { source: flat.source as WeatherOptions["source"] } : {}),
+      ...(typeof flat.entity === "string" && flat.entity ? { entity: flat.entity } : {}),
+      ...(typeof flat.lat === "number" && typeof flat.lon === "number" ? { location: { name: typeof flat.locationName === "string" ? flat.locationName : "", lat: flat.lat, lon: flat.lon } } : {}),
+      ...(typeof flat.show === "string" && flat.show ? { show: flat.show as WeatherOptions["show"] } : {}),
+      ...(typeof flat.units === "string" && flat.units ? { units: flat.units as WeatherOptions["units"] } : {}),
+    };
+    return (
+      <>
+        <p className="text-xs text-muted-foreground">{found.plugin.name} · {found.widget.name}</p>
+        <WeatherForm value={wo} onChange={(n) => {
+          const out: Record<string, string | number | boolean> = {};
+          if (n.source) out.source = n.source;
+          if (n.entity) out.entity = n.entity;
+          if (n.location) { out.locationName = n.location.name; out.lat = n.location.lat; out.lon = n.location.lon; }
+          if (n.show) out.show = n.show;
+          if (n.units) out.units = n.units;
+          put(out);
+        }} />
+      </>
+    );
+  }
   return (
     <>
       <p className="text-xs text-muted-foreground">{found.plugin.name} · {found.widget.name}</p>

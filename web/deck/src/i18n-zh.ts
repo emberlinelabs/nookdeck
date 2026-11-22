@@ -199,6 +199,7 @@ export const ZH: { [en: string]: string } = {
   "Nothing to show": "没有可显示的内容",
   "OK": "正常",
   "Warning": "警告",
+  "No preview": "暂无预览",
   "Plugin missing": "插件缺失",
   "Plugin off": "插件已关闭",
   "Needs approval": "需要批准",

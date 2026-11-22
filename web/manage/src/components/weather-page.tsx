@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/knowns/button";
 import { Field } from "@/components/ui/knowns/input";
 import { SegmentedControl } from "@/components/ui/knowns/segmented-control";
 import { Icon } from "@/components/icon";
+import { PluginsPanel } from "@/components/plugins-panel";
 import { t, useLanguage } from "@/lib/i18n";
 import type { Layout } from "@/types";
 
@@ -31,6 +32,8 @@ export function WeatherPage({ layout, update, onGoScreens }: { layout: Layout; u
           </div>
         </CardContent>
       </Card>
+      {/* The agent's core.weather plugin: its on/off switch and settings, when this agent lists it. */}
+      <PluginsPanel update={update} only="core.weather" quietIfMissing />
     </div>
   );
 }
