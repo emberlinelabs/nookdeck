@@ -215,4 +215,7 @@ export const ZH_PLUGINS: Record<string, string> = {
   "List view": "列表视图",
   "View": "视图",
   "Installed plugins": "已安装的插件",
+  "That plugin link is not valid, so it was ignored.": "此插件链接无效，已被忽略。",
+  "{name} is already installed.": "{name} 已安装。",
+  "That plugin is not in the Store, so nothing was installed.": "该插件不在商店中，因此没有安装任何内容。",
 };

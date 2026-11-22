@@ -26,6 +26,7 @@ import { mergeLayouts } from "@/lib/layout-merge";
 import { PluginsPanel } from "@/components/plugins-panel";
 import { placePluginTile } from "@/lib/palette";
 import { PluginsOverview } from "@/components/plugins-overview";
+import { parsePluginLink, type PluginLink } from "@/lib/plugin-link";
 import { WeatherPage } from "@/components/weather-page";
 import { HassCard } from "@/components/hass-card";
 import { WebhookCard } from "@/components/webhook-card";
@@ -70,6 +71,21 @@ export default function App() {
     window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#plugin/hass`);
     setTabState("plugin/hass");
   }, [layoutReady]);
+  // Plugin deeplinks (#plugins?add=<id> or #plugins?install=<https address>): open the right dialog, never install by itself. The hash is cleared at once.
+  const [pluginLink, setPluginLink] = useState<PluginLink | null>(null);
+  useEffect(() => {
+    const read = () => {
+      const r = parsePluginLink(window.location.hash);
+      if (!r) return;
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#plugins`);
+      setTabState("plugins");
+      if ("link" in r) setPluginLink(r.link);
+      else setStatus({ kind: "error", text: t("That plugin link is not valid, so it was ignored.") });
+    };
+    read();
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, []);
   const setTab = useCallback((v: Tab) => {
     setTabState(v);
     if (window.location.hash !== `#${v}`) window.location.hash = v;
@@ -356,7 +372,7 @@ export default function App() {
           {tab === "screen" && <ScreenPanel layout={layout} pageId={layout.pages[safePageIdx]!.id} update={update} orientation={orientation} onOrientation={setOrientation} />}
           {tab === "rules" && <div className="flex flex-col gap-4"><RulesPanel layout={layout} update={update} /><WebhookCard /></div>}
           {tab === "sounds" && <SoundsPanel />}
-          {tab === "plugins" && <PluginsOverview update={update} layout={layout} onSaveLayout={() => { window.setTimeout(() => void saveRef.current(), 80); }}
+          {tab === "plugins" && <PluginsOverview deeplink={pluginLink} onDeeplinkDone={() => setPluginLink(null)} update={update} layout={layout} onSaveLayout={() => { window.setTimeout(() => void saveRef.current(), 80); }}
             onAddTile={(p, widgetId, pi) => { const r = placePluginTile(layout, pi, p, widgetId); if ("error" in r) return r.error; update(() => r.layout); setPageIdx(pi); setItemId(r.itemId); setTab("screens"); return null; }} />}
           {(AI_TOOL_IDS as readonly string[]).includes(tab.replace("plugin/", "")) && tab.startsWith("plugin/") && <IntegrationsPanel key={tab} tool={tab.slice(7) as AiProvider} />}
           {tab === "plugin/hass" && <div className="max-w-3xl"><HassCard /></div>}

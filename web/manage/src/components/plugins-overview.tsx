@@ -1,3 +1,4 @@
+import { sameRepo, type PluginLink } from "@/lib/plugin-link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { IconBook as Book, IconLink as LinkIcon, IconSearch as Search, IconBuildingStore as Store, IconCloudOff as Offline } from "@tabler/icons-react";
 import { Alert } from "@/components/ui/knowns/alert";
@@ -26,7 +27,7 @@ const fromInstalled = (p: PluginInfo, reg?: RegistryEntry): PluginDetails => reg
 const NO_PERMS: PluginPermissions = { network: [], shell: false, keyboard: false, storage: false };
 
 /** The Plugins page: find plugins in the Store, manage the installed ones, and see what is waiting for an update. */
-export function PluginsOverview({ update, layout, onSaveLayout, onAddTile }: { update: (fn: (l: Layout) => Layout) => void; layout: Layout; onSaveLayout: () => void; onAddTile: (p: PluginInfo, widgetId: string, pageIdx: number) => string | null }) {
+export function PluginsOverview({ deeplink, onDeeplinkDone, update, layout, onSaveLayout, onAddTile }: { deeplink?: PluginLink | null; onDeeplinkDone?: () => void; update: (fn: (l: Layout) => Layout) => void; layout: Layout; onSaveLayout: () => void; onAddTile: (p: PluginInfo, widgetId: string, pageIdx: number) => string | null }) {
   useLanguage();
   const [tab, setTab] = useState<Tab>("installed");
   const [query, setQuery] = useState("");
@@ -39,6 +40,7 @@ export function PluginsOverview({ update, layout, onSaveLayout, onAddTile }: { u
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [linkSource, setLinkSource] = useState("");
   const [view, setView] = usePluginView();
 
   const [rev, setRev] = useState(0);
@@ -68,6 +70,26 @@ export function PluginsOverview({ update, layout, onSaveLayout, onAddTile }: { u
     if (!permissions) return setError(t("Could not read what this plugin asks for, so it was not installed. Try again in a moment."));
     setAsk({ entry: e, permissions });
   };
+
+  // A deeplink waits for the Store list, then opens the Add dialog (or the link dialog). It never installs by itself.
+  useEffect(() => {
+    if (!deeplink || (registry === undefined && !registryError) || installed === null) return;
+    const entry = deeplink.kind === "add"
+      ? entries.find((e) => e.id === deeplink.id)
+      : entries.find((e) => e.repo && sameRepo(e.repo, deeplink.source));
+    onDeeplinkDone?.();
+    if (entry) {
+      setTab("discover");
+      if (entry.installed && !entry.updateAvailable && !entry.fromLink) setNotice(t("{name} is already installed.", { name: entry.name }));
+      else void askFor(entry);
+    } else if (deeplink.kind === "install") {
+      setTab("installed");
+      setLinkSource(deeplink.source);
+      setLinkOpen(true);
+    } else {
+      setError(t("That plugin is not in the Store, so nothing was installed."));
+    }
+  }, [deeplink, registry, registryError, installed, entries]);
 
   const addEntry = async () => {
     const a = ask;
@@ -204,7 +226,7 @@ export function PluginsOverview({ update, layout, onSaveLayout, onAddTile }: { u
         {tab === "discover" && discover}
         {tab === "updates" && (shownUpdates.length > 0 ? grid(shownUpdates) : <Empty icon={<Store />} title={t("Everything is up to date")} />)}
         <PluginsPanel view={view} rev={rev} hideList={tab !== "installed"} installedView update={update} layout={layout} onSaveLayout={onSaveLayout} query={query} onChanged={() => { loadInstalled(); loadRegistry(); }}
-          onDetails={openInstalled} onAddTile={onAddTile} linkOpen={linkOpen} onLinkClose={() => setLinkOpen(false)} header={firstRun} builtinExtra={builtinGrid} />
+          onDetails={openInstalled} onAddTile={onAddTile} linkOpen={linkOpen} linkSource={linkSource} onLinkClose={() => { setLinkOpen(false); setLinkSource(""); }} header={firstRun} builtinExtra={builtinGrid} />
       </div>
 
       <PermissionDialog open={!!ask} name={ask?.entry.name ?? ""} version={ask?.entry.version ?? ""} author={ask?.entry.author} verified={ask?.entry.verified}

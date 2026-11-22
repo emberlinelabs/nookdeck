@@ -212,4 +212,7 @@ export const VI_PLUGINS: Record<string, string> = {
   "List view": "Dạng danh sách",
   "View": "Cách xem",
   "Installed plugins": "Plugin đã cài",
+  "That plugin link is not valid, so it was ignored.": "Liên kết plugin này không hợp lệ nên đã bị bỏ qua.",
+  "{name} is already installed.": "{name} đã được cài rồi.",
+  "That plugin is not in the Store, so nothing was installed.": "Plugin này không có trong Store nên chưa cài gì cả.",
 };

@@ -102,6 +102,8 @@ export interface PluginsPanelProps {
   /** The "Install from a link" dialog, opened by the page's header button. */
   linkOpen?: boolean;
   onLinkClose?: () => void;
+  /** An address to fill into the link dialog when it opens (from a deeplink). */
+  linkSource?: string;
   /** Shown above the list (first-run suggestions). */
   header?: React.ReactNode;
   /** Shown below the community plugins, above the built-in ones. */
@@ -110,7 +112,7 @@ export interface PluginsPanelProps {
 
 interface Removed { plugin: PluginInfo; before: Layout | null; alsoItems: boolean }
 
-export function PluginsPanel({ update, layout, onSaveLayout, only, quietIfMissing, installedView, hideList, query = "", onChanged, rev, view = "grid", onDetails, onAddTile, linkOpen, onLinkClose, header, builtinExtra }: PluginsPanelProps) {
+export function PluginsPanel({ update, layout, onSaveLayout, only, quietIfMissing, installedView, hideList, query = "", onChanged, rev, view = "grid", onDetails, onAddTile, linkOpen, linkSource, onLinkClose, header, builtinExtra }: PluginsPanelProps) {
   useLanguage();
   const [plugins, setPlugins] = useState<PluginInfo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -135,6 +137,7 @@ export function PluginsPanel({ update, layout, onSaveLayout, only, quietIfMissin
     }
   }, []);
   useEffect(() => { void load(); }, [load, rev]);
+  useEffect(() => { if (linkOpen && linkSource) setSource(linkSource); }, [linkOpen, linkSource]);
   const changed = async () => { await load(); onChanged?.(); };
 
   const fail = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
