@@ -1,0 +1,56 @@
+{
+  "id": "dev.nookdeck.clipboard-snippets",
+  "name": "Clipboard snippets",
+  "version": "1.0.0",
+  "nookdeck": ">=0.2.0",
+  "author": "Nookdeck",
+  "description": "Buttons that copy a saved piece of text to the clipboard",
+  "permissions": {
+    "network": [],
+    "shell": true
+  },
+  "actions": [
+    {
+      "id": "copy-mac",
+      "name": "Copy text (macOS)",
+      "settings": [
+        {
+          "key": "text",
+          "type": "string",
+          "label": "Text to copy"
+        }
+      ],
+      "run": {
+        "macro": [
+          {
+            "kind": "shell",
+            "command": "printf '%s' \"$NOOKDECK_SETTING_TEXT\" | pbcopy"
+          }
+        ]
+      }
+    },
+    {
+      "id": "copy-windows",
+      "name": "Copy text (Windows)",
+      "settings": [
+        {
+          "key": "text",
+          "type": "string",
+          "label": "Text to copy"
+        }
+      ],
+      "run": {
+        "macro": [
+          {
+            "kind": "shell",
+            "command": "Set-Clipboard -Value $env:NOOKDECK_SETTING_TEXT"
+          }
+        ]
+      }
+    }
+  ],
+  "widgets": [],
+  "themes": [],
+  "layouts": [],
+  "main": null
+}

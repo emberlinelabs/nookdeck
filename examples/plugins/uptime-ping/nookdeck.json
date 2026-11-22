@@ -1,0 +1,24 @@
+{
+  "$schema": "https://nookdeck.app/schema/plugin.json",
+  "id": "dev.nookdeck.uptime-ping",
+  "name": "Uptime ping",
+  "version": "1.0.0",
+  "nookdeck": ">=0.3.0",
+  "author": "Nookdeck",
+  "description": "Checks whether a web address answers, and how fast",
+  "permissions": { "network": ["nookdeck.app"] },
+  "widgets": [
+    {
+      "id": "status",
+      "name": "Site status",
+      "render": "status",
+      "sizes": ["2x1"],
+      "settings": [
+        { "key": "url", "type": "string", "label": "Address to check", "default": "https://nookdeck.app" },
+        { "key": "slowMs", "type": "number", "label": "Slow after (ms)", "default": 1500 }
+      ]
+    }
+  ],
+  "actions": [],
+  "main": "src/index.ts"
+}

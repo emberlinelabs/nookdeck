@@ -1,0 +1,13 @@
+{
+  "$schema": "https://nookdeck.app/schema/plugin.json",
+  "id": "dev.__AUTHOR__.__NAME__",
+  "name": "__TITLE__",
+  "version": "0.1.0",
+  "nookdeck": ">=0.3.0",
+  "author": "__AUTHOR__",
+  "description": "What this plugin does, in one line",
+  "permissions": { "network": [] },
+  "widgets": [{ "id": "hello", "name": "Hello", "render": "stat", "sizes": ["2x1"], "settings": [] }],
+  "actions": [],
+  "main": "src/index.ts"
+}

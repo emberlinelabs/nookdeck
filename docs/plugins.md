@@ -1,6 +1,6 @@
 # Writing Nookdeck plugins
 
-A plugin adds tiles and buttons to Nookdeck. It is a folder (usually a GitHub repo) with a `nookdeck.json` file. This guide covers the first phase: **no-code plugins**, which need no JavaScript. Code plugins come in a later release.
+A plugin adds tiles and buttons to Nookdeck. It is a folder (usually a GitHub repo) with a `nookdeck.json` file. This guide starts with **no-code plugins**, which need no JavaScript, and then covers [plugins with code](#plugins-with-code).
 
 ## Quick start
 
@@ -67,6 +67,8 @@ A widget is a tile. It describes where its data comes from and how to show it.
 
 `{{key}}` inserts a setting. `every` is the refresh time in seconds.
 
+**Commands never get `{{key}}`.** A `shell` macro step or a `command` source that contains `{{...}}` is rejected at install: a value with a quote, `;` or `$(...)` would run as code. The command reads its settings from the environment instead, as `NOOKDECK_SETTING_<KEY>` (key in capitals): `printf '%s' "$NOOKDECK_SETTING_TEXT" | pbcopy` on macOS/Linux, `$env:NOOKDECK_SETTING_TEXT` in PowerShell. Always put the variable in double quotes in sh.
+
 ### Sources
 
 - `http`: GET a URL, then `map` the JSON with dot paths (`$.a.b`). The host must be in `permissions.network`.
@@ -118,6 +120,78 @@ If the plugin is off or removed, its tiles show a neutral placeholder. Nothing e
 ## Themes and layout packs
 
 A plugin can also ship `themes` and `layouts`. Each shows an **Apply** or **Add screens** button on its card in the Plugins tab. They change your draft, and you press **Save** to keep them.
+
+## Plugins with code
+
+Use code when a widget needs logic a `source` cannot express: several requests, parsing, state, or reacting to a button press. A code plugin sets `"main"` in `nookdeck.json` to its entry file and exports `activate(ctx)`.
+
+```ts
+import { definePlugin } from "@nookdeck/plugin";
+
+export default definePlugin({
+  activate(ctx) {
+    ctx.widgets.provide("stars", async (settings) => {
+      const res = await ctx.net.fetch(`https://api.github.com/repos/${settings.repo}`);
+      const repo = await res.json();
+      return { render: "stat", data: { value: repo.stargazers_count, label: String(settings.repo) } };
+    }, { every: 300 });
+    ctx.actions.handle("open", async () => { /* ... */ });
+  },
+});
+```
+
+### How it runs
+
+Each code plugin runs in its own process, started by the agent, so a crash or a slow plugin cannot stop Nookdeck. The agent talks to it over JSON-RPC and draws its data with the same built-in renderers as no-code plugins: no plugin code runs on the phone. In the manage page, open the plugin's page to see whether it is running, stopped or crashed, read its last 50 log lines, and restart or stop it.
+
+### The context (`ctx`)
+
+| Member | Needs | What it does |
+|---|---|---|
+| `ctx.id` | | The plugin id |
+| `ctx.log(...)` | | Writes to the plugin's log (shown in manage) |
+| `ctx.settings.get()` | | The plugin-wide settings the user saved. `ctx.settings.onChange(fn)` runs after they change |
+| `ctx.storage.get/set` | `storage` | The plugin's own saved data |
+| `ctx.net.fetch(url, init?)` | `network` hosts | `fetch`, limited to the hosts you list |
+| `ctx.shell?.run(cmd)` | `shell` | Run a command, get `{ code, stdout }`. Present only when granted |
+| `ctx.keys?.hotkey / type` | `keyboard` | Press keys and type text. Present only when granted |
+| `ctx.widgets.provide(id, fn, { every })` | | Supply a widget's data now and every `every` seconds |
+| `ctx.widgets.push(id, update)` | | Push new data when something changes |
+| `ctx.actions.handle(id, fn)` | | Handle a button press |
+
+`ctx.shell` and `ctx.keys` exist only when the user granted that permission. A call that is not allowed (a host you did not list, storage without `storage`) rejects with a `PluginPermissionError`. A widget provider or an action handler receives the plugin-wide settings overlaid with the tile's own settings. The exact types are in `src/plugins/api.ts`, re-exported by `@nookdeck/plugin` (`PluginContext`, `PluginModule`, `WidgetUpdate`).
+
+### Limits
+
+| What | Limit |
+|---|---|
+| `net.fetch` | 5 MB response, 15 s, 5 redirects, only your listed hosts (checked on every redirect) |
+| `shell.run` | 30 s |
+| `storage` | 1 MB in total |
+| Widget refresh | `every` defaults to 60 s, minimum 5 s |
+| After a crash | restarts after 0.5, 2, 10, then 60 s; marked failed after 8 crashes in a row |
+| Idle | a plugin with no calls for 5 minutes is stopped and starts again on the next call |
+
+### Permissions and trust
+
+Plugins that ask for `shell` or `keyboard` run code that can control the computer, so the manage page marks them **Runs trusted code** and the install dialog says so. Ask for the least you need, and list each host exactly. Secrets go in settings of type `secret`, which stay on the computer.
+
+### Dev loop
+
+1. `nookdeck plugin new my-plugin` creates a folder from the template.
+2. `nookdeck plugin dev my-plugin` links the folder and reloads on every save.
+3. Read the log lines in the plugin's page in manage.
+4. `nookdeck plugin pack` makes a zip and its sha256 for release.
+
+### Publishing
+
+Put the plugin in a GitHub repo and tell people the address; it installs directly. To be listed in the Store, open a PR to [howznguyen/nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins) (see below). The three tiers (Community, Verified, Core) are described in [CONTRIBUTING.md](../CONTRIBUTING.md#plugins).
+
+### Samples
+
+- [`github-stars`](../examples/plugins/github-stars): code, `net.fetch` to api.github.com, a stat and a chart.
+- [`uptime-ping`](../examples/plugins/uptime-ping): code, checks a URL, `status` renderer.
+- [`clipboard-snippets`](../examples/plugins/clipboard-snippets): no code, actions with the `shell` permission.
 
 ## Share it
 

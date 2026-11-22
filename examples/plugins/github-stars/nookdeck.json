@@ -1,0 +1,29 @@
+{
+  "$schema": "https://nookdeck.app/schema/plugin.json",
+  "id": "dev.nookdeck.github-stars",
+  "name": "GitHub stars",
+  "version": "1.0.0",
+  "nookdeck": ">=0.3.0",
+  "author": "Nookdeck",
+  "description": "Star count of a GitHub repository, with a short history",
+  "permissions": { "network": ["api.github.com"], "storage": true },
+  "settings": [{ "key": "token", "type": "secret", "label": "GitHub token (optional, raises the rate limit)" }],
+  "widgets": [
+    {
+      "id": "stars",
+      "name": "Stars",
+      "render": "stat",
+      "sizes": ["2x1", "2x2"],
+      "settings": [{ "key": "repo", "type": "string", "label": "Repository (owner/name)", "default": "howznguyen/nookdeck" }]
+    },
+    {
+      "id": "history",
+      "name": "Stars over time",
+      "render": "chart",
+      "sizes": ["2x2", "4x2"],
+      "settings": [{ "key": "repo", "type": "string", "label": "Repository (owner/name)", "default": "howznguyen/nookdeck" }]
+    }
+  ],
+  "actions": [],
+  "main": "src/index.ts"
+}
