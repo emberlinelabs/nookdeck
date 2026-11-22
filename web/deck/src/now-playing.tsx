@@ -93,7 +93,7 @@ interface Track {
  */
 function Cover(props: { track: Track | null; size: number; round: number; bare?: boolean; playing?: boolean }) {
   const st = { width: props.size + 'px', height: props.size + 'px', borderRadius: props.round + 'px' }
-  const disc = !!props.track?.cover
+  const disc = !!(props.track && props.track.cover)
   const cls = 'pd-npc' + (disc ? ' pd-npc--disc' : '') + (disc && props.playing && !reducedMotion() ? ' pd-npc--spin' : '')
   if (!props.track) {
     return (
