@@ -44,7 +44,7 @@ export const VI_PALETTE: Record<string, string> = {
   "Undo": "Hoàn tác",
   "Redo": "Làm lại",
   "Capture region": "Chụp vùng",
-  "Lock Mac": "Khoá máy",
+  "Lock computer": "Khoá máy",
   "Custom shortcut": "Phím tắt tuỳ chỉnh",
   "Type text": "Gõ chữ",
   "Open web address": "Mở địa chỉ web",

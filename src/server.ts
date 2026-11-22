@@ -5,7 +5,7 @@ import { resolveAsset } from "./assets";
 /** Embedded text assets served gzipped when the client accepts it; compressed once and kept (they never change). */
 const COMPRESSIBLE = /^(text\/|application\/(javascript|json|manifest\+json)|image\/svg\+xml)/;
 const gzCache = new Map<string, Uint8Array>();
-import { isLocal, lanIp, localHostName } from "./net";
+import { defaultAddress, isLocal, lanIp, localHostName, localResolves, phoneAddresses, tailnetName } from "./net";
 import { Pairing, cookieToken, expiryFrom, tokenCookie, withDevicesLock } from "./pairing";
 import { SOUND_MAX, SOUND_TYPES, SoundLibrary, SoundPlayer, bareId, SOUND_ID_HEX, type SpawnFn } from "./sounds";
 import type { HassLike } from "./automation-types";
@@ -31,6 +31,7 @@ import type { Stats } from "./stats";
 import type { VolumeChange, VolumeState } from "./actions";
 import { AiHub, QUOTA_SOURCE, realAiSources, type AiProviderId, type AiSources } from "./ai";
 import { agyPath } from "./ai/antigravity";
+import { findCli } from "./ai/find-cli";
 import { ToolStates, type ToolState } from "./ai/states";
 import { detectOpencode, opencodeDataFound, installPlugin, isPluginInstalled, opencodePath, pluginPath, readOpencodeSessions, uninstallPlugin } from "./ai/opencode";
 import { UpdateChecker } from "./update";
@@ -110,6 +111,10 @@ export interface StartOptions {
   sounds?: SoundLibrary;
   /** How sound player processes are started (tests: a fake; never plays audio). */
   soundSpawn?: SpawnFn;
+  /** tests: the MagicDNS name, the interface table and the mDNS check */
+  tailnetName?: () => Promise<string | null>;
+  interfaces?: () => NodeJS.Dict<import("node:os").NetworkInterfaceInfo[]>;
+  localResolves?: (name: string) => Promise<boolean>;
   /** Machine name for the .local address (tests). */
   hostName?: () => Promise<string>;
   /** layout-history folder (tests: a temp dir). */
@@ -341,11 +346,17 @@ export async function startServer(opts: StartOptions = {}) {
     if (to) send(to, { type: "weather", items }); else broadcast({ type: "weather", items });
   }
 
-  const pairingInfo = async () => {
+  const pairingInfo = async (all = false) => {
     const ip = lanIp();
     const port = server.port as number;
     const host = await (opts.hostName ?? localHostName)();
+    const tail = await (opts.tailnetName ?? tailnetName)().catch(() => null);
+    const list = phoneAddresses({ hostName: host, tailnetName: tail, all, ...(opts.interfaces ? { interfaces: opts.interfaces() } : {}) });
+    const addresses = list.map((a) => ({ ...a, url: `http://${a.host}:${port}/?pin=${pairing.pin}` }));
+    const resolves = await (opts.localResolves ?? localResolves)(host).catch(() => false);
     return {
+      addresses,
+      defaultAddress: defaultAddress(list, { localResolves: resolves, lanIp: ip }),
       pin: pairing.pin,
       url: `http://${ip}:${port}/?pin=${pairing.pin}`,
       lanIp: ip,
@@ -529,8 +540,12 @@ export async function startServer(opts: StartOptions = {}) {
   /** Phone-facing routes: only names that really are this machine (LAN IP, .local, localhost); other Hosts are rebinding. */
   const guardPhone = async (server: Server<WsData>, req: Request): Promise<Response | null> => {
     const host = await (opts.hostName ?? localHostName)().catch(() => "");
-    const names = phoneNames([host]);
-    return hostAllowed(req.headers.get("host"), server.port as number, names) ? null : json({ error: "forbidden: bad Host" }, 403);
+    const port = server.port as number;
+    const ips = opts.interfaces ? Object.values(opts.interfaces()).flatMap((l) => (l ?? []).map((a) => a.address)) : [];
+    if (hostAllowed(req.headers.get("host"), port, phoneNames([host], ips))) return null;
+    // a Tailscale MagicDNS name (cached, asked only when the cheap check failed)
+    const tail = await (opts.tailnetName ?? tailnetName)().catch(() => null);
+    return tail && hostAllowed(req.headers.get("host"), port, phoneNames([host], [...ips, tail])) ? null : json({ error: "forbidden: bad Host" }, 403);
   };
 
   async function readBody(req: Request): Promise<any> {
@@ -916,7 +931,8 @@ export async function startServer(opts: StartOptions = {}) {
         if (denied) return denied;
         // The management page is not a paired phone, so it never triggers the WS-driven refresh: refresh here
         // (refreshQuotas keeps its own 5 min cache, so reloading the page does not hammer the providers).
-        await hub.refreshQuotas().catch(() => false);
+        // ?refresh=1 (the refresh button) reads again at once and lets agy retry after a sign-in problem
+        await hub.refreshQuotas(new URL(req.url).searchParams.get("refresh") === "1").catch(() => false);
         const snap = hub.snapshot();
         const quota = (id: string) => {
           const p = snap.providers.find((x) => x.id === id);
@@ -933,8 +949,8 @@ export async function startServer(opts: StartOptions = {}) {
         const claudeFile = pathFor("claude");
         const codexFile = pathFor("codex");
         return json({
-          claude: { installed: await isHookInstalled(claudeFile), askHook: { installed: await isAskHookInstalled(claudeFile), ...(await askSettings.get()) }, settingsPath: claudeFile, cli: !!Bun.which("claude"), quota: quota("claude") },
-          codex: { installed: await isHookInstalled(codexFile), settingsPath: codexFile, cli: !!Bun.which("codex"), quota: quota("codex") },
+          claude: { installed: await isHookInstalled(claudeFile), askHook: { installed: await isAskHookInstalled(claudeFile), ...(await askSettings.get()) }, settingsPath: claudeFile, cli: !!findCli("claude"), quota: quota("claude") },
+          codex: { installed: await isHookInstalled(codexFile), settingsPath: codexFile, cli: !!findCli("codex"), quota: quota("codex") },
           antigravity: { available: agyPath() !== null, quota: quota("antigravity") },
           opencode: await opencodeBlock(quota("opencode")),
           grok: await grokBlock(),
@@ -1133,7 +1149,7 @@ export async function startServer(opts: StartOptions = {}) {
         const regen = path.endsWith("/regenerate");
         if (regen ? req.method !== "POST" : req.method !== "GET") return json({ error: "method not allowed" }, 405);
         if (regen) pairing.regenerate();
-        return json(await pairingInfo());
+        return json(await pairingInfo(url.searchParams.get("all") === "1"));
       }
 
       if (path === "/editor" || path === "/editor/") {

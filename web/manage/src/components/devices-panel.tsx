@@ -5,12 +5,29 @@ import { Badge } from "@/components/ui/knowns/badge";
 import { Button } from "@/components/ui/knowns/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/knowns/card";
 import { Empty } from "@/components/ui/knowns/empty";
-import { Switch } from "@/components/ui/knowns/switch";
+import { Select } from "@/components/ui/knowns/select";
 import { Spinner } from "@/components/ui/knowns/spinner";
 import { ApiError, api } from "@/api";
 import { QrCode } from "@/components/qr";
 import { getLanguage, t, useLanguage } from "@/lib/i18n";
-import type { DeviceInfo, Pairing } from "@/types";
+import type { DeviceInfo, PairAddress, PairAddressKind, Pairing } from "@/types";
+
+const ADDRESS_KEY = "nookdeck.pairAddress";
+
+function kindHelp(kind: PairAddressKind): string | null {
+  if (kind === "local") return t("Keeps working when the IP changes; some Android phones can't open .local names.");
+  if (kind === "lan") return t("Works on this Wi-Fi; pair again if the IP changes.");
+  if (kind === "tailscale") return t("Works anywhere the phone is on your tailnet, even away from home.");
+  return null;
+}
+
+function kindLabel(kind: PairAddressKind): string {
+  return kind === "local" ? t("Name") : kind === "lan" ? t("Wi-Fi") : kind === "tailscale" ? "Tailscale" : kind === "vpn" ? "VPN" : t("Other");
+}
+
+function readSaved(): string | null {
+  try { return window.localStorage.getItem(ADDRESS_KEY); } catch { return null; }
+}
 
 function when(iso?: string | number): string {
   if (!iso) return t("never");
@@ -27,14 +44,27 @@ export function DevicesPanel() {
   );
 }
 
+function addressLink(host: string, p: Pairing): string {
+  const port = p.port ?? (/:(\d+)(?:\/|$)/.exec(p.url)?.[1] ? Number(/:(\d+)(?:\/|$)/.exec(p.url)![1]) : 80);
+  const h = host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+  return `http://${h}:${port}/?pin=${p.pin}`;
+}
+
 function PairingCard() {
   useLanguage();
   const [pairing, setPairing] = useState<Pairing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [useIp, setUseIp] = useState(false);
-  const link = pairing ? (pairing.urlLocal && !useIp ? pairing.urlLocal : pairing.url) : "";
+  const [saved, setSaved] = useState<string | null>(readSaved);
+  const addresses = pairing?.addresses?.length ? pairing.addresses : null;
+  // The saved choice wins while it still exists, then the agent's default, then the first one.
+  const chosen: PairAddress | null = addresses ? (addresses.find((a) => a.id === saved) ?? addresses.find((a) => a.id === pairing?.defaultAddress) ?? addresses[0]!) : null;
+  const pickAddress = (id: string) => {
+    setSaved(id);
+    try { window.localStorage.setItem(ADDRESS_KEY, id); } catch { /* the choice just is not remembered */ }
+  };
+  const link = !pairing ? "" : chosen ? addressLink(chosen.host, pairing) : pairing.urlLocal ?? pairing.url;
 
   const load = useCallback(async () => {
     try {
@@ -92,15 +122,18 @@ function PairingCard() {
             </div>
             <code className="w-full break-all rounded-lg bg-muted px-2.5 py-1.5 text-center text-xs select-all">{link}</code>
             <p className="text-center text-xs text-muted-foreground">
-              {t("Scan the QR code or open the link on a phone on the same Wi-Fi network.")}
+              {chosen?.kind === "tailscale" ? t("Scan the QR code or open the link on a phone signed in to the same Tailscale network.")
+                : chosen && (chosen.kind === "vpn" || chosen.kind === "other") ? t("Scan the QR code or open the link on a phone that can reach this address.")
+                : t("Scan the QR code or open the link on a phone on the same Wi-Fi network.")}
             </p>
-            {pairing.urlLocal && (
+            {chosen && addresses && (
               <div className="flex w-full flex-col gap-1.5 rounded-lg border p-2.5">
-                <label className="flex items-center justify-between gap-2 text-[13px]">
-                  <span>{t("Use IP address")}</span>
-                  <Switch checked={useIp} onCheckedChange={setUseIp} aria-label={t("Use IP address")} />
-                </label>
-                <p className="text-[11.5px] leading-snug text-muted-foreground">{t("Use the .local name so you do not have to pair again when the Mac's IP changes.")}</p>
+                <label htmlFor="pair-address" className="text-[13px]">{t("Phone connects via")}</label>
+                <Select id="pair-address" value={chosen.id} onChange={(e) => pickAddress(e.target.value)} options={addresses.map((a) => ({ value: a.id, label: `${a.label} \u00b7 ${a.host}` }))} />
+                <div className="flex items-start gap-2">
+                  <Badge size="sm" tone="neutral">{kindLabel(chosen.kind)}</Badge>
+                  <p className="text-[11.5px] leading-snug text-muted-foreground">{[kindHelp(chosen.kind), chosen.note].filter(Boolean).join(" ")}</p>
+                </div>
               </div>
             )}
             <div className="flex gap-2">

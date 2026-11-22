@@ -119,7 +119,9 @@ export const realCredApi: CredApi = {
       const size = w.ffi.read.u32(cred as any, 32);
       const blob = w.ffi.read.ptr(cred as any, 40);
       if (!size || !blob) return undefined;
-      return Buffer.from(w.ffi.toArrayBuffer(blob as any, 0, size)).toString("utf8");
+      const raw = Buffer.from(w.ffi.toArrayBuffer(blob as any, 0, size));
+      // Credential Manager blobs written by other tools are often UTF-16LE (every other byte is 0)
+      return size >= 2 && size % 2 === 0 && raw[1] === 0 && raw[0] !== 0 ? raw.toString("utf16le") : raw.toString("utf8");
     } finally {
       w.advapi32.CredFree(cred);
     }

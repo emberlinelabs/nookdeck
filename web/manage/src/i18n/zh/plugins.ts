@@ -90,4 +90,12 @@ export const ZH_PLUGINS: Record<string, string> = {
   "Signed in to Home Assistant.": "已登录 Home Assistant。",
   "Home Assistant sign-in failed: {reason}": "Home Assistant 登录失败：{reason}",
   "Home Assistant sign-in failed.": "Home Assistant 登录失败。",
+  "About": "关于",
+  "Website": "网站",
+  "Privacy": "隐私",
+  "Check for updates": "检查更新",
+  "Checking...": "正在检查...",
+  "You are up to date.": "已是最新版本。",
+  "Could not check for updates.": "无法检查更新。",
+  "Formerly PhoneDesk. Existing installs migrate automatically on update.": "前身为 PhoneDesk。现有安装会在更新时自动迁移。",
 };

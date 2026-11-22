@@ -305,8 +305,21 @@ export interface DeviceInfo {
   online?: boolean;
 }
 
+export type PairAddressKind = "local" | "lan" | "tailscale" | "vpn" | "other";
+
+export interface PairAddress {
+  id: string;
+  kind: PairAddressKind;
+  host: string;
+  label: string;
+  note?: string;
+}
+
 export interface Pairing {
   pin: string;
+  /** Every address a phone could use; missing on older agents. */
+  addresses?: PairAddress[];
+  defaultAddress?: string;
   /** Link using the IP address. */
   url: string;
   /** Link using the .local name (http://<name>.local:<port>/?pin=...), when the agent has one. */

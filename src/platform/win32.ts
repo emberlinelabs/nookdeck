@@ -52,6 +52,9 @@ export function soundArgv(path: string, volume: number): string[] {
   ];
 }
 
+/** Credential Manager target names Claude Code is known or likely to use. */
+export const CLAUDE_CRED_TARGETS = ["Claude Code-credentials", "claude-code-credentials", "Claude Code"];
+
 export function credentialStore(api: CredApi = realCredApi): SecretStore {
   const target = (service: string, account: string) => `${service}/${account}`;
   return {
@@ -255,7 +258,17 @@ export function createWin32(d: Win32Deps = {}): Platform {
     },
 
     secrets: credentialStore(d.cred),
-    async claudeCredentials() { return null; },
+    /** Newer Claude Code may keep the OAuth secrets in Credential Manager. Read-only; the first target that holds JSON with an access token wins. */
+    async claudeCredentials() {
+      const api = d.cred ?? realCredApi;
+      for (const target of CLAUDE_CRED_TARGETS) {
+        try {
+          const v = api.read(target);
+          if (v && v.includes("accessToken")) return v;
+        } catch { /* try the next */ }
+      }
+      return null;
+    },
     loadKind: "estimate",
     async idleSeconds() { return (d.idle ?? realIdle)(); },
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import "./compat";
 import { startServer } from "./server";
-import { lanIp, localHostName } from "./net";
+import { lanIp, localHostName, phoneAddresses, tailnetName } from "./net";
 import { hookSecretPath, runHook } from "./permissions";
 import { runAskHook } from "./questions";
 import { readFile } from "node:fs/promises";
@@ -73,7 +73,7 @@ if (argv[0] === "hook") {
 if (argv[0] === "migrate") {
   const { migrateFromEnv } = await import("./migrate");
   try {
-    const r = await migrateFromEnv(parsePort(argv.slice(1)), (l) => console.log(l));
+    const r = await migrateFromEnv(parsePort(argv.slice(1)), (l) => console.log(l), { service: !argv.includes("--no-service") });
     for (const n of r.notes) console.warn(n);
     if (!r.changed.length) console.log("Nothing to migrate.");
   } catch (e: any) { console.error(`nookdeck migrate: ${e?.message ?? e}`); process.exit(1); }
@@ -83,6 +83,23 @@ if (argv[0] === "migrate") {
 if (argv[0] === "mcp") {
   const { runMcp } = await import("./mcp/server");
   await runMcp({ port: parsePort(argv.slice(1)) });
+  process.exit(0);
+}
+// `nookdeck pair [--port N] [--all] [--plain]`: the phone addresses and the PIN of the running agent (the setup scripts print them).
+if (argv[0] === "pair") {
+  const port = parsePort(argv.slice(1));
+  let info: any;
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/api/pairing${argv.includes("--all") ? "?all=1" : ""}`, { signal: AbortSignal.timeout(3000) });
+    info = await r.json();
+  } catch { console.error(`nookdeck: no agent answered on port ${port}. Start it with: nookdeck`); process.exit(1); }
+  const list: any[] = info.addresses ?? [];
+  const first = list.find((a) => a.id === info.defaultAddress);
+  const ordered = first ? [first, ...list.filter((a) => a !== first)] : list;
+  const plain = argv.includes("--plain");
+  for (const a of ordered) console.log(plain ? `${a === first ? "*" : "-"}\t${a.url}\t${a.label}` : `  ${a === first ? "Phone (default)" : "Phone          "}  ${a.url}   ${a.label}${a.note ? `  (${a.note})` : ""}`);
+  if (!ordered.length) console.log(plain ? `*\t${info.url}\t` : `  Phone  ${info.url}`);
+  console.log(plain ? `PIN\t${info.pin}` : `  PIN             ${info.pin}`);
   process.exit(0);
 }
 // `nookdeck qr <text>`: prints a QR code (the setup scripts use it for the pairing URL). Silent when stdout is not a terminal.
@@ -256,12 +273,17 @@ if (platform.id === "win32") { const { rm } = await import("node:fs/promises"); 
 import { qrText } from "./qr";
 const printed = { port: 0 };
 const host = await localHostName();
-const printPairing = (pin: string) => {
+const printPairing = async (pin: string) => {
   // a scannable code for the .local URL (it keeps working when the IP changes); not when piped, or with --no-qr
   if (process.stdout.isTTY && !argv.includes("--no-qr")) { try { console.log(`\n${qrText(`http://${host}.local:${printed.port}/?pin=${pin}`)}`); } catch { /* the URL below is enough */ } }
   console.log(`\nPairing PIN: ${pin}`);
-  console.log(`Pair URL:    http://${lanIp()}:${printed.port}/?pin=${pin}`);
-  console.log(`             http://${host}.local:${printed.port}/?pin=${pin}  (keeps working when the IP changes)\n`);
+  let first = true;
+  for (const a of phoneAddresses({ hostName: host, tailnetName: await tailnetName().catch(() => null) })) {
+    console.log(`${first ? "Pair URL:    " : "             "}http://${a.host}:${printed.port}/?pin=${pin}  (${a.label})`);
+    first = false;
+  }
+  if (first) console.log(`Pair URL:    http://${lanIp()}:${printed.port}/?pin=${pin}`);
+  console.log("");
 };
 
 // 0.1.x -> 0.2.0: PhoneDesk became Nookdeck. Moves the data, the service, the PATH entry and the hooks over (idempotent, never deletes data).
@@ -273,7 +295,7 @@ try {
 const wantPort = parsePort(argv);
 let app: Awaited<ReturnType<typeof startServer>>;
 try {
-  app = await startServer({ port: wantPort, onPinChange: (pin) => { console.log("Too many failed attempts, PIN regenerated."); printPairing(pin); } });
+  app = await startServer({ port: wantPort, onPinChange: (pin) => { console.log("Too many failed attempts, PIN regenerated."); void printPairing(pin); } });
 } catch (err: any) {
   if (err?.code === "EADDRINUSE" || /in use/i.test(String(err?.message))) {
     const { explainBusyPort } = await import("./busy");
@@ -290,7 +312,7 @@ printed.port = app.port;
 console.log(`Nookdeck running on port ${app.port}`);
 console.log(`Phone:  http://${lanIp()}:${app.port}  or  http://${host}.local:${app.port}`);
 console.log(`${t("Manage:")} http://localhost:${app.port}/manage/`);
-printPairing(app.pin);
+void printPairing(app.pin);
 
 const shutdown = () => { app.stop(); process.exit(0); };
 process.on("SIGINT", shutdown);

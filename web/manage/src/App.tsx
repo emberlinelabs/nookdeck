@@ -309,7 +309,7 @@ export default function App() {
   return (
     <SidebarProvider collapsed={sidebarCollapsed} onCollapsedChange={onSidebarCollapse} mobileBelow={900}>
       <AppSidebar tab={tab} onTab={setTab} attention={attention} about={about} repo={about?.repo ?? REPO} lang={lang} onLang={(l) => void switchLanguage(l)}
-        onAbout={() => { setTab("devices"); window.setTimeout(() => document.getElementById("about")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
+        onAbout={() => setTab("about")} />
       <SidebarInset className="h-screen overflow-hidden">
         <header className="flex flex-none items-center gap-2 border-b px-3 py-2">
           <SidebarTrigger label={t("Menu")} labels={{ collapse: t("Collapse sidebar"), expand: t("Expand sidebar") }} />
@@ -362,7 +362,8 @@ export default function App() {
           {tab.startsWith("plugin/") && !BUILTIN_PLUGINS.some((p) => `plugin/${p.id}` === tab) && <div className="max-w-3xl"><PluginsPanel key={tab} update={update} only={tab.slice(7)} /></div>}
           {tab === "permissions" && <PermissionsPanel {...doctor} />}
           {tab === "json" && <JsonPanel key={jsonKey} layout={layout} onChange={(l) => update(() => l)} onError={setJsonError} />}
-          {tab === "devices" && <div className="flex flex-col gap-4"><DevicesPanel /><AboutCard about={about} /></div>}
+          {tab === "devices" && <DevicesPanel />}
+          {tab === "about" && <AboutCard about={about} />}
         </main>
       )}
         </div>

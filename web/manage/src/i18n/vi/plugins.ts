@@ -88,4 +88,12 @@ export const VI_PLUGINS: Record<string, string> = {
   "Signed in to Home Assistant.": "Đã đăng nhập Home Assistant.",
   "Home Assistant sign-in failed: {reason}": "Đăng nhập Home Assistant thất bại: {reason}",
   "Home Assistant sign-in failed.": "Đăng nhập Home Assistant thất bại.",
+  "About": "Giới thiệu",
+  "Website": "Trang web",
+  "Privacy": "Quyền riêng tư",
+  "Check for updates": "Kiểm tra cập nhật",
+  "Checking...": "Đang kiểm tra...",
+  "You are up to date.": "Bạn đang dùng bản mới nhất.",
+  "Could not check for updates.": "Không kiểm tra được cập nhật.",
+  "Formerly PhoneDesk. Existing installs migrate automatically on update.": "Trước đây là PhoneDesk. Bản cài cũ tự động chuyển sang khi cập nhật.",
 };

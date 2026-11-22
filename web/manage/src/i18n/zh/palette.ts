@@ -44,7 +44,7 @@ export const ZH_PALETTE: Record<string, string> = {
   "Undo": "撤销",
   "Redo": "重做",
   "Capture region": "区域截图",
-  "Lock Mac": "锁定电脑",
+  "Lock computer": "锁定电脑",
   "Custom shortcut": "自定义快捷键",
   "Type text": "输入文字",
   "Open web address": "打开网址",

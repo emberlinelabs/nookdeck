@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { IconAlarm as Alarm, IconBolt as Bolt, IconBraces as Braces, IconDevices as Devices, IconLayoutGrid as Grid, IconPalette as Palette, IconPuzzle as Puzzle, IconShieldCheck as Shield, IconVolume as Volume } from "@tabler/icons-react";
+import { useState, type ReactNode } from "react";
+import { IconAlarm as Alarm, IconBolt as Bolt, IconBraces as Braces, IconDevices as Devices, IconInfoCircle as Info, IconLayoutGrid as Grid, IconPalette as Palette, IconPuzzle as Puzzle, IconShieldCheck as Shield, IconVolume as Volume } from "@tabler/icons-react";
 import { Tooltip } from "@/components/ui/knowns/tooltip";
 import { SegmentedControl } from "@/components/ui/knowns/segmented-control";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarHeader, SidebarItem, useSidebar } from "@/components/ui/knowns/blocks/sidebar/sidebar";
@@ -27,6 +27,7 @@ const NAV_SYSTEM: Section[] = [
   { value: "permissions", label: "Permissions", icon: <Shield /> },
   { value: "devices", label: "Devices", icon: <Devices /> },
   { value: "json", label: "JSON", icon: <Braces /> },
+  { value: "about", label: "About", icon: <Info /> },
 ];
 const BASE: Section[] = [...NAV_TOP.flatMap((g) => g.items), { value: "plugins", label: "Plugins", icon: <Puzzle /> }, ...NAV_SYSTEM];
 /** Hashes of older versions that now live somewhere else. */
@@ -52,6 +53,13 @@ export function pageTitle(page: Tab, communityName?: string): string {
   return BUILTIN_PLUGINS.find((p) => p.id === id)?.name ?? communityName ?? id;
 }
 
+/** Fold state of a group, remembered per group. */
+function useFold(name: string): [boolean, (o: boolean) => void] {
+  const key = `nookdeck.sidebar.${name}Open`;
+  const [open, setOpen] = useState(() => { try { return window.localStorage.getItem(key) !== "0"; } catch { return true; } });
+  return [open, (o) => { setOpen(o); try { window.localStorage.setItem(key, o ? "1" : "0"); } catch { /* not remembered */ } }];
+}
+
 const LANGS: { value: Language; label: string }[] = [{ value: "en", label: "EN" }, { value: "vi", label: "VI" }, { value: "zh", label: "中文" }];
 
 function VersionChip({ about, onAbout }: { about: About; onAbout: () => void }) {
@@ -72,6 +80,11 @@ export function AppSidebar({ tab, onTab, attention, about, repo, lang, onLang, o
   const { collapsed, isMobile } = useSidebar();
   const rail = collapsed && !isMobile;
   const community = useEnabledPlugins(tab);
+  const [layoutOpen, setLayoutOpen] = useFold("layout");
+  const [actionsOpen, setActionsOpen] = useFold("actions");
+  const [pluginsOpen, setPluginsOpen] = useFold("plugins");
+  const [systemOpen, setSystemOpen] = useFold("system");
+  const folds: Record<string, [boolean, (o: boolean) => void]> = { Layout: [layoutOpen, setLayoutOpen], Actions: [actionsOpen, setActionsOpen] };
   const row = (x: Section, raw = false) => (
     <div key={x.value} id={`tab-${x.value}`}>
       <SidebarItem
@@ -99,11 +112,11 @@ export function AppSidebar({ tab, onTab, attention, about, repo, lang, onLang, o
       <SidebarContent>
         <nav aria-label={t("Sections")} className="flex flex-col gap-3">
           {NAV_TOP.map((g) => (
-            <SidebarGroup key={g.label} label={t(g.label)}>
+            <SidebarGroup key={g.label} label={t(g.label)} collapsible open={folds[g.label]![0]} onOpenChange={folds[g.label]![1]} active={g.items.some((x) => x.value === tab)}>
               {g.items.map((x) => row(x))}
             </SidebarGroup>
           ))}
-          <SidebarGroup label={t("Plugins")}>
+          <SidebarGroup label={t("Plugins")} collapsible open={pluginsOpen} onOpenChange={setPluginsOpen} active={tab === "plugins" || tab.startsWith("plugin/")} count={pluginsOpen ? undefined : BUILTIN_PLUGINS.length + community.length}>
             {row({ value: "plugins", label: "All plugins", icon: <Puzzle /> })}
             {!rail && (
               <div className="ml-4 flex flex-col gap-0.5 border-l pl-1.5">
@@ -114,7 +127,7 @@ export function AppSidebar({ tab, onTab, attention, about, repo, lang, onLang, o
               </div>
             )}
           </SidebarGroup>
-          <SidebarGroup label={t("System")}>
+          <SidebarGroup label={t("System")} collapsible open={systemOpen} onOpenChange={setSystemOpen} active={NAV_SYSTEM.some((x) => x.value === tab)}>
             {NAV_SYSTEM.map((x) => row(x))}
           </SidebarGroup>
         </nav>

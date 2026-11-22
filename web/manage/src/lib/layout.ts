@@ -349,7 +349,7 @@ export const PROVIDER_LABEL: Record<string, string> = { claude: "Claude", codex:
 
 export const WIDGET_HINT: Record<WidgetKind, string> = {
   clock: "Time and date", nowplaying: "Current track", cpu: "CPU usage (click to see processes)", gpu: "Graphics card load and memory (no data on Linux)", memory: "Memory in use",
-  uptime: "How long the Mac has been running", load: "System load", network: "Network speed", quota: "Claude / Codex / Antigravity quota", sessions: "Running AI sessions", entity: "Home Assistant device", weather: "Weather", value: "Value pushed from outside (webhook)", notifications: "Recent notifications", plugin: "Tile from a plugin",
+  uptime: "How long this computer has been running", load: "System load", network: "Network speed", quota: "Claude / Codex / Antigravity quota", sessions: "Running AI sessions", entity: "Home Assistant device", weather: "Weather", value: "Value pushed from outside (webhook)", notifications: "Recent notifications", plugin: "Tile from a plugin",
 };
 
 export const WIDGET_LABEL: Record<string, string> = {

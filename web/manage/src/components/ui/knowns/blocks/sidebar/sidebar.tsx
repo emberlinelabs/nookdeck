@@ -472,6 +472,9 @@ export function SidebarGroup({
   count,
   collapsible,
   defaultOpen = true,
+  open: openProp,
+  onOpenChange,
+  active,
   children,
   className,
 }: {
@@ -482,11 +485,18 @@ export function SidebarGroup({
   /** The label folds the group. */
   collapsible?: boolean;
   defaultOpen?: boolean;
+  /** Controlled fold state (with onOpenChange); the group then does not keep its own. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** The current page is inside this group: its label stays highlighted while it is folded. */
+  active?: boolean;
   children: ReactNode;
   className?: string;
 }) {
   const { rail } = useContext(SurfaceCtx);
-  const [open, setOpen] = useState(defaultOpen);
+  const [own, setOwn] = useState(defaultOpen);
+  const open = openProp ?? own;
+  const setOpen = (f: (o: boolean) => boolean) => { const n = f(open); setOwn(n); onOpenChange?.(n); };
   const id = useId();
   const shown = rail || !collapsible || open;
   return (
@@ -501,7 +511,7 @@ export function SidebarGroup({
               aria-expanded={open}
               aria-controls={id}
               onClick={() => setOpen((o) => !o)}
-              className="flex min-w-0 flex-1 items-center gap-1 rounded-md text-left text-[11.5px] font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+              className={cn("flex min-w-0 flex-1 items-center gap-1 rounded-md text-left text-[11.5px] font-medium outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50", active && !open ? "font-semibold text-foreground" : "text-muted-foreground")}
               tabIndex={rail ? -1 : undefined}
             >
               <Fade className="truncate">{label}</Fade>

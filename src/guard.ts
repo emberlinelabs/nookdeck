@@ -32,12 +32,13 @@ export function originAllowed(origin: string | null | undefined, port: number, n
 export const localNames = () => LOCAL_NAMES;
 
 /** Names a phone may use to reach us: localhost, our interface addresses, <LocalHostName>.local and <hostname>.local. */
-export function phoneNames(extra: string[] = []): string[] {
+export function phoneNames(extra: string[] = [], exact: string[] = []): string[] {
   const out = new Set<string>(LOCAL_NAMES);
   for (const addrs of Object.values(networkInterfaces())) for (const a of addrs ?? []) if (a.family === "IPv4") out.add(a.address);
   const h = hostname().split(".")[0];
   if (h) { out.add(`${h}.local`); out.add(hostname().toLowerCase()); }
   for (const e of extra) if (e) out.add(`${e}.local`);
+  for (const e of exact) if (e) out.add(e.toLowerCase()); // e.g. the Tailscale MagicDNS name
   return [...out];
 }
 
