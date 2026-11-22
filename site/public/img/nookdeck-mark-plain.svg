@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="80 80 352 352"><defs><clipPath id="pdk"><rect x="96" y="96" width="320" height="320" rx="84"/></clipPath></defs>
-<rect x="96" y="96" width="320" height="320" rx="84" fill="#22d3ee"/>
-<rect x="96" y="96" width="320" height="160" rx="84" fill="#ffffff" opacity=".10"/>
-
-<circle cx="352" cy="160" r="40" fill="#34d399"/><circle cx="352" cy="160" r="40" fill="none" stroke="#0b0d10" stroke-width="16"/></svg>
