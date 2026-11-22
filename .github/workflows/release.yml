@@ -206,6 +206,11 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # dmgbuild (pinned in scripts/build-macos-app.ts) runs through uv; it writes the DMG window layout without Finder
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.26"
+
       - uses: actions/download-artifact@v4
         with:
           name: cli-assets

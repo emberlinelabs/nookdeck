@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="660" height="400" viewBox="0 0 660 400">
+<!-- Nookdeck install window background (660x400 pt). Icon spots (128 pt) are centred at (170,190) for the app and (490,190) for Applications. Keep them clear. -->
+<defs>
+<radialGradient id="glow" cx="50%" cy="46%" r="62%"><stop offset="0" stop-color="#0f2a33"/><stop offset="1" stop-color="#0b0d10"/></radialGradient>
+<linearGradient id="arrow" gradientUnits="userSpaceOnUse" x1="252" y1="0" x2="414" y2="0"><stop offset="0" stop-color="#22d3ee" stop-opacity=".25"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+<radialGradient id="vig" cx="50%" cy="50%" r="75%"><stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".45"/></radialGradient>
+<radialGradient id="calm"><stop offset="0" stop-color="#0b0d10" stop-opacity=".92"/><stop offset=".7" stop-color="#0b0d10" stop-opacity=".7"/><stop offset="1" stop-color="#0b0d10" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="660" height="400" fill="url(#glow)"/>
+<rect x="6.0" y="26.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="66.0" y="26.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="126.0" y="26.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="186.0" y="26.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="246.0" y="26.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="306.0" y="26.0" width="48" height="48" rx="12" fill="#22d3ee" opacity="0.07"/>
+<rect x="366.0" y="26.0" width="48" height="48" rx="12" fill="#22d3ee" opacity="0.07"/>
+<rect x="426.0" y="26.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="486.0" y="26.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="546.0" y="26.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="606.0" y="26.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="6.0" y="86.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="66.0" y="86.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="126.0" y="86.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="186.0" y="86.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="246.0" y="86.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="306.0" y="86.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="366.0" y="86.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="426.0" y="86.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="486.0" y="86.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="546.0" y="86.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="606.0" y="86.0" width="48" height="48" rx="12" fill="#22d3ee" opacity="0.07"/>
+<rect x="6.0" y="146.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="66.0" y="146.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="126.0" y="146.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="186.0" y="146.0" width="48" height="48" rx="12" fill="#22d3ee" opacity="0.07"/>
+<rect x="246.0" y="146.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="306.0" y="146.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="366.0" y="146.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="426.0" y="146.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="486.0" y="146.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="546.0" y="146.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="606.0" y="146.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="6.0" y="206.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="66.0" y="206.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="126.0" y="206.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="186.0" y="206.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="246.0" y="206.0" width="48" height="48" rx="12" fill="#22d3ee" opacity="0.07"/>
+<rect x="306.0" y="206.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="366.0" y="206.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="426.0" y="206.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="486.0" y="206.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="546.0" y="206.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="606.0" y="206.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="6.0" y="266.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="66.0" y="266.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="126.0" y="266.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="186.0" y="266.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="246.0" y="266.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="306.0" y="266.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="366.0" y="266.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="426.0" y="266.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="486.0" y="266.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="546.0" y="266.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="606.0" y="266.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="6.0" y="326.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="66.0" y="326.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="126.0" y="326.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="186.0" y="326.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="246.0" y="326.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="306.0" y="326.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="366.0" y="326.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="426.0" y="326.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="486.0" y="326.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="546.0" y="326.0" width="48" height="48" rx="12" fill="#ffffff" opacity="0.035"/>
+<rect x="606.0" y="326.0" width="48" height="48" rx="12" fill="#22d3ee" opacity="0.07"/>
+<circle cx="170" cy="200" r="110" fill="url(#calm)"/><circle cx="490" cy="200" r="110" fill="url(#calm)"/>
+<!-- mid-grey plates under the two Finder icon labels. Finder draws them black (Light) or white (Dark); #6f7a84 is ~4.8:1 against black and ~4.4:1 against white. Keep it opaque: transparency over the dark art would break the black-text contrast. Label centre is at y=273. -->
+<rect x="108" y="262" width="124" height="22" rx="11" fill="#6f7a84"/>
+<rect x="428" y="262" width="124" height="22" rx="11" fill="#6f7a84"/>
+<rect width="660" height="400" fill="url(#vig)"/>
+<svg x="255" y="28" width="40" height="40" viewBox="80 80 352 352"><defs><clipPath id="ndk"><rect x="96" y="96" width="320" height="320" rx="84"/></clipPath></defs>
+<rect x="96" y="96" width="320" height="320" rx="84" fill="#22d3ee"/>
+<rect x="96" y="96" width="320" height="160" rx="84" fill="#ffffff" opacity=".10"/>
+
+<circle cx="352" cy="160" r="40" fill="#34d399"/><circle cx="352" cy="160" r="40" fill="none" stroke="#0b0d10" stroke-width="16"/></svg>
+<g font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Helvetica, Arial, sans-serif" text-anchor="middle">
+<text id="wordmark" x="305" y="54" font-size="25" font-weight="700" fill="#f4f7f8" letter-spacing="-0.4" text-anchor="start">Nookdeck</text>
+<text x="330" y="100" font-size="17" font-weight="500" fill="#c9d4d9">Drag Nookdeck to Applications</text>
+<text x="330" y="372" font-size="13" fill="#b6c2c8">Then open it from Applications · nookdeck.app</text>
+</g>
+<!-- arrow from the app spot to the Applications spot -->
+<g fill="none" stroke="url(#arrow)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+<path d="M 252 190 L 404 190" stroke-dasharray="2 13"/>
+<path d="M 388 168 L 414 190 L 388 212" stroke="#22d3ee"/>
+</g>
+</svg>

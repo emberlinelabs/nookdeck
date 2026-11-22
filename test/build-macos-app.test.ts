@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { AGENT_TARGETS, APP_ID, infoPlist, parseArgs } from "../scripts/build-macos-app";
+import { AGENT_TARGETS, APP_ID, DMGBUILD, DMG_LAYOUT, dmgDefines, infoPlist, parseArgs } from "../scripts/build-macos-app";
 import { IDENTIFIER } from "../scripts/sign-macos";
 
 describe("build-macos-app (pure parts)", () => {
@@ -24,5 +24,19 @@ describe("build-macos-app (pure parts)", () => {
     expect(parseArgs([])).toMatchObject({ hostAgent: false, dmg: true });
     expect(parseArgs(["--host-agent", "--no-dmg", "--agent-arm64", "a", "--agent-x64", "b"])).toMatchObject({ hostAgent: true, dmg: false, agentArm64: "a", agentX64: "b" });
     expect(/[\\/]x$/.test(parseArgs(["--out", "x"]).out)).toBe(true);
+  });
+});
+
+describe("the install window (dmgbuild)", () => {
+  test("660x400 content, 128 pt icons, app left and Applications right on the same row, as the artwork expects", () => {
+    expect([DMG_LAYOUT.width, DMG_LAYOUT.height, DMG_LAYOUT.iconSize]).toEqual([660, 400, 128]);
+    expect(DMG_LAYOUT.app).toEqual([170, 190]);
+    expect(DMG_LAYOUT.apps).toEqual([490, 190]);
+  });
+  test("dmgbuild is pinned and the definitions carry the layout, volume icon, background and explicit size", () => {
+    expect(DMGBUILD).toMatch(/^dmgbuild==\d+\.\d+\.\d+$/);
+    const d = dmgDefines({ app: "/x/Nookdeck.app", volicon: "/x/AppIcon.icns", background: "/x/background.png", sizeBytes: 123456 });
+    expect(d).toEqual(expect.arrayContaining(["app=/x/Nookdeck.app", "width=660", "height=400", "icon_size=128", "app_x=170", "apps_x=490", "volicon=/x/AppIcon.icns", "background=/x/background.png", "size=123456"]));
+    expect(dmgDefines({ app: "/x/a.app" }).some((x) => x.startsWith("background="))).toBe(false);
   });
 });

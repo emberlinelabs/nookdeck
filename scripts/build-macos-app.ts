@@ -10,13 +10,32 @@
 // first run. Both the agent programs and the app are signed with the release identity (scripts/sign-macos.ts: ci, local or ad hoc);
 // the agent keeps the identifier dev.nookdeck.agent so Accessibility grants survive updates, the app is dev.nookdeck.app.
 // Prerequisites (CI runs them before this): bun scripts/ensure-icons.ts, bun run build:web, bun scripts/build-mediaremote.ts, bun run gen-assets.
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { arch as hostArch } from "node:os";
 import { signMacos } from "./sign-macos";
 
 export const APP_ID = "dev.nookdeck.app";
+export const DMGBUILD = "dmgbuild==2.0.0";
+/** The install window, in points (the content area, without the title bar). The background art is 660x400 (@2x: 1320x800) and the drop zones are centred on these points. */
+export const DMG_LAYOUT = { width: 660, height: 400, iconSize: 128, app: [170, 190], apps: [490, 190] } as const;
+
+/** Where the artwork lives: background.png and background@2x.png (a missing pair means a plain window, with the same layout). */
+export function dmgBackground(dir = process.env.NOOKDECK_DMG_ART || join(import.meta.dir, "../apps/macos/dmg")): string | undefined {
+  const one = join(dir, "background.png");
+  return existsSync(one) ? one : undefined;
+}
+
+/** The -D key=value definitions dmg-settings.py reads. */
+export function dmgDefines(o: { app: string; volicon?: string; background?: string; sizeBytes?: number }): string[] {
+  const L = DMG_LAYOUT;
+  const defs = [`app=${o.app}`, `width=${L.width}`, `height=${L.height}`, `icon_size=${L.iconSize}`, `app_x=${L.app[0]}`, `app_y=${L.app[1]}`, `apps_x=${L.apps[0]}`, `apps_y=${L.apps[1]}`];
+  if (o.volicon) defs.push(`volicon=${o.volicon}`);
+  if (o.background) defs.push(`background=${o.background}`);
+  if (o.sizeBytes) defs.push(`size=${o.sizeBytes}`);
+  return defs;
+}
 export const AGENT_TARGETS = [
   { arch: "arm64", bunTarget: "bun-darwin-arm64", file: "nookdeck-arm64" },
   { arch: "x86_64", bunTarget: "bun-darwin-x64", file: "nookdeck-x86_64" },
@@ -127,23 +146,21 @@ export function build(o: Options): { app: string; dmg?: string } {
   rmSync(work, { recursive: true, force: true });
   if (!o.dmg) { console.log(`built ${at(app)}`); return finish({ app: at(app) }); }
 
-  const stage = join(o.out, "dmg");
-  mkdirSync(stage, { recursive: true });
-  run(["ditto", app, join(stage, "Nookdeck.app")]);
-  symlinkSync("/Applications", join(stage, "Applications"));
   const dmg = join(o.out, "Nookdeck.dmg");
-  // hdiutil's own size estimate is sometimes too small on CI runners ("No space left on device" while copying the agent): give it room explicitly, and retry once or twice
-  const mb = Math.ceil(Number(run(["du", "-sk", stage]).trim().split(/\s+/)[0]) / 1024 * 1.5) + 64;
+  // dmgbuild (through uv, pinned) lays the window out by writing the .DS_Store itself: no Finder, so it also works on a headless runner.
+  // The explicit size (the automatic estimate is sometimes too small on CI runners, "No space left on device") and the retries stay.
+  const bg = dmgBackground();
+  const mb = Math.ceil(Number(run(["du", "-sk", app]).trim().split(/\s+/)[0]) / 1024 * 1.5) + 64;
+  const defs = dmgDefines({ app: resolve(app), volicon: join(shared, "icons/macos/AppIcon.icns"), background: bg, sizeBytes: mb * 1024 * 1024 });
   for (let attempt = 1; ; attempt++) {
-    try { run(["hdiutil", "create", "-volname", "Nookdeck", "-srcfolder", stage, "-fs", "HFS+", "-size", `${mb}m`, "-ov", "-format", "UDZO", dmg]); break; }
+    try { run(["uv", "run", "--with", DMGBUILD, "dmgbuild", "-s", join(import.meta.dir, "dmg-settings.py"), ...defs.flatMap((x) => ["-D", x]), "Nookdeck", dmg]); break; }
     catch (e) {
       if (attempt >= 3) throw e;
-      console.warn(`hdiutil failed (attempt ${attempt}), retrying: ${e instanceof Error ? e.message : e}`);
+      console.warn(`dmgbuild failed (attempt ${attempt}), retrying: ${e instanceof Error ? e.message : e}`);
       try { run(["hdiutil", "detach", "/Volumes/Nookdeck", "-force"]); } catch {}
       rmSync(dmg, { force: true });
     }
   }
-  rmSync(stage, { recursive: true, force: true });
   writeFileSync(`${dmg}.sha256`, `${sha256(dmg)}  Nookdeck.dmg\n`);
   console.log(`built ${at(app)}\nbuilt ${at(dmg)} (${Math.round(statSync(dmg).size / 1e6)} MB)`);
   return finish({ app: at(app), dmg: at(dmg) });
