@@ -105,12 +105,25 @@ async function readNet(): Promise<NetCounters | undefined> {
   }
 }
 
-async function readGpu(): Promise<GpuStats | undefined> {
-  try {
-    return cleanGpu(await platform.gpu());
-  } catch {
-    return undefined; // unsupported or failed: the deck just has no gpu figure
+/**
+ * The GPU figure never holds up a stats tick: a Windows perf-counter sample can take a second or more. Each tick returns the last
+ * value and starts at most one refresh in the background, no more often than GPU_REFRESH_MS.
+ */
+const GPU_REFRESH_MS = 2000;
+let gpuLast: GpuStats | undefined;
+let gpuAt = 0;
+let gpuBusy = false;
+function readGpu(): GpuStats | undefined {
+  const now = Date.now();
+  if (!gpuBusy && now - gpuAt >= GPU_REFRESH_MS) {
+    gpuBusy = true;
+    gpuAt = now;
+    Promise.resolve()
+      .then(() => platform.gpu())
+      .then((raw) => { gpuLast = cleanGpu(raw); }, () => { gpuLast = undefined; }) // unsupported or failed: no gpu figure
+      .finally(() => { gpuBusy = false; });
   }
+  return gpuLast;
 }
 
 export function computerName(): string {
@@ -201,7 +214,8 @@ export function startStats(onTick: (s: Stats) => void, intervalMs = 2000): () =>
       const cur = readCpuTimes();
       const cpu = cpuDelta(prev, cur);
       prev = cur;
-      const [used, netNow, gpu] = await Promise.all([memUsed(), readNet(), readGpu()]);
+      const [used, netNow] = await Promise.all([memUsed(), readNet()]);
+      const gpu = readGpu();
       if (stopped) return;
       const at = Date.now();
       const net = prevNet && netNow ? netRate(prevNet, netNow, (at - prevNetAt) / 1000) : { rx: 0, tx: 0 };

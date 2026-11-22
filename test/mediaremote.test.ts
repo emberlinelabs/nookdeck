@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { WIN } from "./_os";
 import { LineSplitter, MR_COMMANDS, applyStreamLine, backoffMs, isPlaying, nowPlayingApp, positionAt, stateArtwork, stateToMedia } from "../src/mediaremote";
 import { NowPlayingStream, extractAdapter, type StreamProc } from "../src/platform/mac-remote";
 
@@ -216,7 +217,7 @@ describe("extractAdapter", () => {
     const a = await extractAdapter({ binary: bin, script: pl }, lib);
     expect(a!.framework.endsWith("MediaRemoteAdapter.framework")).toBe(true);
     expect(readFileSync(join(a!.framework, "MediaRemoteAdapter"), "utf8")).toBe("BINARY-ONE");
-    expect(statSync(join(a!.framework, "MediaRemoteAdapter")).mode & 0o111).not.toBe(0);
+    if (!WIN) expect(statSync(join(a!.framework, "MediaRemoteAdapter")).mode & 0o111).not.toBe(0); // no exec bit on Windows
     const marker = join(a!.framework, "..", "marker"); writeFileSync(marker, "x");
     const again = await extractAdapter({ binary: bin, script: pl }, lib);
     expect(again).toEqual(a);
