@@ -132,6 +132,7 @@ describe("migration on Windows (fake schtasks / netsh / reg / powershell)", () =
     const winRun = async (argv: string[]) => {
       ran.push(argv.join(" "));
       if (argv[0] === "powershell") return { code: 0, out: "changed" };
+      if (argv[0] === "netsh" && argv.includes("show") && argv.includes("name=Nookdeck")) return { code: 1, out: "No rules match" };
       return { code: 0, out: "" };
     };
     process.env.NOOKDECK_WIN_DIR = join(local, "Nookdeck");
@@ -147,8 +148,49 @@ describe("migration on Windows (fake schtasks / netsh / reg / powershell)", () =
       expect(ran.some((c) => c.includes("delete rule name=PhoneDesk"))).toBe(true);
       expect(ran.some((c) => c.includes("add rule name=Nookdeck") && c.includes("nookdeck.exe"))).toBe(true);
       expect(ran.some((c) => c.startsWith("powershell") && c.includes("PhoneDesk\\bin") && c.includes("Nookdeck\\bin"))).toBe(true);
-      expect(r.changed.join("\n")).toContain("startup entry");
+      // every step is reported (and so lands in migration.log)
+      const log = r.changed.join("\n");
+      expect(log).toContain("startup entry");
+      expect(log).toContain('removed the old firewall rule "PhoneDesk"');
+      expect(log).toContain("added the firewall rule Nookdeck");
+      expect(log).toContain("PATH: removed");
+      expect(readFileSync(join(home, ".nookdeck", "logs", "migration.log"), "utf8")).toContain("PATH: removed");
+      expect(r.notes).toEqual([]);
     } finally { delete process.env.NOOKDECK_WIN_DIR; }
+  });
+});
+
+describe("migration on Windows: what cannot be done is said, what is gone is not done again", () => {
+  const mk = () => { const home = tmp(); const local = tmp(); mkdirSync(join(home, ".phonedesk")); return { home, local }; };
+  test("the old firewall rule cannot be removed without administrator rights: the exact commands are printed", async () => {
+    const { home, local } = mk();
+    const run = async (argv: string[]) => {
+      if (argv[0] === "netsh" && argv.includes("delete")) return { code: 1, out: "requires elevation" };
+      if (argv[0] === "netsh" && argv.includes("show")) return { code: argv.includes("name=PhoneDesk") ? 0 : 1, out: "" };
+      if (argv[0] === "schtasks" || argv[0] === "reg") return { code: 1, out: "" };
+      return { code: 0, out: "" };
+    };
+    const svc: any = { launchctl: async () => ({ code: 0, out: "" }), uid: 0, platform: "win32", program: ["x"], log: () => {}, winRun: run, winDir: join(local, "Nookdeck") };
+    const r = await migrate({ platform: "win32", home, winLocal: local, data: true, service: true, svc, program: ["x"], hookFiles: {}, instance: { port: 7420, home: join(home, ".nookdeck") } });
+    const note = r.notes.find((n) => n.startsWith("firewall: the old rule"))!;
+    expect(note).toContain('netsh advfirewall firewall delete rule name="PhoneDesk"');
+    expect(note).toContain('Remove-NetFirewallRule -DisplayName "PhoneDesk"');
+  });
+  test("nothing old left: nothing is done and nothing is logged (a second run)", async () => {
+    const { home, local } = mk();
+    const ran: string[] = [];
+    const run = async (argv: string[]) => { ran.push(argv.join(" ")); return { code: 1, out: "" }; }; // no task, no run key, no rule, PATH untouched
+    const svc: any = { launchctl: async () => ({ code: 0, out: "" }), uid: 0, platform: "win32", program: ["x"], log: () => {}, winRun: run, winDir: join(local, "Nookdeck") };
+    await migrate({ platform: "win32", home, winLocal: local, data: true, service: true, svc, program: ["x"], hookFiles: {}, instance: { port: 7420, home: join(home, ".nookdeck") } });
+    const r = await migrate({ platform: "win32", home, winLocal: local, data: true, service: true, svc, program: ["x"], hookFiles: {}, instance: { port: 7420, home: join(home, ".nookdeck") } });
+    expect(r.changed).toEqual([]);
+    expect(ran.some((c) => c.includes("delete") || c.includes("add rule") || c.includes("/Create"))).toBe(false);
+  });
+  test("the PATH script drops the old entry, keeps the new one once, and touches nothing else", () => {
+    const src = readFileSync(join(import.meta.dir, "..", "src", "migrate.ts"), "utf8");
+    expect(src).toContain("$parts=@($p -split ';'");
+    expect(src).toContain("-ieq $o");
+    expect(src).toContain("-ieq $n");
   });
 });
 

@@ -173,28 +173,42 @@ async function migrateLaunchd(o: MigrateOptions, program: string[], say: (s: str
 async function migrateWindows(o: MigrateOptions, program: string[], newHome: string, say: (s: string) => void, notes: string[]) {
   const { winServiceCtxFrom } = await import("./service");
   const { winInstall } = await import("./platform/win32/service");
-  const run = o.svc.winRun;
-  if (!run) return;
+  const { runCode } = await import("./platform/exec");
+  // the real service deps carry no runner: the Windows one is the usual schtasks / reg / powershell caller
+  const run = o.svc.winRun ?? ((argv: string[]) => runCode(argv, 15_000));
+  const rule = (name: string) => ["netsh", "advfirewall", "firewall", "show", "rule", `name=${name}`];
+  const RUN_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+
+  // startup entry
   const hadTask = (await run(["schtasks", "/Query", "/TN", OLD_TASK_NAME, "/FO", "LIST"])).code === 0;
-  const hadRun = (await run(["reg", "query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", OLD_TASK_NAME])).code === 0;
+  const hadRun = (await run(["reg", "query", RUN_KEY, "/v", OLD_TASK_NAME])).code === 0;
   if (hadTask || hadRun) {
     await run(["schtasks", "/End", "/TN", OLD_TASK_NAME]);
     await run(["schtasks", "/Delete", "/TN", OLD_TASK_NAME, "/F"]);
-    await run(["reg", "delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", OLD_TASK_NAME, "/f"]);
+    await run(["reg", "delete", RUN_KEY, "/v", OLD_TASK_NAME, "/f"]);
     await winInstall(winServiceCtxFrom({ ...o.svc, program }));
     say("replaced the PhoneDesk startup entry with Nookdeck");
   }
-  if ((await run(["netsh", "advfirewall", "firewall", "show", "rule", `name=${OLD_FIREWALL_RULE}`])).code === 0) {
+
+  // firewall: the old inbound rule goes (when it cannot be removed, the exact command is printed); the new one is added unless it exists
+  if ((await run(rule(OLD_FIREWALL_RULE))).code === 0) {
     const d = await run(["netsh", "advfirewall", "firewall", "delete", "rule", `name=${OLD_FIREWALL_RULE}`]);
-    const a = await run(["netsh", "advfirewall", "firewall", "add", "rule", "name=Nookdeck", "dir=in", "action=allow", `program=${program[0]}`, "profile=any", "remoteip=localsubnet"]);
-    if (d.code === 0 && a.code === 0) say("replaced the PhoneDesk firewall rule with Nookdeck");
-    else notes.push(`firewall: run as administrator: netsh advfirewall firewall add rule name="Nookdeck" dir=in action=allow program="${program[0]}" profile=any remoteip=localsubnet`);
+    if (d.code === 0) say(`removed the old firewall rule "${OLD_FIREWALL_RULE}"`);
+    else notes.push(`firewall: the old rule "${OLD_FIREWALL_RULE}" needs administrator rights to remove. Run as administrator: netsh advfirewall firewall delete rule name="${OLD_FIREWALL_RULE}"   (or in PowerShell: Remove-NetFirewallRule -DisplayName "${OLD_FIREWALL_RULE}")`);
+    if ((await run(rule("Nookdeck"))).code !== 0) {
+      const a = await run(["netsh", "advfirewall", "firewall", "add", "rule", "name=Nookdeck", "dir=in", "action=allow", `program=${program[0]}`, "profile=any", "remoteip=localsubnet"]);
+      if (a.code === 0) say("added the firewall rule Nookdeck");
+      else notes.push(`firewall: run as administrator: netsh advfirewall firewall add rule name="Nookdeck" dir=in action=allow program="${program[0]}" profile=any remoteip=localsubnet`);
+    }
   }
+
+  // user PATH: the old bin folder goes; the new one takes its place unless it is there already (no duplicates)
   const local = o.winLocal ?? process.env.LOCALAPPDATA ?? "";
   const oldBin = `${local}\\PhoneDesk\\bin`, newBin = `${local}\\Nookdeck\\bin`;
-  const script = `$o='${oldBin.replace(/'/g, "''")}'; $n='${newBin.replace(/'/g, "''")}'; $p=[Environment]::GetEnvironmentVariable('Path','User'); if($p -and $p.Contains($o)){[Environment]::SetEnvironmentVariable('Path',$p.Replace($o,$n),'User'); 'changed'}`;
+  const q = (x: string) => x.replace(/'/g, "''");
+  const script = `$o='${q(oldBin)}'; $n='${q(newBin)}'; $p=[Environment]::GetEnvironmentVariable('Path','User'); if(-not $p){return}; $parts=@($p -split ';' | Where-Object { $_ -ne '' }); if(-not ($parts | Where-Object { $_.TrimEnd('\\') -ieq $o })){return}; $out=@(); $seen=$false; foreach($x in $parts){ if($x.TrimEnd('\\') -ieq $o){ if(-not $seen){$out+=$n; $seen=$true} } elseif($x.TrimEnd('\\') -ieq $n){ if(-not $seen){$out+=$x; $seen=$true} } else { $out+=$x } }; [Environment]::SetEnvironmentVariable('Path',($out -join ';'),'User'); 'changed'`;
   const r = await run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script]);
-  if (/changed/.test(r.out)) say("PATH now uses the Nookdeck bin folder");
+  if (/changed/.test(r.out)) say(`PATH: removed ${oldBin} (${newBin} is used instead)`);
 }
 
 /**
