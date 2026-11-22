@@ -14,10 +14,10 @@ import { pagePlace } from "@shared/reflow";
 import type { PaletteEntry } from "@/lib/palette";
 import { cn } from "@/lib/utils";
 import { t, useLanguage } from "@/lib/i18n";
-import { findFree, randomId, GRID_PRESETS, PROVIDER_LABEL, WIDGET_LABEL, actionSummary, duplicateItem, moveTile, newItem, repack, resizeGrid, resizeTile, setWidgetKind, uniquePageId, type GridResult } from "@/lib/layout";
+import { findFree, randomId, GRID_PRESETS, PROVIDER_LABEL, WIDGET_LABEL, actionSummary, duplicateItem, moveTile, newItem, repack, resizeGrid, resizeTile, setWidgetKind, uniquePageId, type GridResult, type MoveResult, moveToPage, tileName } from "@/lib/layout";
 import type { Item, Layout, Page, WidgetKind } from "@/types";
 
-export function ScreensPanel({ layout, pageIdx, itemId, setPageIdx, setItemId, update, orientation, onOrientation }: {
+export function ScreensPanel({ layout, pageIdx, itemId, setPageIdx, setItemId, update, orientation, onOrientation, onUndo }: {
   layout: Layout;
   pageIdx: number;
   itemId: string | null;
@@ -26,18 +26,27 @@ export function ScreensPanel({ layout, pageIdx, itemId, setPageIdx, setItemId, u
   update: (fn: (l: Layout) => Layout) => void;
   orientation: Orientation;
   onOrientation: (o: Orientation) => void;
+  /** Undoes the last edit (the toast after a swap offers it). */
+  onUndo?: () => void;
 }) {
   useLanguage();
   const page = layout.pages[pageIdx]!;
   const item = page.items.find((i) => i.id === itemId);
   const [cell, setCell] = useState<{ x: number; y: number } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const [leftTab, setLeftTab] = useState<"palette" | "items">("palette");
   const controller = useRef<PreviewController | null>(null);
   const [drag, setDrag] = useState<{ override: Layout | null; ghost: DropGhost | null } | null>(null);
   const latest = useRef({ layout, pageIdx });
   latest.current = { layout, pageIdx };
   const draft = useRef<{ key: string; item: Item } | null>(null);
+
+  useEffect(() => {
+    if (!note) return;
+    const timer = setTimeout(() => setNote(null), 6000);
+    return () => clearTimeout(timer);
+  }, [note]);
 
   useEffect(() => {
     if (!toast) return;
@@ -68,12 +77,14 @@ export function ScreensPanel({ layout, pageIdx, itemId, setPageIdx, setItemId, u
     select(it.id);
   };
 
-  const apply = (pageId: string, fn: (p: Page) => GridResult) => {
+  const apply = (pageId: string, fn: (p: Page) => GridResult | MoveResult) => {
     const pi = layout.pages.findIndex((p) => p.id === pageId);
     if (pi < 0) return;
     const res = fn(layout.pages[pi]!);
     if (!res.ok) return setToast(res.error);
     update((l) => ({ ...l, pages: l.pages.map((p, i) => (i === pi ? res.page : p)) }));
+    const sw = "swapped" in res ? res.swapped : undefined;
+    if (sw?.length) setNote(t("Swapped with {name}", { name: sw.map(tileName).join(", ") }));
   };
 
   /** The item a palette entry would create (same id for the whole drag so the preview does not flicker). */
@@ -200,6 +211,11 @@ export function ScreensPanel({ layout, pageIdx, itemId, setPageIdx, setItemId, u
           onResize={(pageId, id, w, h, x, y) => apply(pageId, (p) => resizeTile(p, id, w, h, x, y))}
           onPage={switchPage}
         />
+        {note && (
+          <div className="pointer-events-none absolute inset-x-0 top-12 z-10 mx-auto w-fit max-w-[min(520px,90%)]">
+            <div className="pointer-events-auto"><Alert tone="success" onDismiss={() => setNote(null)} action={onUndo ? { label: t("Undo"), onClick: () => { onUndo(); setNote(null); } } : undefined}>{note}</Alert></div>
+          </div>
+        )}
         {toast && (
           <div className="pointer-events-none absolute inset-x-0 top-12 z-10 mx-auto w-fit max-w-[min(520px,90%)]">
             <div className="pointer-events-auto"><Alert tone="danger" onDismiss={() => setToast(null)}>{toast}</Alert></div>
@@ -235,6 +251,16 @@ export function ScreensPanel({ layout, pageIdx, itemId, setPageIdx, setItemId, u
             onDelete={() => {
               setItems(page.items.filter((i) => i.id !== item.id));
               select(null);
+            }}
+            onMoveToPage={(toId, swapWith) => {
+              const res = moveToPage(layout, page.id, item.id, toId, swapWith);
+              if (!res.ok) return res.full ? "full" : (setToast(res.error), "error");
+              update(() => res.layout);
+              const dstIdx = res.layout.pages.findIndex((p) => p.id === toId);
+              if (res.swapped) setNote(t("Swapped with {name}", { name: tileName(res.swapped) }));
+              else setNote(t("Moved to {name}", { name: res.layout.pages[dstIdx]?.name ?? toId }));
+              select(null);
+              return "ok";
             }}
           />
         ) : cell ? (

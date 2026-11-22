@@ -4,6 +4,7 @@
 import { readdirSync, statSync, existsSync, writeFileSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, relative, dirname, extname, sep } from "node:path";
+import { writeMraEmbed } from "./mra-assets";
 
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -135,4 +136,5 @@ if (import.meta.main) {
   const root = join(import.meta.dir, "..");
   const r = generate(join(root, "web"), join(root, "src", "assets.gen.ts"), gitInfo(root));
   console.log(`assets.gen.ts: ${r.deck} deck files, ${r.manage} manage files`);
+  writeMraEmbed(); // the Now Playing adapter, when build-mediaremote.ts has built it (else a stub)
 }

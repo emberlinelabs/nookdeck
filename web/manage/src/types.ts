@@ -82,10 +82,11 @@ export interface IconCatalog {
 }
 
 export type MetricChart = "sparkline" | "area" | "bars" | "gauge" | "ring" | "bar" | "number" | "donut";
-export const METRIC_WIDGETS = ["cpu", "memory", "network", "load"] as const;
+export const METRIC_WIDGETS = ["cpu", "gpu", "memory", "network", "load"] as const;
 export type MetricWidget = (typeof METRIC_WIDGETS)[number];
 export const METRIC_CHARTS_FOR: Record<MetricWidget, MetricChart[]> = {
   cpu: ["sparkline", "area", "bars", "gauge", "ring", "bar", "number"],
+  gpu: ["sparkline", "area", "bars", "gauge", "ring", "bar", "number"],
   memory: ["sparkline", "area", "bars", "gauge", "ring", "bar", "number", "donut"],
   network: ["sparkline", "area", "bars", "number"],
   load: ["sparkline", "area", "bars", "number"],
@@ -98,8 +99,8 @@ export interface MetricOptions {
   showSub?: boolean;
 }
 
-export type WidgetKind = "clock" | "cpu" | "memory" | "uptime" | "load" | "network" | "nowplaying" | "quota" | "sessions" | "entity" | "weather" | "value" | "notifications";
-export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "memory", "uptime", "load", "network", "nowplaying", "quota", "sessions", "entity", "weather", "value", "notifications"];
+export type WidgetKind = "clock" | "cpu" | "gpu" | "memory" | "uptime" | "load" | "network" | "nowplaying" | "quota" | "sessions" | "entity" | "weather" | "value" | "notifications";
+export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "gpu", "memory", "uptime", "load", "network", "nowplaying", "quota", "sessions", "entity", "weather", "value", "notifications"];
 
 export interface WeatherOptions {
   source?: "auto" | "hass" | "open-meteo";
@@ -212,6 +213,30 @@ export type Item =
 
 export type ThemeOrientation = "landscape" | "portrait" | "auto";
 
+export interface ScreenSettings {
+  lite?: "auto" | "on" | "off";
+  keepAwake?: boolean;
+  standby?: { enabled: boolean; afterMin: number; style: "digital" | "analog" | "words"; showDate?: boolean; showNext?: boolean };
+  /** Black overlay opacity 0..0.9; from/to "HH:MM" is the schedule (may wrap midnight); both missing = never auto-dim. */
+  dim?: { level: number; from?: string; to?: string };
+}
+
+export type AlarmSoundId = "chime" | "birds" | "soft" | "none";
+export interface Alarm {
+  id: string;
+  time: string;
+  /** 0=Sun..6=Sat; missing or empty = once. */
+  days?: number[];
+  label?: string;
+  enabled: boolean;
+  sound: AlarmSoundId;
+  sunriseMin: number;
+  snoozeMin: number;
+  /** Device ids; missing or empty = every phone. */
+  devices?: string[];
+}
+export const ALARMS_MAX = 20;
+
 export interface Theme {
   /** UI language for this page and the phone overlay; missing means English. */
   language?: "en" | "vi";
@@ -219,6 +244,10 @@ export interface Theme {
   temperatureUnit?: "c" | "f";
   /** Look for a newer PhoneDesk once a day; missing means on. */
   updateCheck?: boolean;
+  /** Phone screen behaviour: lite mode, keep awake, standby clock, dimming. */
+  screen?: ScreenSettings;
+  /** Top bar on the phone: full (default), minimal (no computer name or CPU/RAM) or hidden. */
+  header?: "full" | "minimal" | "hidden";
   mode?: "dark" | "light" | "auto";
   accent?: string;
   background?: string;
@@ -248,6 +277,7 @@ export interface Layout {
   theme?: Theme;
   pages: Page[];
   rules?: Rule[];
+  alarms?: Alarm[];
   /** Icon images the deck needs (app icons, uploads), keyed by icon value; only sent to the preview, never saved by this page. */
   assets?: Record<string, unknown>;
 }

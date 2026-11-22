@@ -2,6 +2,32 @@ import { cpus, freemem, hostname, loadavg, totalmem, uptime } from "node:os";
 import { getVolumeCached, type VolumeState } from "./actions";
 import { platform } from "./platform";
 
+/** GPU figures; the whole object is omitted from Stats when the OS cannot tell. */
+export interface GpuStats {
+  util: number; // 0-100
+  memUsed?: number; // bytes
+  memTotal?: number; // bytes
+  temp?: number; // degrees Celsius
+  name?: string;
+}
+
+/** Pure: cleans whatever a platform returned into a GpuStats (util clamped to 0-100, bad optional fields dropped), or undefined. */
+export function cleanGpu(raw: any): GpuStats | undefined {
+  const util = Number(raw?.util);
+  if (raw?.util === null || raw?.util === undefined || !Number.isFinite(util)) return undefined;
+  const out: GpuStats = { util: Math.round(Math.min(100, Math.max(0, util)) * 10) / 10 };
+  const bytes = (v: unknown) => (v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.round(Number(v)) : undefined);
+  const memUsed = bytes(raw.memUsed);
+  const memTotal = bytes(raw.memTotal);
+  if (memUsed !== undefined) out.memUsed = memUsed;
+  if (memTotal !== undefined && memTotal > 0) out.memTotal = memTotal;
+  if (out.memUsed !== undefined && out.memTotal !== undefined) out.memUsed = Math.min(out.memUsed, out.memTotal);
+  const temp = Number(raw.temp);
+  if (raw.temp !== null && raw.temp !== undefined && raw.temp !== "" && Number.isFinite(temp) && temp > 0 && temp < 150) out.temp = Math.round(temp);
+  if (typeof raw.name === "string" && raw.name.trim()) out.name = raw.name.trim().slice(0, 80);
+  return out;
+}
+
 export interface Stats {
   cpu: number; // 0-100
   memUsed: number; // bytes
@@ -14,6 +40,8 @@ export interface Stats {
   host: string; // computer name without ".local"
   net: { rx: number; tx: number }; // bytes/s over non-loopback interfaces
   volume: VolumeState | null; // output volume, null when unknown
+  /** Omitted when unknown (Linux, no GPU, a failed read). */
+  gpu?: GpuStats;
 }
 
 export type NetCounters = Record<string, { rx: number; tx: number }>;
@@ -74,6 +102,14 @@ async function readNet(): Promise<NetCounters | undefined> {
     return await platform.netCounters();
   } catch {
     return undefined; // unsupported or failed: report zero traffic
+  }
+}
+
+async function readGpu(): Promise<GpuStats | undefined> {
+  try {
+    return cleanGpu(await platform.gpu());
+  } catch {
+    return undefined; // unsupported or failed: the deck just has no gpu figure
   }
 }
 
@@ -165,7 +201,7 @@ export function startStats(onTick: (s: Stats) => void, intervalMs = 2000): () =>
       const cur = readCpuTimes();
       const cpu = cpuDelta(prev, cur);
       prev = cur;
-      const [used, netNow] = await Promise.all([memUsed(), readNet()]);
+      const [used, netNow, gpu] = await Promise.all([memUsed(), readNet(), readGpu()]);
       if (stopped) return;
       const at = Date.now();
       const net = prevNet && netNow ? netRate(prevNet, netNow, (at - prevNetAt) / 1000) : { rx: 0, tx: 0 };
@@ -177,7 +213,7 @@ export function startStats(onTick: (s: Stats) => void, intervalMs = 2000): () =>
       let load: [number, number, number];
       if (kind === "estimate") { load = estimator.update((cpu / 100) * cpus().length, prevLoadAt ? (at - prevLoadAt) / 1000 : 0); prevLoadAt = at; }
       else { const [l1 = 0, l5 = 0, l15 = 0] = loadavg(); load = [l1, l5, l15]; }
-      onTick({ cpu, memUsed: used, memTotal: totalmem(), uptime: uptime(), load, loadKind: kind, time: at, host, net, volume: getVolumeCached() });
+      onTick({ cpu, memUsed: used, memTotal: totalmem(), uptime: uptime(), load, loadKind: kind, time: at, host, net, volume: getVolumeCached(), ...(gpu ? { gpu } : {}) });
     } catch {
       // a failed sample must not kill the loop
     } finally {

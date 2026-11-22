@@ -12,3 +12,5 @@ src/assets.gen.ts
 web/shared/icon-catalog.json
 web/*/dist/
 .mcp.json
+src/platform/mra-embed.gen.ts
+build/

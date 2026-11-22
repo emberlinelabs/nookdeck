@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { defaultLayout, validateLayout } from "../src/config";
+import { HEADER_MODES, defaultLayout, validateLayout } from "../src/config";
 import { isIconName } from "../web/shared/icons";
 
 const withItem = (extra: Record<string, unknown>) => {
@@ -186,5 +186,84 @@ describe("Home Assistant", () => {
     expect(() => validateLayout(page({ kind: "widget", widget: "entity", entity: { id: "Light Bep" } }))).toThrow("domain.object_id");
     expect(() => validateLayout(page({ kind: "widget", widget: "entity" }))).toThrow("needs entity.id");
     expect(() => validateLayout(page({ kind: "button", label: "x", action: { type: "hass", service: "rm -rf" } }))).toThrow("domain.service");
+  });
+});
+
+describe("theme.screen and layout.alarms", () => {
+  const base = (extra: Record<string, unknown>) => ({ ...defaultLayout(), ...extra }) as any;
+  const withScreen = (screen: unknown) => base({ theme: { mode: "dark", screen } });
+  const alarm = (extra: Record<string, unknown> = {}) => ({ id: "wake", time: "06:30", enabled: true, sound: "chime", sunriseMin: 10, snoozeMin: 9, ...extra });
+
+  test("existing layouts are unchanged: no screen, no alarms", () => {
+    const l = validateLayout(defaultLayout());
+    expect(l.theme?.screen).toBeUndefined();
+    expect(l.alarms).toBeUndefined();
+    expect(validateLayout(JSON.parse(JSON.stringify(l)))).toEqual(l);
+  });
+
+  test("screen round-trips and fills standby/dim defaults", () => {
+    const l = validateLayout(withScreen({ lite: "on", keepAwake: false, standby: { enabled: true }, dim: { from: "22:30", to: "06:30", junk: 1 }, extra: 1 }));
+    expect(l.theme?.screen).toEqual({ lite: "on", keepAwake: false, standby: { enabled: true, afterMin: 5, style: "digital" }, dim: { level: 0.6, from: "22:30", to: "06:30" } });
+    expect(validateLayout(JSON.parse(JSON.stringify(l)))).toEqual(l);
+  });
+
+  test("screen rejects bad values", () => {
+    expect(() => validateLayout(withScreen({ lite: "max" }))).toThrow("theme.screen.lite");
+    expect(() => validateLayout(withScreen({ standby: { afterMin: 0 } }))).toThrow("afterMin");
+    expect(() => validateLayout(withScreen({ standby: { afterMin: 121 } }))).toThrow("afterMin");
+    expect(() => validateLayout(withScreen({ standby: { style: "flip" } }))).toThrow("standby.style");
+    expect(() => validateLayout(withScreen({ dim: { level: 0.95 } }))).toThrow("dim.level");
+    expect(() => validateLayout(withScreen({ dim: { from: "25:00" } }))).toThrow("theme.screen.dim.from must be HH:MM");
+    expect(() => validateLayout(withScreen("x"))).toThrow("theme.screen must be an object");
+  });
+
+  test("alarms: valid ones round-trip with defaults and clean-up", () => {
+    const l = validateLayout(base({ alarms: [alarm({ days: [5, 1, 1], label: "Work", devices: ["a", "a"], junk: 1 }), { id: "once", time: "07:00" }] }));
+    expect(l.alarms![0]).toEqual({ id: "wake", time: "06:30", days: [1, 5], label: "Work", enabled: true, sound: "chime", sunriseMin: 10, snoozeMin: 9, devices: ["a"] });
+    expect(l.alarms![1]).toEqual({ id: "once", time: "07:00", enabled: true, sound: "chime", sunriseMin: 0, snoozeMin: 9 });
+    expect(validateLayout(JSON.parse(JSON.stringify(l)))).toEqual(l);
+  });
+
+  test("alarms reject bad values with indexed messages", () => {
+    expect(() => validateLayout(base({ alarms: [alarm({ time: "6:30" })] }))).toThrow("alarms[0].time must be HH:MM");
+    expect(() => validateLayout(base({ alarms: [alarm(), alarm({ id: "B x" })] }))).toThrow("alarms[1].id");
+    expect(() => validateLayout(base({ alarms: [alarm(), alarm()] }))).toThrow("used twice");
+    expect(() => validateLayout(base({ alarms: [alarm({ days: [7] })] }))).toThrow("alarms[0].days[0]");
+    expect(() => validateLayout(base({ alarms: [alarm({ label: "x".repeat(61) })] }))).toThrow("label");
+    expect(() => validateLayout(base({ alarms: [alarm({ sound: "gong" })] }))).toThrow("alarms[0].sound");
+    expect(() => validateLayout(base({ alarms: [alarm({ sunriseMin: 31 })] }))).toThrow("sunriseMin");
+    expect(() => validateLayout(base({ alarms: [alarm({ snoozeMin: 0 })] }))).toThrow("snoozeMin");
+    expect(() => validateLayout(base({ alarms: "x" }))).toThrow("alarms must be an array");
+    const many = Array.from({ length: 21 }, (_, i) => alarm({ id: `a${i}` }));
+    expect(() => validateLayout(base({ alarms: many }))).toThrow("at most 20");
+    expect(validateLayout(base({ alarms: many.slice(0, 20) })).alarms).toHaveLength(20);
+  });
+});
+
+describe("theme.header", () => {
+  const withHeader = (header: unknown) => ({ ...defaultLayout(), theme: { mode: "dark", header } }) as any;
+
+  test("missing stays missing; the three modes round-trip", () => {
+    expect(HEADER_MODES).toEqual(["full", "minimal", "hidden"]);
+    expect(validateLayout(defaultLayout()).theme?.header).toBeUndefined();
+    for (const m of HEADER_MODES) {
+      const l = validateLayout(withHeader(m));
+      expect(l.theme?.header).toBe(m);
+      expect(validateLayout(JSON.parse(JSON.stringify(l)))).toEqual(l);
+    }
+  });
+
+  test("anything else is rejected", () => {
+    expect(() => validateLayout(withHeader("tiny"))).toThrow("theme.header must be one of full, minimal, hidden");
+    expect(() => validateLayout(withHeader(true))).toThrow("theme.header");
+  });
+});
+
+describe("gpu widget", () => {
+  const page = (metric?: unknown) => ({ version: 1, pages: [{ id: "p", name: "P", columns: 4, rows: 1, items: [{ id: "g", kind: "widget", widget: "gpu", ...(metric ? { metric } : {}) }] }] }) as any;
+  test("gpu is a metric widget with the cpu charts", () => {
+    expect(validateLayout(page({ chart: "gauge", window: 300 })).pages[0]!.items[0]).toMatchObject({ widget: "gpu", metric: { chart: "gauge", window: 300 } });
+    expect(() => validateLayout(page({ chart: "donut" }))).toThrow("chart for gpu");
+    expect(validateLayout(page()).pages[0]!.items[0]!.widget).toBe("gpu");
   });
 });

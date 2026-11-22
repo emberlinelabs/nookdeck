@@ -12,7 +12,7 @@ export type Action =
   | { type: 'macro'; steps: { kind: string; [k: string]: unknown }[] }
   | { type: 'hass'; service: string; entityId?: string; data?: { [k: string]: unknown } }
 
-export type WidgetKind = 'clock' | 'cpu' | 'memory' | 'uptime' | 'load' | 'network' | 'nowplaying' | 'quota' | 'sessions' | 'entity' | 'weather' | 'value' | 'notifications'
+export type WidgetKind = 'clock' | 'cpu' | 'gpu' | 'memory' | 'uptime' | 'load' | 'network' | 'nowplaying' | 'quota' | 'sessions' | 'entity' | 'weather' | 'value' | 'notifications'
 
 export type ClockStyle = 'digital' | 'flip' | 'analog' | 'minimal' | 'word' | 'world'
 export interface ClockOptions {
@@ -152,6 +152,51 @@ export interface Theme {
   orientation?: Orientation
   /** every temperature on the phone; missing = 'c' */
   temperatureUnit?: 'c' | 'f'
+  /** lite mode, keep awake, standby clock, dim */
+  screen?: ScreenSettings
+  /** top bar: full (default), minimal (no computer name / CPU / RAM), hidden (no bar, a small corner button) */
+  header?: HeaderMode
+}
+
+export type HeaderMode = 'full' | 'minimal' | 'hidden'
+
+export interface ScreenSettings {
+  /** 'auto' = the deck decides (old iOS, <= 2 CPU cores, deviceMemory <= 2); default 'auto' */
+  lite?: 'auto' | 'on' | 'off'
+  /** keep the phone screen on; default true */
+  keepAwake?: boolean
+  standby?: {
+    enabled: boolean
+    /** idle minutes (no touch) before standby, 1..120; default 5 */
+    afterMin: number
+    style: 'digital' | 'analog' | 'words'
+    showDate?: boolean
+    showNext?: boolean
+  }
+  dim?: {
+    /** black overlay opacity while dimmed, 0..0.9; default 0.6 */
+    level: number
+    /** "HH:MM" phone local time; both missing = never auto-dim; the window may wrap midnight */
+    from?: string
+    to?: string
+  }
+}
+
+export interface Alarm {
+  id: string
+  /** "HH:MM" 24h, phone local time */
+  time: string
+  /** 0=Sun..6=Sat; missing/empty = one-shot */
+  days?: number[]
+  label?: string
+  enabled: boolean
+  sound: 'chime' | 'birds' | 'soft' | 'none'
+  /** 0..30 minutes of sunrise before time */
+  sunriseMin: number
+  /** 1..30, default 9 */
+  snoozeMin: number
+  /** device ids; missing/empty = every phone */
+  devices?: string[]
 }
 
 export interface Page {
@@ -169,6 +214,7 @@ export interface Layout {
   version: 1
   theme?: Theme
   assets?: IconAssets
+  alarms?: Alarm[]
   pages: Page[]
 }
 
@@ -184,6 +230,8 @@ export interface Stats {
   host?: string
   net?: { rx: number; tx: number }
   volume?: { level: number; muted: boolean } | null
+  /** graphics card; absent = unknown (Linux, read failed) */
+  gpu?: { util: number; memUsed?: number; memTotal?: number; temp?: number; name?: string }
 }
 
 export type MediaCommand = 'playpause' | 'next' | 'previous' | 'resume' | 'open'

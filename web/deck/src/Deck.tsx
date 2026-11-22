@@ -9,6 +9,9 @@ import { setTempUnit } from './temp'
 import { shade, applyTheme, readableOn, tint } from './theme'
 import { PROVIDER_COLOR } from './ai'
 import { PermissionSheet, ProcessSheet, QuestionSheet } from './sheets'
+import { ScreenLayer, ScreenSheet } from './screen'
+import { swapPreview } from './swap'
+import { headerMode, keepAwakeOn, liteOn, onLocalScreen } from './screen-logic'
 import type { QuestionRequest, WeatherData, PushedValue, Notice, GotoReq, HassEntity, HassState, IconAssets, AiData, Item, Layout, Media, MediaCommand, Orientation, Page, Stats, TileStyle } from './types'
 
 export { Icon }
@@ -56,6 +59,7 @@ const SAMPLE_STATS: Stats = {
   host: 'My computer',
   net: { rx: 2.4 * 1024 * 1024, tx: 245 * 1024 },
   volume: { level: 62, muted: false },
+  gpu: { util: 46, memUsed: 3.4 * GB, memTotal: 8 * GB, temp: 61, name: 'Sample GPU' },
 }
 const SAMPLE_MEDIA: Media = {
   app: 'Spotify',
@@ -222,7 +226,7 @@ const sampleSeries = (seed: number, base: number, amp: number) => {
   for (let i = 0; i < HIST_LEN; i++) out.push(Math.max(0, base + Math.sin(i / 5 + seed) * amp + Math.sin(i / 2.3 + seed * 2) * amp * 0.4))
   return out
 }
-const SAMPLE_HIST: Hist = { cpu: sampleSeries(1, 37, 15), mem: sampleSeries(2, 51, 4), rx: sampleSeries(3, 2.4e6, 1.4e6), tx: sampleSeries(5, 4e5, 2.5e5), load: sampleSeries(4, 1.2, 0.5) }
+const SAMPLE_HIST: Hist = { cpu: sampleSeries(1, 37, 15), mem: sampleSeries(2, 51, 4), rx: sampleSeries(3, 2.4e6, 1.4e6), tx: sampleSeries(5, 4e5, 2.5e5), load: sampleSeries(4, 1.2, 0.5), gpu: sampleSeries(6, 46, 20) }
 
 /** Font size (px) that keeps `chars` characters inside `avail` px; no CSS clamp()/container queries on Safari 12. */
 const fit = (chars: number, avail: number, max: number, min: number) =>
@@ -310,11 +314,34 @@ interface TileTheme {
   radius: number
 }
 
-function useClientState(client: DeckClient): ClientState {
+/** lite mode: a stats-only update (nothing else changed) is applied at most every 5 s, so charts and tiles redraw less */
+function useClientState(client: DeckClient, liteRef?: { current: boolean }): ClientState {
   const [s, setS] = useState(client.state)
   useEffect(() => {
     setS(client.state)
-    return client.subscribe(setS)
+    let shown: any = client.state
+    let at = 0
+    let timer = 0
+    const apply = (n: ClientState) => {
+      shown = n
+      at = Date.now()
+      setS(n)
+    }
+    const unsub = client.subscribe((n) => {
+      if (liteRef && liteRef.current && n.stats !== shown.stats) {
+        let only = true
+        for (const k in n) if (k !== 'stats' && (n as any)[k] !== shown[k]) only = false
+        if (only && Date.now() - at < 5000) {
+          if (!timer) timer = window.setTimeout(() => { timer = 0; apply(client.state) }, 5000 - (Date.now() - at))
+          return
+        }
+      }
+      apply(n)
+    })
+    return () => {
+      unsub()
+      if (timer) clearTimeout(timer)
+    }
   }, [client])
   return s
 }
@@ -836,6 +863,8 @@ interface Drag {
   tw: number // target span
   th: number
   valid: boolean
+  /** the drop would swap: the tiles it trades with (their current cells) and where they would land */
+  swap?: { id: string; px: number; py: number; pw: number; ph: number; nx: number; ny: number }[]
 }
 
 const orientOf = (l: Layout | null): Orientation => (l && l.theme && l.theme.orientation) || 'landscape'
@@ -843,7 +872,11 @@ const orientOf = (l: Layout | null): Orientation => (l && l.theme && l.theme.ori
 export function Deck(props: DeckProps) {
   const preview = !!props.preview
   const client = useMemo(() => new DeckClient(props.baseUrl), [props.baseUrl])
-  const live = useClientState(client)
+  const liteRef = useRef(false)
+  const live = useClientState(client, liteRef)
+  const [, bumpLocal] = useState(0)
+  useEffect(() => onLocalScreen(() => bumpLocal((x) => x + 1)), [])
+  const [scrOpen, setScrOpen] = useState(false)
   const [pv, setPv] = useState<{ layout: Layout | null; selectedId: string | null; np: string; clean: boolean }>(() => {
     const q = new URLSearchParams(location.search)
     const n = splitNp(q.get('np') || '')
@@ -886,7 +919,7 @@ export function Deck(props: DeckProps) {
   const pagesRef = useRef(pages)
   pagesRef.current = pages
   // last ~60 samples of each metric, kept client side for the sparklines
-  const histRef = useRef<Hist>({ cpu: [], mem: [], rx: [], tx: [], load: [] })
+  const histRef = useRef<Hist>({ cpu: [], mem: [], rx: [], tx: [], load: [], gpu: [] })
   const lastStats = useRef<Stats | null>(null)
   if (!preview && st.stats && st.stats !== lastStats.current) {
     lastStats.current = st.stats
@@ -896,6 +929,7 @@ export function Deck(props: DeckProps) {
       if (a.length > HIST_LEN) a.shift()
     }
     push(hs.cpu, st.stats.cpu)
+    if (st.stats.gpu) push(hs.gpu || (hs.gpu = []), st.stats.gpu.util)
     push(hs.mem, st.stats.memTotal ? (st.stats.memUsed / st.stats.memTotal) * 100 : 0)
     push(hs.rx, st.stats.net ? st.stats.net.rx : 0)
     push(hs.tx, st.stats.net ? st.stats.net.tx : 0)
@@ -1052,8 +1086,9 @@ export function Deck(props: DeckProps) {
   }, [gt])
 
   // screen wake lock
+  const keepAwake = keepAwakeOn(st.layout && st.layout.theme ? st.layout.theme.screen : undefined)
   useEffect(() => {
-    if (!active || preview) return
+    if (!active || preview || !keepAwake) return
     let lock: any = null
     let dead = false
     const req = () => {
@@ -1074,7 +1109,7 @@ export function Deck(props: DeckProps) {
       document.removeEventListener('visibilitychange', req)
       if (lock) lock.release().catch(() => undefined)
     }
-  }, [active, preview])
+  }, [active, preview, keepAwake])
 
   // fullscreen state
   useEffect(() => {
@@ -1147,6 +1182,7 @@ export function Deck(props: DeckProps) {
     if (p) report(p)
   }
 
+  const hmode = st.status === 'pair' ? 'full' : headerMode(st.layout ? st.layout.theme : undefined)
   // measure the room the grid has (local frame, so it is right when the deck is rotated)
   const measure = () => {
     const strip = stripRef.current
@@ -1176,7 +1212,7 @@ export function Deck(props: DeckProps) {
       clearTimeout(t2)
       if (ro) ro.disconnect()
     }
-  }, [active, st.status, st.layout, vp.w, vp.h, rotated])
+  }, [active, st.status, st.layout, vp.w, vp.h, rotated, hmode])
 
   // restore the last page once the first layout arrives; keep position when the layout changes
   useEffect(() => {
@@ -1600,8 +1636,22 @@ export function Deck(props: DeckProps) {
       tw = Math.min(cols - it.px, Math.max(1, Math.round((rx - it.px * step + boxRef.current.gap) / step)))
       th = Math.min(rows - it.py, Math.max(1, Math.round((ry - it.py * step + boxRef.current.gap) / step)))
     }
-    if (valid && overlaps(items, it.id, tx, ty, tw, th)) valid = false
-    return Object.assign({}, d, { rx, ry, tx, ty, tw, th, valid })
+    let swap: Drag['swap'] = undefined
+    if (valid && overlaps(items, it.id, tx, ty, tw, th)) {
+      valid = false
+      if (d.kind === 'move') {
+        const pl = { id: page.id, columns: cols, rows: rows, items: items.map((o) => ({ id: o.id, x: o.px, y: o.py, w: o.pw, h: o.ph })) }
+        const sw = swapPreview(pl, it.id, tx, ty)
+        if (sw) {
+          valid = true
+          swap = sw.map((m) => {
+            const o = items.find((q) => q.id === m.id) as Placed
+            return { id: m.id, px: o.px, py: o.py, pw: o.pw, ph: o.ph, nx: m.x, ny: m.y }
+          })
+        }
+      }
+    }
+    return Object.assign({}, d, { rx, ry, tx, ty, tw, th, valid, swap })
   }
   const onDown = (e: PointerEvent, page: Page, item: Placed, kind: 'move' | 'resize') => {
     if (!preview || (e.button !== undefined && e.button !== 0)) return
@@ -1697,6 +1747,9 @@ export function Deck(props: DeckProps) {
   const canClose = !props.standalone && !preview && !!props.onClose
   const showFs = !preview && fsSupported() && st.status !== 'pair'
   const theme = (st.layout && st.layout.theme) || {}
+  const lite = liteOn(theme.screen)
+  const [menu, setMenu] = useState(false)
+  liteRef.current = lite && !preview
   const scale = Math.min(2, Math.max(0.5, theme.fontScale || 1))
   setIconStroke(theme.iconStroke)
   setLang(theme.language)
@@ -1710,10 +1763,25 @@ export function Deck(props: DeckProps) {
   }
 
   return (
-    <div class={'pd-root' + (preview ? ' pd-root--preview' : '') + (rotated ? ' pd-root--rot' : '') + (Math.min(vp.w, vp.h) <= 340 ? ' pd-root--sm' : '')} ref={rootRef} data-pd-theme="dark" style={rootStyle}>
+    <div class={'pd-root' + (preview ? ' pd-root--preview' : '') + (rotated ? ' pd-root--rot' : '') + (Math.min(vp.w, vp.h) <= 340 ? ' pd-root--sm' : '') + (lite ? ' pd-lite' : '') + (hmode !== 'full' ? ' pd-hdr--' + hmode : '')} ref={rootRef} data-pd-theme="dark" style={rootStyle}>
       {st.reloading ? <div class="pd-veil">{t('Reloading…')}</div> : null}
       <div class={'pd-sheet' + (closing ? ' pd-sheet--closing' : '')}>
         <div class="pd-panel" role="dialog" aria-label="PhoneDesk">
+          {hmode === 'hidden' ? (
+            <div class="pd-fabwrap">
+              {st.status !== 'online' && st.status !== 'pair' ? <span class="pd-fab__pill"><i class={dotCls} />{statusText}</span> : null}
+              <button type="button" class={'pd-fab' + (menu ? ' pd-fab--on' : '')} aria-label="Menu" onClick={() => setMenu(!menu)}>
+                <i class={dotCls} />
+              </button>
+              {menu ? (
+                <div class="pd-fab__menu">
+                  {!preview ? <button type="button" onClick={() => { setMenu(false); setScrOpen(true) }}><Icon name="moon" size={16} /> {t('Screen & alarms')}</button> : null}
+                  {showFs ? <button type="button" onClick={() => { setMenu(false); toggleFull() }}><Icon name={full ? 'minimize' : 'maximize'} size={16} /> {t('Fullscreen')}</button> : null}
+                  {canClose ? <button type="button" onClick={() => { setMenu(false); close() }}><Icon name="x" size={16} /> {t('Close')}</button> : null}
+                </div>
+              ) : null}
+            </div>
+          ) : (
           <div class="pd-head">
             <span class="pd-conn" title={statusText}>
               <span class="pd-dotbtn" onTouchStart={holdStart} onTouchEnd={holdEnd} onTouchCancel={holdEnd} onTouchMove={holdEnd} onMouseDown={holdStart} onMouseUp={holdEnd} onMouseLeave={holdEnd} onContextMenu={(e) => e.preventDefault()}>
@@ -1730,6 +1798,11 @@ export function Deck(props: DeckProps) {
             </span>
             <span class="pd-spacer" />
             {st.status !== 'pair' && cur ? <span class="pd-pagename">{cur.name || cur.id}</span> : null}
+            {!preview && st.status !== 'pair' ? (
+              <button type="button" class="pd-iconbtn" aria-label={t('Screen & alarms')} title={t('Screen & alarms')} onClick={() => setScrOpen(true)}>
+                <Icon name="moon" size={18} />
+              </button>
+            ) : null}
             {showFs ? (
               <button type="button" class="pd-iconbtn" aria-label={t('Fullscreen')} title={t('Fullscreen')} onClick={toggleFull}>
                 <Icon name={full ? 'minimize' : 'maximize'} size={18} />
@@ -1742,6 +1815,7 @@ export function Deck(props: DeckProps) {
             ) : null}
           </div>
 
+          )}
           {st.status === 'pair' ? (
             <PairForm client={client} notice={st.notice} pin={props.pin} />
           ) : (
@@ -1840,6 +1914,16 @@ export function Deck(props: DeckProps) {
                             }}
                           />
                         ) : null}
+                        {dg && dg.moved && dg.swap
+                          ? dg.swap.map((m) => (
+                              <div key={'sw' + m.id}>
+                                <div class="pd-swap" style={{ left: m.px * step + 'px', top: m.py * step + 'px', width: m.pw * cell + (m.pw - 1) * box.gap + 'px', height: m.ph * cell + (m.ph - 1) * box.gap + 'px' }}>
+                                  <Icon name="arrows-shuffle" size={18} />
+                                </div>
+                                <div class="pd-swap pd-swap--to" style={{ left: m.nx * step + 'px', top: m.ny * step + 'px', width: m.pw * cell + (m.pw - 1) * box.gap + 'px', height: m.ph * cell + (m.ph - 1) * box.gap + 'px' }} />
+                              </div>
+                            ))
+                          : null}
                         {dg && dg.moved && dg.kind === 'move' ? (
                           <div
                             class="pd-ghost"
@@ -1910,11 +1994,13 @@ export function Deck(props: DeckProps) {
               </div>
             </div>
           ) : null}
+          {scrOpen && !preview ? <ScreenSheet settings={theme.screen} header={theme.header} alarms={st.layout ? st.layout.alarms : undefined} onClose={() => setScrOpen(false)} /> : null}
           <div class={'pd-toast' + (toast ? ' pd-toast--on' : '') + (toastLv ? ' pd-toast--' + toastLv : '')} role="status">
             {toast}
           </div>
         </div>
       </div>
+      {st.status !== 'pair' ? <ScreenLayer settings={theme.screen} alarms={st.layout ? st.layout.alarms : undefined} preview={preview} pvFlags={preview ? pv.np.split(',') : undefined} /> : null}
     </div>
   )
 }

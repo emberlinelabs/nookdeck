@@ -17,6 +17,7 @@ import { SoundsPanel } from "@/components/sounds-panel";
 import { ThemePanel } from "@/components/theme-panel";
 import { PermissionsPanel } from "@/components/permissions-panel";
 import { AboutCard } from "@/components/about-card";
+import { ScreenPanel } from "@/components/screen-panel";
 import { CustomizeHint } from "@/components/visual-options";
 import { UpdateBanner } from "@/components/update-banner";
 import { useAbout } from "@/lib/about";
@@ -28,10 +29,11 @@ import type { Layout } from "@/types";
 
 const REPO = "https://github.com/howznguyen/phonedesk";
 
-type Tab = "screens" | "theme" | "sounds" | "rules" | "ai" | "permissions" | "json" | "devices";
+type Tab = "screens" | "theme" | "screen" | "sounds" | "rules" | "ai" | "permissions" | "json" | "devices";
 const TABS: { value: Tab; label: string }[] = [
   { value: "screens", label: "Screens" },
   { value: "theme", label: "Theme" },
+  { value: "screen", label: "Screen & alarms" },
   { value: "rules", label: "Automation" },
   { value: "sounds", label: "Sounds" },
   { value: "ai", label: "AI integrations" },
@@ -321,7 +323,7 @@ export default function App() {
           {(tab === "screens" || tab === "theme") && <div className="mb-3"><CustomizeHint /></div>}
           {tab === "screens" && (
             <ScreensPanel layout={layout} pageIdx={safePageIdx} itemId={itemId} setPageIdx={setPageIdx} setItemId={setItemId} update={update}
-              orientation={orientation} onOrientation={setOrientation} />
+              orientation={orientation} onOrientation={setOrientation} onUndo={undo} />
           )}
           {tab === "theme" && (
             <ThemePanel layout={layout} pageId={layout.pages[safePageIdx]!.id} orientation={orientation} onOrientation={setOrientation}
@@ -331,6 +333,7 @@ export default function App() {
                 return theme ? { ...rest, theme } : rest;
               })} />
           )}
+          {tab === "screen" && <ScreenPanel layout={layout} pageId={layout.pages[safePageIdx]!.id} update={update} orientation={orientation} onOrientation={setOrientation} />}
           {tab === "rules" && <RulesPanel layout={layout} update={update} />}
           {tab === "sounds" && <SoundsPanel />}
           {tab === "ai" && <IntegrationsPanel />}

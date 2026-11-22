@@ -3,9 +3,9 @@ import { WIN, MODE600, MODE644 } from "./_os";
 import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LAST_ARTWORK_MAX, LastMediaStore, MediaTracker, parseControl, parseMacTrackOutput, parsePlayerctl, resumeScript, type RawMedia } from "../src/media";
+import { LAST_ARTWORK_MAX, LastMediaStore, MediaTracker, parseControl, macReadScript, parseMacTrackOutput, parsePlayerctl, resumeScript, type RawMedia } from "../src/media";
 import { netRate, parseNetstat, parseProcNetDev } from "../src/stats";
-import { buildMacMediaFallback, buildVolumeCommand, parseMacVolumeSettings, parsePactlVolume } from "../src/actions";
+import { MAC_NATIVE, buildVolumeCommand, parsePactlVolume } from "../src/actions";
 
 const US = "\u001f";
 
@@ -148,29 +148,23 @@ utun3      1380  <Link#20>                          10     0        1000       1
 });
 
 describe("volume", () => {
-  test("parseMacVolumeSettings", () => {
-    expect(parseMacVolumeSettings("output volume:55, input volume:75, alert volume:100, output muted:false")).toEqual({ level: 55, muted: false });
-    expect(parseMacVolumeSettings("output volume:0, input volume:75, alert volume:100, output muted:true")).toEqual({ level: 0, muted: true });
-    expect(parseMacVolumeSettings("output volume:missing value, input volume:75, alert volume:100, output muted:missing value")).toBeNull();
-  });
   test("parsePactlVolume", () => {
     expect(parsePactlVolume("Volume: front-left: 42000 /  64% / -11.9 dB,   front-right: 42000 /  64%", "Mute: no")).toEqual({ level: 64, muted: false });
     expect(parsePactlVolume("", "")).toBeNull();
   });
   test("buildVolumeCommand", () => {
-    expect(buildVolumeCommand({ level: 40 }, "darwin")).toEqual(["osascript", "-e", "set volume output volume 40"]);
-    expect(buildVolumeCommand({ muted: true }, "darwin")).toEqual(["osascript", "-e", "set volume output muted true"]);
+    expect(() => buildVolumeCommand({ level: 40 }, "darwin")).toThrow(MAC_NATIVE);
+    expect(() => buildVolumeCommand({ muted: true }, "darwin")).toThrow(MAC_NATIVE);
     expect(buildVolumeCommand({ level: 7 }, "linux")).toEqual(["pactl", "set-sink-volume", "@DEFAULT_SINK@", "7%"]);
     expect(buildVolumeCommand({ muted: false }, "linux")).toEqual(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "0"]);
     expect(() => buildVolumeCommand({ level: 101 }, "darwin")).toThrow();
     expect(() => buildVolumeCommand({ level: 1.5 }, "linux")).toThrow();
     expect(() => buildVolumeCommand({ muted: true }, "win32")).toThrow();
   });
-  test("mac media fallback never launches an app", () => {
-    const script = buildMacMediaFallback("next").join("\n");
+  test("the mac read script only touches the one app it is for, and never launches it", () => {
+    const script = macReadScript("Spotify");
     expect(script).toContain('application "Spotify" is running');
-    expect(script).toContain('application "Music" is running');
-    expect(script).toContain("next track");
+    expect(script).not.toContain('application "Music"');
   });
 });
 

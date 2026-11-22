@@ -1,4 +1,4 @@
-import { OptionCards, StyleChips, modeOptions, orientationOptions, radiusOptions } from "@/components/visual-options";
+import { OptionCards, StyleChips, modeOptions, orientationOptions, radiusOptions, headerOptions } from "@/components/visual-options";
 import { LANGUAGES, asLanguage, t, useLanguage } from "@/lib/i18n";
 import { useState } from "react";
 import { IconArrowDown as ArrowDown, IconArrowRight as ArrowRight, IconRotate as RotateLeft, IconCheck as Check } from "@tabler/icons-react";
@@ -141,6 +141,9 @@ export function ThemePanel({ layout, pageId, onChange, orientation, onOrientatio
             </Field>
             <Field label={t("Phone orientation")} id="t-orient" hint={t("Landscape: a grid made for a phone held sideways, it rotates when held upright.")}>
               <OptionCards label={t("Phone orientation")} value={th.orientation ?? THEME_DEFAULTS.orientation} onChange={(v) => set({ orientation: v })} options={orientationOptions()} />
+            </Field>
+            <Field label={t("Top bar")} id="t-header" hint={t("Minimal hides the computer name and CPU/RAM. Hidden gives the whole height to the tiles; a small button keeps the menu and shows problems.")}>
+              <OptionCards label={t("Top bar")} value={th.header ?? "full"} onChange={(v) => set({ header: v === "full" ? undefined : v })} options={headerOptions()} />
             </Field>
             <Field label={t("Temperature unit")} id="t-temp" hint={t("Every temperature on the phone follows this, whatever unit the source reports.")}>
               <SegmentedControl

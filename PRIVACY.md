@@ -16,8 +16,8 @@ verify it (the code is in `src/`).
 | Your Home Assistant (the URL you enter) | Only if you configure the Home Assistant integration. | A WebSocket connection with your long-lived access token, to read entity states and call services you press. | Goes only to the address you entered. The URL is stored in `~/.phonedesk/hass.json`; the token is stored in the macOS Keychain (item `PhoneDesk-HASS`), or in the same file with owner-only permissions when no Keychain is available. Neither is ever sent to phones. |
 | Artwork URL of the track playing | Only while Now Playing is shown and the player (for example Spotify) reports an artwork URL. | A plain GET for the image. | The URL comes from your music player. The image is cached in memory and sent to your phones. |
 
-Local helper programs are also run on your computer: `osascript`, `sips`, `netstat`, `ioreg`, `afplay`, `scutil`,
-`security` (see below), `plutil` and, if you have them, `grok` (see the table above), `agy` (Antigravity CLI), `nowplaying-cli` or `playerctl`. They do not
+Local helper programs are also run on your computer: `sips`, `netstat`, `ioreg`, `afplay`, `scutil`,
+`security` (see below), `plutil` and, if you have them, `grok` (see the table above), `agy` (Antigravity CLI) or `playerctl`. They do not
 talk to PhoneDesk servers; `agy` talks to its own service as it normally does.
 
 ## Inbound connections (the agent listens)
@@ -41,7 +41,7 @@ talk to PhoneDesk servers; `agy` talks to its own service as it normally does.
   last modified time; no prompt or response text is sent anywhere).
 - **Installed apps and icons** (to build the app picker), **CPU, memory, network and process lists** (for the stat tiles),
   **keyboard idle time** (`ioreg`, only if you turn on "only ask me on the phone when I am away").
-- **Media**: what is playing, through AppleScript or `playerctl`.
+- **Media**: what is playing. On macOS PhoneDesk reads what any app is playing (Safari, Chrome, YouTube, Spotify, Music...) through the bundled, BSD-licensed [mediaremote-adapter](THIRD_PARTY_NOTICES.md), run by Apple's own `/usr/bin/perl` only while a phone is connected; if that is unavailable it asks Spotify and Music in its own process (Apple Events, only for a player that is already running). Elsewhere `playerctl` or the Windows media session. Keys, typing, volume and media keys on macOS are native system calls (no helper programs).
 
 ## What is stored
 

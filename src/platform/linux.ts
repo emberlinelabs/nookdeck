@@ -51,6 +51,8 @@ export function createLinux(id: NodeJS.Platform = "linux", which: (n: string) =>
       try { return parseProcNetDev(await Bun.file("/proc/net/dev").text()); } catch { return undefined; }
     },
     async memUsed() { return undefined; },
+    async nowPlayingStatus() { return { ok: false, why: "macOS only" }; },
+    async gpu() { return undefined; },
     async topProcesses(sort, limit) {
       return topProcessesFrom(parsePs(await runCapture(["ps", "-Ao", "pid,pcpu,rss,comm"], 5000)), sort, limit);
     },

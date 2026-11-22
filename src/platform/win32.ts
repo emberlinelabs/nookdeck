@@ -235,6 +235,10 @@ export function createWin32(d: Win32Deps = {}): Platform {
       } catch { return undefined; }
     },
     async memUsed() { return undefined; },
+    async nowPlayingStatus() { return { ok: false, why: "macOS only" }; },
+    async gpu() {
+      try { return (await helper.call<any>("gpu.read", {}, 6000)) ?? undefined; } catch { return undefined; }
+    },
     async topProcesses(sort, limit) {
       const { topProcessesFrom } = await import("../processes");
       const rows = (await helper.call<Array<{ pid: number; name: string; cpu: number; mem: number }>>("proc.list", {}, 10_000)) ?? [];

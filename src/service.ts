@@ -29,7 +29,7 @@ export interface PlistOptions {
 /** The launchd property list: starts at login, restarts only after a crash (a clean exit stays stopped), logs to ~/.phonedesk/logs. */
 export function buildPlist(o: PlistOptions): string {
   const logs = o.logDir ?? logsDir();
-  // launchd gives agents a minimal PATH; add the usual Homebrew locations so nowplaying-cli, playerctl and agy are found
+  // launchd gives agents a minimal PATH; add the usual Homebrew locations so playerctl, agy and grok are found
   const env: Record<string, string> = { PATH: "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin", ...(o.env ?? {}) };
   const envXml = Object.entries(env).map(([k, v]) => `    <key>${xml(k)}</key>\n    <string>${xml(v)}</string>`).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>

@@ -1,8 +1,12 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildCommand, buildMacMediaFallback, buildVolumeCommand, parseMacVolumeSettings } from "../actions";
-import { MAC_SCRIPT_LINES, parseMacTrackOutput, resumeScript, MEDIA_APPS, type MediaApp, type RawMedia } from "../media";
+import { buildCommand } from "../actions";
+import { MEDIA_BUNDLES, macReadScript, parseMacTrackOutput, resumeScript, MEDIA_APPS, type MediaApp, type RawMedia } from "../media";
+import { hotkeyPlan, typePlan, type MediaKey } from "./mac-keys";
+import { MAC_LAUNCH_TIMEOUT_MS, MAC_READ_TIMEOUT_MS, macNative } from "./mac-client";
+import { NowPlayingStream, extractAdapter, type AdapterFiles } from "./mac-remote";
+import { MRA_EMBED } from "./mra-embed.gen";
 import { parseNetstat } from "../stats";
 import { parsePs, topProcessesFrom } from "../processes";
 import { parseAfinfo } from "../sounds";
@@ -52,11 +56,41 @@ async function macMemUsed(): Promise<number | undefined> {
   }
 }
 
+const mac = () => macNative();
+
+// ---------- Now Playing from every app (mediaremote-adapter stream) ----------
+
+let adapterFiles: Promise<AdapterFiles | null> | undefined;
+/** The adapter written to ~/.phonedesk/lib (once); null when this build does not carry it. */
+const adapter = () => (adapterFiles ??= extractAdapter(MRA_EMBED).catch(() => null));
+const remote = new NowPlayingStream({ files: adapter });
+
+/** Is the all-apps reader usable? ok:false carries the reason for the doctor. */
+async function nowPlayingStatus(): Promise<{ ok: boolean; why?: string }> {
+  if (!MRA_EMBED) return { ok: false, why: "this build does not include the Now Playing adapter" };
+  const files = await adapter();
+  if (!files) return { ok: false, why: "the Now Playing adapter could not be unpacked into ~/.phonedesk/lib" };
+  if (remote.gaveUp) return { ok: false, why: "the adapter stopped repeatedly; only Spotify and Music are read" };
+  try {
+    await runCapture([files.perl, files.script, files.framework, "get", "--no-artwork"], 8000);
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, why: String(e?.message ?? e).split("\n")[0]!.slice(0, 120) || "the adapter did not run" };
+  }
+}
+
+/** Spotify/Music through the native helper; a player that is not running is skipped without sending any Apple Event. */
 async function readMac(): Promise<RawMedia | null> {
-  const out = await runCapture(["osascript", ...MAC_SCRIPT_LINES.flatMap((l) => ["-e", l])], 4000);
+  const r = await remote.read();
+  if (r !== "unavailable") return r;
+  return readPlayers();
+}
+
+async function readPlayers(): Promise<RawMedia | null> {
+  const out = await mac().call<string>("readMedia", { scripts: MEDIA_APPS.map((a) => ({ bundle: MEDIA_BUNDLES[a], source: macReadScript(a) })) }, MAC_READ_TIMEOUT_MS);
   const media = parseMacTrackOutput(out);
   if (media?.app === "Spotify") {
-    const url = (await runCapture(["osascript", "-e", `tell application "Spotify" to artwork url of current track`], 3000).catch(() => "")).trim();
+    const url = (await mac().call<string>("script", { requires: MEDIA_BUNDLES.Spotify, source: `tell application "Spotify" to artwork url of current track` }, MAC_READ_TIMEOUT_MS).catch(() => "")).trim();
     if (url) media.artworkUrl = url;
   }
   return media;
@@ -70,6 +104,15 @@ async function sipsToJpegDataUrl(input: string, dir: string): Promise<string> {
 
 /** Artwork as a data URL, resized to max 300px with sips. Undefined when unavailable. */
 async function macArtwork(raw: RawMedia): Promise<string | undefined> {
+  if (!remote.gaveUp) {
+    // the cover from the now playing stream (often a big TIFF): JPEG of at most 300 px, made by ImageIO inside the worker
+    const a = remote.artwork();
+    if (a) {
+      const jpg = await mac().call<string | null>("jpeg", { b64: a.b64, max: 300 }, 8000).catch(() => null);
+      if (jpg) return `data:image/jpeg;base64,${jpg}`;
+    }
+    if (raw.app !== "Spotify" && raw.app !== "Music") return undefined;
+  }
   const dir = await mkdtemp(join(tmpdir(), "pd-art-"));
   try {
     const src = join(dir, "src");
@@ -78,20 +121,17 @@ async function macArtwork(raw: RawMedia): Promise<string | undefined> {
       if (!res.ok) return undefined;
       await writeFile(src, new Uint8Array(await res.arrayBuffer()));
     } else if (raw.app === "Music") {
-      await runCapture(
-        [
-          "osascript",
-          "-e", `set f to POSIX file "${src}"`,
-          "-e", `tell application "Music" to set d to (raw data of artwork 1 of current track)`,
-          "-e", `set fh to open for access f with write permission`,
-          "-e", `try`,
-          "-e", `set eof fh to 0`,
-          "-e", `write d to fh`,
-          "-e", `end try`,
-          "-e", `close access fh`,
-        ],
-        6000,
-      );
+      const script = [
+        `set f to POSIX file "${src.replace(/["\\]/g, "")}"`,
+        `tell application "Music" to set d to (raw data of artwork 1 of current track)`,
+        `set fh to open for access f with write permission`,
+        `try`,
+        `set eof fh to 0`,
+        `write d to fh`,
+        `end try`,
+        `close access fh`,
+      ].join("\n");
+      await mac().call("script", { requires: MEDIA_BUNDLES.Music, source: script }, 6000);
     } else {
       return undefined;
     }
@@ -103,9 +143,9 @@ async function macArtwork(raw: RawMedia): Promise<string | undefined> {
   }
 }
 
-async function isRunning(app: MediaApp): Promise<boolean> {
-  const out = await runCapture(["osascript", "-e", `application "${app}" is running`], 3000).catch(() => "false");
-  return out.trim() === "true";
+async function runningApps(): Promise<Record<MediaApp, boolean>> {
+  const r = await mac().call<Record<string, boolean>>("running", { bundles: Object.values(MEDIA_BUNDLES) }, MAC_READ_TIMEOUT_MS).catch(() => ({} as Record<string, boolean>));
+  return { Music: !!r[MEDIA_BUNDLES.Music], Spotify: !!r[MEDIA_BUNDLES.Spotify] };
 }
 
 export function createDarwin(): Platform {
@@ -115,33 +155,55 @@ export function createDarwin(): Platform {
     keyNames: { cmd: "Cmd", alt: "Option", ctrl: "Control" },
 
     async runAction(a) {
-      if (a.type === "media") {
-        if (Bun.which("nowplaying-cli")) return void (await runCapture(buildCommand(a, "darwin")));
-        return void (await runCapture(buildMacMediaFallback(a.command)));
+      // keys, typing, media keys and volume are native calls; open / shell are plain commands
+      switch (a.type) {
+        case "hotkey": hotkeyPlan(a.keys); return void (await mac().call("hotkey", { keys: a.keys }));
+        case "type": typePlan(a.text); return void (await mac().call("type", { text: a.text }, 15000));
+        case "media": {
+          // the adapter targets whatever app is now playing and needs no Accessibility; the media keys are the fallback
+          if (!remote.gaveUp && remote.hasSession && (await remote.send(a.command))) return;
+          return void (await mac().call("media", { command: a.command as MediaKey }));
+        }
+        case "volume": return void (await mac().call("volumeStep", { command: a.command }));
       }
       await runCapture(buildCommand(a, "darwin"));
     },
 
     async readVolume() {
-      try { return parseMacVolumeSettings(await runCapture(["osascript", "-e", "get volume settings"], 3000)); } catch { return null; }
+      try { return await mac().call("volumeGet"); } catch { return null; }
     },
-    async setVolume(v) { await runCapture(buildVolumeCommand(v, "darwin")); },
+    async setVolume(v) {
+      if ("level" in v) {
+        if (!Number.isInteger(v.level) || v.level < 0 || v.level > 100) throw new Error("volume level must be an integer 0-100");
+        await mac().call("volumeSet", { level: v.level });
+      } else {
+        if (typeof v.muted !== "boolean") throw new Error("muted must be a boolean");
+        await mac().call("mute", { muted: v.muted });
+      }
+    },
 
     readMedia: readMac,
     fetchArtwork: macArtwork,
+    nowPlayingStatus,
     async resumeMedia(lastApp) {
-      const plan = resumeScript({ Spotify: await isRunning("Spotify"), Music: await isRunning("Music") }, lastApp);
-      await runCapture(["osascript", ...plan.lines.flatMap((l) => ["-e", l])], plan.launches ? 15000 : 5000);
+      // a browser or another app was the last player: ask the system to play whatever is paused there
+      if (lastApp && !(MEDIA_APPS as readonly string[]).includes(lastApp) && !remote.gaveUp && (await remote.send("play"))) return;
+      const plan = resumeScript(await runningApps(), lastApp);
+      // `tell application ... to play` launches the app when it is not running: that is the point of resume
+      await mac().call("script", { source: plan.lines.join("\n") }, plan.launches ? MAC_LAUNCH_TIMEOUT_MS : MAC_READ_TIMEOUT_MS);
     },
     async openMediaApp(app) {
       if (!(MEDIA_APPS as readonly string[]).includes(app)) throw new Error(t("Opening the music app is not supported on this operating system"));
-      await runCapture(["osascript", "-e", `tell application "${app}" to activate`], 15000);
+      await runCapture(["open", "-b", MEDIA_BUNDLES[app]], 15000);
     },
 
     async netCounters() {
       try { return parseNetstat(await runCapture(["netstat", "-ibn"], 3000)); } catch { return undefined; }
     },
     memUsed: macMemUsed,
+    async gpu() {
+      try { return (await mac().call("gpu", {}, MAC_READ_TIMEOUT_MS)) ?? undefined; } catch { return undefined; }
+    },
     async topProcesses(sort, limit) {
       return topProcessesFrom(parsePs(await runCapture(["ps", "-Ao", "pid,pcpu,rss,comm"], 5000)), sort, limit);
     },
@@ -164,6 +226,6 @@ export function createDarwin(): Platform {
 
     openExternal: async (url) => void (await runCapture(["open", url], 5000)),
     hookPath: (p) => p,
-    dispose: () => {},
+    dispose: () => { remote.stop(); macNative().dispose(); },
   };
 }

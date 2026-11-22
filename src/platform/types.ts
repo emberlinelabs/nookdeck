@@ -1,7 +1,7 @@
 import type { Action } from "../config";
 import type { VolumeChange, VolumeState } from "../actions";
 import type { RawMedia, MediaApp } from "../media";
-import type { NetCounters } from "../stats";
+import type { GpuStats, NetCounters } from "../stats";
 import type { ProcessInfo, ProcessSort } from "../processes";
 import type { AppInfo } from "../icons";
 
@@ -27,6 +27,8 @@ export interface Platform {
   netCounters(): Promise<NetCounters | undefined>;
   /** Bytes in use when the OS has a better figure than total - free; undefined otherwise. */
   memUsed(): Promise<number | undefined>;
+  /** GPU utilisation (and memory / temperature when known); undefined when the OS cannot tell. */
+  gpu(): Promise<GpuStats | undefined>;
   topProcesses(sort: ProcessSort, limit: number): Promise<ProcessInfo[]>;
   /** The name other devices reach this machine by (macOS LocalHostName); undefined = use os.hostname(). */
   lanName(): Promise<string | undefined>;
@@ -51,6 +53,8 @@ export interface Platform {
   openExternal(url: string): Promise<void>;
   /** How a command line is written for the hook config (path style). */
   hookPath(p: string): string;
+  /** macOS: can every app's Now Playing be read (the mediaremote adapter)? ok:false carries the reason. Other systems: ok:false "macOS only". */
+  nowPlayingStatus(): Promise<{ ok: boolean; why?: string }>;
   /** Stops anything long-lived this platform started (the Windows helper). */
   dispose(): void;
 }

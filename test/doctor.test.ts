@@ -24,11 +24,11 @@ function probes(over: Partial<P> & { outputs?: Record<string, { code: number; ou
     platform: "darwin", exe: EXE, program: [EXE], version: "phonedesk 1.2.3", asService: true,
     run: async (argv) => { calls.push(argv); const key = argv[0]!.split("/").pop() + (argv[1] ? ` ${argv[1]}` : ""); return over.outputs?.[key] ?? over.outputs?.[argv[0]!.split("/").pop()!] ?? { code: 0, out: "" }; },
     axTrusted: () => true,
+    nowPlaying: async () => ({ ok: true }),
     automation: (b) => over.auto?.[b] ?? "granted",
     requestAccessibility: () => { asked.ax++; return false; },
     requestAutomation: (b) => { asked.auto.push(b); return "not-asked"; },
     installed: (b) => over.apps ? over.apps.includes(b) : true,
-    which: (n) => (n === "nowplaying-cli" ? "/opt/homebrew/bin/nowplaying-cli" : null),
     hookFiles: () => ({}),
     ...over,
   };
@@ -47,7 +47,7 @@ describe("item shape", () => {
   test("every item has id, title, a valid status and a detail; problems carry a fix", async () => {
     const { r } = await run({ outputs: { ...FW_ON, ...SIG_ADHOC, "security find-generic-password": { code: 44, out: "not found" } }, auto: { "com.apple.Music": "denied" } }, {});
     const ids = r.items.map((i) => i.id);
-    expect(ids).toEqual(["agent", "service", "signature", "accessibility", "automation-system-events", "automation-music", "automation-spotify", "keychain-claude", "keychain-hass", "local-network", "firewall", "nowplaying-cli", "hooks-claude", "hooks-codex"]);
+    expect(ids).toEqual(["agent", "service", "signature", "accessibility", "automation-music", "automation-spotify", "now-playing", "keychain-claude", "keychain-hass", "local-network", "firewall", "hooks-claude", "hooks-codex"]);
     for (const i of r.items) {
       expect(["ok", "missing", "denied", "unknown", "n/a"]).toContain(i.status);
       expect(i.title.length).toBeGreaterThan(0);
@@ -55,6 +55,16 @@ describe("item shape", () => {
       if (i.status === "missing" || i.status === "denied") expect(i.fix?.text.length).toBeGreaterThan(0);
     }
     expect(r).toMatchObject({ version: "phonedesk 1.2.3", exe: EXE, asService: true, platform: "darwin" });
+  });
+  test("Now Playing (all apps): ok when the adapter reads, missing with the reason otherwise, n/a off macOS", async () => {
+    const ok = (await run()).by("now-playing");
+    expect(ok).toMatchObject({ title: "Now Playing (all apps)", status: "ok" });
+    expect(ok.detail).toContain("Safari");
+    const bad = (await run({ nowPlaying: async () => ({ ok: false, why: "this build does not include the Now Playing adapter" }) })).by("now-playing");
+    expect(bad.status).toBe("missing");
+    expect(bad.detail).toBe("only Spotify and Music can be read: this build does not include the Now Playing adapter");
+    expect(bad.fix?.text.length).toBeGreaterThan(0);
+    expect((await run({ nowPlaying: async () => { throw new Error("x"); } })).by("now-playing").status).toBe("missing");
   });
   test("it never asks macOS for a prompt", async () => {
     const { asked } = await run({ auto: { "com.apple.Music": "not-asked" } });
@@ -72,9 +82,9 @@ describe("Accessibility and Automation", () => {
   });
   test("automation: granted, denied, not asked yet, app not running, app not installed", async () => {
     const { by } = await run({
-      auto: { "com.apple.systemevents": "granted", "com.apple.Music": "denied", "com.spotify.client": "not-asked" },
+      auto: { "com.apple.Music": "denied", "com.spotify.client": "not-asked" },
     });
-    expect(by("automation-system-events").status).toBe("ok");
+    expect(by("automation-music").detail).toBe("denied: Now Playing for Music will not work");
     expect(by("automation-music")).toMatchObject({ status: "denied", fix: { settingsUrl: expect.stringContaining("Privacy_Automation") } });
     expect(by("automation-spotify")).toMatchObject({ status: "missing" });
     expect(by("automation-spotify").fix!.text).toContain("--request automation-spotify");
@@ -136,29 +146,26 @@ describe("Keychain, Local Network, Firewall, signature", () => {
     const dev = (await run({ outputs: { codesign: { code: 0, out: "Authority=Developer ID Application: Someone (ABCDE12345)\nAuthority=Apple" } } })).by("signature");
     expect(dev.detail).toContain("Developer ID Application: Someone (ABCDE12345)");
   });
-  test("optional nowplaying-cli is never counted; the Claude read in flight is unknown, not a failure", async () => {
+  test("the Claude read in flight is unknown, not a failure", async () => {
     const r = await run({ which: () => null, axTrusted: () => true, outputs: { ...FW_ON, "socketfilterfw --getappblocked": { code: 0, out: "permitted" }, ...SIG_ADHOC, "security find-generic-password": { code: 0, out: "" } } }, { claude: { ok: false, pending: true } });
     expect(r.by("keychain-claude")).toMatchObject({ status: "unknown", detail: "checking…" });
     const text = D.formatReport(r.r);
-    expect(text).toContain("Note: Install it with `brew install nowplaying-cli`.");
     expect(text).toContain("Everything that can be checked looks fine.");
     expect(text).not.toMatch(/✗ nowplaying/);
   });
-  test("System Events is launched silently when it is not running; Music and Spotify are not", async () => {
-    let state: import("../src/doctor").AutomationState = "not-running";
-    const k = probes({ automation: (b) => (b === "com.apple.systemevents" ? state : "not-running"), run: async (argv) => { if (argv[0] === "open") state = "granted"; return { code: 0, out: "" }; } });
+  test("System Events is not checked or launched; Music and Spotify say they are for Now Playing", async () => {
+    const k = probes({ automation: () => "granted" });
     const r = await D.runDoctor(k.p, { instance: INST });
-    expect(r.items.find((i) => i.id === "automation-system-events")!.status).toBe("ok");
-    expect(r.items.find((i) => i.id === "automation-music")!.status).toBe("unknown");
-    const opens = k.calls.filter((c) => c[0] === "open");
-    expect(opens).toEqual([]); // run() is overridden above, so assert through state instead
+    expect(r.items.some((i) => i.id === "automation-system-events")).toBe(false);
+    expect(r.items.find((i) => i.id === "automation-music")!.detail).toBe("allowed: phonedesk itself reads Music for Now Playing");
+    expect(k.calls.filter((c) => c[0] === "open")).toEqual([]);
   });
-  test("service and nowplaying-cli", async () => {
+  test("service, and nowplaying-cli is no longer checked", async () => {
     expect((await run()).by("service")).toMatchObject({ status: "ok" });
     const term = (await run({ asService: false })).by("service");
     expect(term.status).toBe("n/a");
     expect(term.fix!.text).toContain("service install");
-    expect((await run({ which: () => null })).by("nowplaying-cli")).toMatchObject({ status: "n/a", fix: { text: expect.stringContaining("brew install") } });
+    expect((await run({ which: () => null })).r.items.some((i) => i.id === "nowplaying-cli")).toBe(false);
   });
 });
 

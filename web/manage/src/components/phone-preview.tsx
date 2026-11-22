@@ -93,7 +93,7 @@ export function usePreviewOrientation(themeOrientation: string | undefined): [Or
  * The real phone deck in an iframe inside a device frame, scaled to fit. Driven by postMessage:
  * we send {type:"pd-preview", layout, pageId, selectedId}; the deck answers pd-ready / pd-select / pd-page.
  */
-export function PhonePreview({ layout, override, ghost, controller, pageId, selectedId, orientation, onOrientation, onSelect, onMove, onResize, onPage, onEditGrid }: {
+export function PhonePreview({ layout, override, ghost, controller, pageId, selectedId, orientation, onOrientation, onSelect, onMove, onResize, onPage, onEditGrid, dimLevel }: {
   layout: Layout;
   /** Tentative layout to draw instead of `layout` (live drag preview). */
   override?: Layout | null;
@@ -110,6 +110,8 @@ export function PhonePreview({ layout, override, ghost, controller, pageId, sele
   onPage?: (pageId: string) => void;
   /** Jump to the page grid settings (offered when tiles are small). */
   onEditGrid?: () => void;
+  /** Draws a black overlay (0..0.9) over the screen, to see what dimming looks like. */
+  dimLevel?: number;
 }) {
   useLanguage();
   const frame = useRef<HTMLIFrameElement>(null);
@@ -273,6 +275,7 @@ export function PhonePreview({ layout, override, ghost, controller, pageId, sele
                   onLoad={post}
                   style={{ width: w, height: h, borderRadius: 42, border: 0, background: "#0b0b0d", display: "block" }}
                 />
+                {dimLevel ? <div aria-hidden="true" data-testid="dim-overlay" style={{ position: "absolute", inset: 0, borderRadius: 42, pointerEvents: "none", background: `rgba(0,0,0,${dimLevel})` }} /> : null}
                 {ghost && ghostPx && (
                   <div
                     aria-hidden="true"

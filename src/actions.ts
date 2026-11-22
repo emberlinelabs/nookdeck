@@ -6,10 +6,9 @@ import { platform } from "./platform";
  * OS actions.
  *
  * Contract:
- * - `buildCommand(action, platform)` is pure and always returns ONE argv (`string[]`).
- *   For macOS media the returned argv is the preferred one (`nowplaying-cli`); the
- *   Spotify/Music AppleScript fallback is `buildMacMediaFallback()`, chosen by
- *   `runAction` at runtime. `page` actions have no command and make buildCommand throw.
+ * - `buildCommand(action, platform)` is pure and always returns ONE argv (`string[]`). On macOS, hotkey / type / media /
+ *   volume have no argv: they are native calls (src/platform/mac-native.ts) and buildCommand throws MAC_NATIVE for them.
+ *   `page` actions have no command and make buildCommand throw.
  * - `runAction(action)` resolves on exit code 0 and throws an Error otherwise
  *   (stderr trimmed, or "timed out" after 10 s). `page` resolves immediately.
  *
@@ -23,66 +22,11 @@ export { parseHotkey, type ParsedHotkey } from "./platform/hotkey";
 import { parseHotkey, type ParsedHotkey } from "./platform/hotkey";
 
 // ---------- macOS ----------
+// Keys, typing, media keys and volume on macOS are native calls (src/platform/mac-native.ts), not commands:
+// buildCommand has no argv for them. `open` and `shell` still are commands.
 
-const MAC_KEY_CODES: Record<string, number> = {
-  return: 36, tab: 48, space: 49, delete: 51, escape: 53, forwarddelete: 117,
-  left: 123, right: 124, down: 125, up: 126,
-  home: 115, end: 119, pageup: 116, pagedown: 121,
-  f1: 122, f2: 120, f3: 99, f4: 118, f5: 96, f6: 97, f7: 98, f8: 100, f9: 101, f10: 109, f11: 103, f12: 111,
-};
-
-const MAC_MODS: Record<ParsedHotkey["mods"][number], string> = {
-  cmd: "command down", ctrl: "control down", alt: "option down", shift: "shift down",
-};
-
-/** Escapes text for inside an AppleScript double-quoted string, turning control chars into expressions. */
-export function escapeAppleScript(text: string): string {
-  return text
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\r\n|\r|\n/g, '" & return & "')
-    .replace(/\t/g, '" & tab & "');
-}
-
-function macHotkeyScript(keys: string): string {
-  const { mods, key } = parseHotkey(keys);
-  const using = mods.length ? ` using {${mods.map((m) => MAC_MODS[m]).join(", ")}}` : "";
-  const code = MAC_KEY_CODES[key];
-  const body = code !== undefined ? `key code ${code}` : `keystroke "${escapeAppleScript(key)}"`;
-  return `tell application "System Events" to ${body}${using}`;
-}
-
-/**
- * AppleScript fallback for macOS media keys: acts on the app that is playing, else on a running Spotify,
- * else on a running Music. Never launches an app (every tell is guarded by `is running`).
- */
-export function buildMacMediaFallback(command: "playpause" | "next" | "previous"): string[] {
-  const verb = command === "playpause" ? "playpause" : command === "next" ? "next track" : "previous track";
-  const lines = [
-    `set target to ""`,
-    `if application "Spotify" is running then`,
-    `tell application "Spotify" to if player state is playing then set target to "Spotify"`,
-    `end if`,
-    `if target is "" and application "Music" is running then`,
-    `tell application "Music" to if player state is playing then set target to "Music"`,
-    `end if`,
-    `if target is "" then`,
-    `if application "Spotify" is running then`,
-    `set target to "Spotify"`,
-    `else if application "Music" is running then`,
-    `set target to "Music"`,
-    `end if`,
-    `end if`,
-    `if target is "Spotify" then`,
-    `tell application "Spotify" to ${verb}`,
-    `else if target is "Music" then`,
-    `tell application "Music" to ${verb}`,
-    `else`,
-    `error "no running media player (Spotify or Music)"`,
-    `end if`,
-  ];
-  return ["osascript", ...lines.flatMap((l) => ["-e", l])];
-}
+/** Thrown by buildCommand for actions macOS runs natively. */
+export const MAC_NATIVE = "this action runs natively on macOS (platform.runAction)";
 
 function looksLikeUrl(target: string): boolean {
   return /^[a-z][a-z0-9+.-]*:\/\//i.test(target) || /^(mailto|tel|sms|facetime|slack|spotify):/i.test(target);
@@ -188,32 +132,22 @@ export function buildCommand(a: Action, platform: NodeJS.Platform): string[] {
     }
 
     case "hotkey":
-      if (isMac) return ["osascript", "-e", macHotkeyScript(a.keys)];
+      if (isMac) throw new Error(MAC_NATIVE);
       if (isWin) return ps(`(New-Object -ComObject WScript.Shell).SendKeys('${escapePowerShell(winSendKeysHotkey(a.keys))}')`);
       return ["xdotool", "key", "--", xdotoolKey(a.keys)];
 
     case "type":
-      if (isMac) return ["osascript", "-e", `tell application "System Events" to keystroke "${escapeAppleScript(a.text)}"`];
+      if (isMac) throw new Error(MAC_NATIVE);
       if (isWin) return ps(`(New-Object -ComObject WScript.Shell).SendKeys('${escapePowerShell(escapeSendKeys(a.text))}')`);
       return ["xdotool", "type", "--delay", "12", "--", a.text];
 
     case "media":
-      if (isMac) return ["nowplaying-cli", a.command === "playpause" ? "togglePlayPause" : a.command];
+      if (isMac) throw new Error(MAC_NATIVE);
       if (isWin) return ps(`(New-Object -ComObject WScript.Shell).SendKeys([char]${WIN_MEDIA[a.command]})`);
       return ["playerctl", a.command === "playpause" ? "play-pause" : a.command];
 
     case "volume":
-      if (isMac) {
-        if (a.command === "mute") return ["osascript", "-e", "set volume output muted (not (output muted of (get volume settings)))"];
-        const delta = a.command === "up" ? "+ 6" : "- 6";
-        const clamp = a.command === "up" ? "if v > 100 then set v to 100" : "if v < 0 then set v to 0";
-        return [
-          "osascript",
-          "-e", `set v to (output volume of (get volume settings)) ${delta}`,
-          "-e", clamp,
-          "-e", "set volume output volume v",
-        ];
-      }
+      if (isMac) throw new Error(MAC_NATIVE);
       if (isWin) {
         const code = WIN_VOLUME[a.command];
         const times = a.command === "mute" ? 1 : 3;
@@ -229,11 +163,11 @@ export function buildCommand(a: Action, platform: NodeJS.Platform): string[] {
 export type VolumeChange = { level: number } | { muted: boolean };
 export interface VolumeState { level: number; muted: boolean }
 
-/** Pure: argv that sets an absolute volume (0-100) or the mute state. */
+/** Pure: argv that sets an absolute volume (0-100) or the mute state (Linux/Windows; macOS sets it natively but is validated here). */
 export function buildVolumeCommand(v: VolumeChange, platform: NodeJS.Platform): string[] {
   if ("level" in v) {
     if (!Number.isInteger(v.level) || v.level < 0 || v.level > 100) throw new Error("volume level must be an integer 0-100");
-    if (platform === "darwin") return ["osascript", "-e", `set volume output volume ${v.level}`];
+    if (platform === "darwin") throw new Error(MAC_NATIVE);
     if (platform === "linux") return ["pactl", "set-sink-volume", "@DEFAULT_SINK@", `${v.level}%`];
     if (platform === "win32") {
       // Best effort: each volume key step is 2%. Go to 0, then step up.
@@ -241,7 +175,7 @@ export function buildVolumeCommand(v: VolumeChange, platform: NodeJS.Platform): 
     }
   } else {
     if (typeof v.muted !== "boolean") throw new Error("muted must be a boolean");
-    if (platform === "darwin") return ["osascript", "-e", `set volume output muted ${v.muted}`];
+    if (platform === "darwin") throw new Error(MAC_NATIVE);
     if (platform === "linux") return ["pactl", "set-sink-mute", "@DEFAULT_SINK@", v.muted ? "1" : "0"];
     if (platform === "win32") throw new Error("setting mute state is not supported on Windows");
   }
@@ -251,13 +185,6 @@ export function buildVolumeCommand(v: VolumeChange, platform: NodeJS.Platform): 
 export async function setVolume(v: VolumeChange): Promise<void> {
   await platform.setVolume(v);
   volumeCache = undefined;
-}
-
-/** Parses `osascript -e "get volume settings"` output. Null when the device has no software volume. */
-export function parseMacVolumeSettings(out: string): VolumeState | null {
-  const level = /output volume:\s*(\d+)/.exec(out)?.[1];
-  if (level === undefined) return null;
-  return { level: Math.min(100, Number(level)), muted: /output muted:\s*true/.test(out) };
 }
 
 /** Parses `pactl get-sink-volume` and `pactl get-sink-mute` output. */

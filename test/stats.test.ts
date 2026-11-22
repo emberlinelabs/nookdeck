@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cpuDelta, parseVmStat, readCpuTimes, startStats, type Stats } from "../src/stats.ts";
+import { cleanGpu, cpuDelta, parseVmStat, readCpuTimes, startStats, type Stats } from "../src/stats.ts";
 
 const VM = `Mach Virtual Memory Statistics: (page size of 16384 bytes)
 Pages free:                                     6501.
@@ -75,4 +75,16 @@ test("every platform says where its load figure comes from", () => {
   const { createPlatform } = require("../src/platform") as typeof import("../src/platform");
   expect(createPlatform("darwin").loadKind).toBe("loadavg");
   expect(createPlatform("win32").loadKind).toBe("estimate");
+});
+
+test("cleanGpu clamps utilisation and drops bad optional fields", () => {
+  expect(cleanGpu(undefined)).toBeUndefined();
+  expect(cleanGpu({})).toBeUndefined();
+  expect(cleanGpu({ util: null })).toBeUndefined();
+  expect(cleanGpu({ util: "x" })).toBeUndefined();
+  expect(cleanGpu({ util: 140 })).toEqual({ util: 100 });
+  expect(cleanGpu({ util: -3 })).toEqual({ util: 0 });
+  expect(cleanGpu({ util: 12.34, memUsed: 441860096.4, memTotal: 8e9, temp: 61.2, name: " Apple M1 Pro " })).toEqual({ util: 12.3, memUsed: 441860096, memTotal: 8e9, temp: 61, name: "Apple M1 Pro" });
+  expect(cleanGpu({ util: 5, memUsed: 9e9, memTotal: 8e9 })).toEqual({ util: 5, memUsed: 8e9, memTotal: 8e9 });
+  expect(cleanGpu({ util: 5, memUsed: "n/a", memTotal: 0, temp: 0, name: "  " })).toEqual({ util: 5 });
 });

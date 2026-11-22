@@ -41,7 +41,7 @@ export type SoundMode = "overlap" | "restart" | "toggle";
 export const SOUND_ID_RE = /^snd:[a-f0-9]{16}$/;
 
 /** nowplaying = current track + transport + volume (agent sends {type:"media"}); network = rx/tx rates. */
-export type WidgetKind = "clock" | "cpu" | "memory" | "uptime" | "load" | "network" | "nowplaying" | "quota" | "sessions" | "entity" | "weather" | "value" | "notifications";
+export type WidgetKind = "clock" | "cpu" | "gpu" | "memory" | "uptime" | "load" | "network" | "nowplaying" | "quota" | "sessions" | "entity" | "weather" | "value" | "notifications";
 
 /** AI coding tools PhoneDesk reads quotas/sessions from. A "quota" widget shows one provider (item.provider). */
 export type AiProvider = "claude" | "codex" | "antigravity" | "opencode" | "grok";
@@ -95,10 +95,11 @@ export interface QuotaOptions {
  */
 export type MetricChart = "sparkline" | "area" | "bars" | "gauge" | "ring" | "bar" | "number" | "donut";
 export const METRIC_CHARTS: MetricChart[] = ["sparkline", "area", "bars", "gauge", "ring", "bar", "number", "donut"];
-export const METRIC_WIDGETS = ["cpu", "memory", "network", "load"] as const;
+export const METRIC_WIDGETS = ["cpu", "gpu", "memory", "network", "load"] as const;
 /** Charts that need a 0-100 scale are not offered for network/load (they have no fixed maximum). */
 export const METRIC_CHARTS_FOR: Record<(typeof METRIC_WIDGETS)[number], MetricChart[]> = {
   cpu: ["sparkline", "area", "bars", "gauge", "ring", "bar", "number"],
+  gpu: ["sparkline", "area", "bars", "gauge", "ring", "bar", "number"],
   memory: ["sparkline", "area", "bars", "gauge", "ring", "bar", "number", "donut"],
   network: ["sparkline", "area", "bars", "number"],
   load: ["sparkline", "area", "bars", "number"],
@@ -154,6 +155,59 @@ export interface Theme {
   temperatureUnit?: "c" | "f";
   /** false = never ask GitHub whether a newer PhoneDesk exists (GET /api/update then reports enabled:false). Missing = on. */
   updateCheck?: boolean;
+  /** Phone screen behaviour: lite mode, keep awake, standby clock, dim. Missing = every default below. */
+  screen?: ScreenSettings;
+  /** Deck header bar: full (default), minimal (no computer name / CPU / RAM chips) or hidden (floating round button). */
+  header?: HeaderMode;
+}
+
+export type HeaderMode = "full" | "minimal" | "hidden";
+export const HEADER_MODES: HeaderMode[] = ["full", "minimal", "hidden"];
+
+export type LiteMode = "auto" | "on" | "off";
+export const LITE_MODES: LiteMode[] = ["auto", "on", "off"];
+export type StandbyStyle = "digital" | "analog" | "words";
+export const STANDBY_STYLES: StandbyStyle[] = ["digital", "analog", "words"];
+
+export interface StandbySettings {
+  enabled: boolean;      // default false
+  afterMin: number;      // 1..120 idle minutes before standby; default 5
+  style: StandbyStyle;   // default "digital"
+  showDate?: boolean;    // default true
+  showNext?: boolean;    // show the next alarm under the clock; default true
+}
+export interface DimSettings {
+  level: number;         // 0..0.9 black overlay opacity; default 0.6
+  from?: string;         // "HH:MM" schedule start (phone local time); from and to both missing = never auto-dim
+  to?: string;           // "HH:MM" schedule end; may wrap midnight
+}
+export interface ScreenSettings {
+  lite?: LiteMode;       // default "auto"
+  keepAwake?: boolean;   // default true
+  standby?: StandbySettings;
+  dim?: DimSettings;
+}
+export const SCREEN_DEFAULTS = {
+  lite: "auto" as LiteMode,
+  keepAwake: true,
+  standby: { enabled: false, afterMin: 5, style: "digital" as StandbyStyle, showDate: true, showNext: true },
+  dim: { level: 0.6 },
+};
+
+export type AlarmSound = "chime" | "birds" | "soft" | "none";
+export const ALARM_SOUNDS: AlarmSound[] = ["chime", "birds", "soft", "none"];
+export const MAX_ALARMS = 20;
+export const ALARM_ID_RE = /^[a-z0-9-]{1,40}$/;
+export interface Alarm {
+  id: string;            // [a-z0-9-]{1,40}
+  time: string;          // "HH:MM" 24h, phone local time
+  days?: number[];       // 0=Sun..6=Sat, unique; missing/empty = one-shot
+  label?: string;        // <= 60 chars
+  enabled: boolean;
+  sound: AlarmSound;
+  sunriseMin: number;    // 0..30
+  snoozeMin: number;     // 1..30, default 9
+  devices?: string[];    // device ids; missing/empty = every phone
 }
 
 export type Orientation = "landscape" | "portrait" | "auto";
@@ -179,6 +233,8 @@ export interface Layout {
   pages: Page[];
   /** Automation rules: see src/automation.ts. */
   rules?: Rule[];
+  /** Alarms the phones ring on their own (max 20). */
+  alarms?: Alarm[];
 }
 
 export interface Device {
@@ -196,7 +252,7 @@ const LAYOUT_FILE = join(HOME, "layout.json");
 const DEVICES_FILE = join(HOME, "devices.json");
 
 export const ACTION_TYPES = ["open", "hotkey", "type", "shell", "media", "volume", "page", "sound", "sound-stop", "hass", "macro"] as const;
-export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "memory", "uptime", "load", "network", "nowplaying", "quota", "sessions", "entity", "weather", "value", "notifications"];
+export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "gpu", "memory", "uptime", "load", "network", "nowplaying", "quota", "sessions", "entity", "weather", "value", "notifications"];
 
 export function defaultLayout(): Layout {
   return {
@@ -354,6 +410,10 @@ function validateTheme(t: any): Theme | undefined {
     if (t.temperatureUnit !== "c" && t.temperatureUnit !== "f") throw new Error("theme.temperatureUnit must be c or f");
     out.temperatureUnit = t.temperatureUnit;
   }
+  if (t.header !== undefined) {
+    if (!HEADER_MODES.includes(t.header)) throw new Error(`theme.header must be one of ${HEADER_MODES.join(", ")}`);
+    out.header = t.header;
+  }
   if (t.updateCheck !== undefined) out.updateCheck = bool(t.updateCheck, "theme.updateCheck");
   if (t.language !== undefined) {
     if (!LANGUAGES.includes(t.language)) throw new Error(`theme.language must be one of ${LANGUAGES.join(", ")}`);
@@ -363,7 +423,98 @@ function validateTheme(t: any): Theme | undefined {
     if (!ORIENTATIONS.includes(t.orientation)) throw new Error(`theme.orientation must be one of ${ORIENTATIONS.join(", ")}`);
     out.orientation = t.orientation;
   }
+  const screen = validateScreen(t.screen);
+  if (screen) out.screen = screen;
   return out;
+}
+
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const hhmm = (v: unknown, field: string): string => {
+  if (typeof v !== "string" || !HHMM_RE.test(v)) throw new Error(`${field} must be HH:MM`);
+  return v;
+};
+const obj = (v: unknown, field: string): any => {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) throw new Error(`${field} must be an object`);
+  return v;
+};
+
+function validateScreen(v: any): ScreenSettings | undefined {
+  if (v === undefined || v === null) return undefined;
+  obj(v, "theme.screen");
+  const out: ScreenSettings = {};
+  if (v.lite !== undefined) {
+    if (!LITE_MODES.includes(v.lite)) throw new Error(`theme.screen.lite must be one of ${LITE_MODES.join(", ")}`);
+    out.lite = v.lite;
+  }
+  if (v.keepAwake !== undefined) out.keepAwake = bool(v.keepAwake, "theme.screen.keepAwake");
+  if (v.standby !== undefined && v.standby !== null) {
+    const s = obj(v.standby, "theme.screen.standby");
+    const d = SCREEN_DEFAULTS.standby;
+    const style = s.style ?? d.style;
+    if (!STANDBY_STYLES.includes(style)) throw new Error(`theme.screen.standby.style must be one of ${STANDBY_STYLES.join(", ")}`);
+    out.standby = {
+      enabled: s.enabled === undefined ? d.enabled : bool(s.enabled, "theme.screen.standby.enabled"),
+      afterMin: s.afterMin === undefined ? d.afterMin : num(s.afterMin, "theme.screen.standby.afterMin", 1, 120),
+      style,
+      ...(s.showDate !== undefined ? { showDate: bool(s.showDate, "theme.screen.standby.showDate") } : {}),
+      ...(s.showNext !== undefined ? { showNext: bool(s.showNext, "theme.screen.standby.showNext") } : {}),
+    };
+  }
+  if (v.dim !== undefined && v.dim !== null) {
+    const m = obj(v.dim, "theme.screen.dim");
+    const from = m.from === undefined || m.from === "" ? undefined : hhmm(m.from, "theme.screen.dim.from");
+    const to = m.to === undefined || m.to === "" ? undefined : hhmm(m.to, "theme.screen.dim.to");
+    out.dim = {
+      level: m.level === undefined ? SCREEN_DEFAULTS.dim.level : num(m.level, "theme.screen.dim.level", 0, 0.9, false),
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+    };
+  }
+  return out;
+}
+
+function validateAlarms(raw: any): Alarm[] | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (!Array.isArray(raw)) throw new Error("alarms must be an array");
+  if (raw.length > MAX_ALARMS) throw new Error(`alarms: at most ${MAX_ALARMS}`);
+  const seen = new Set<string>();
+  return raw.map((a: any, i: number): Alarm => {
+    const w = `alarms[${i}]`;
+    obj(a, w);
+    const id = str(a.id, `${w}.id`);
+    if (!ALARM_ID_RE.test(id)) throw new Error(`${w}.id must be 1-40 characters of a-z, 0-9 and -`);
+    if (seen.has(id)) throw new Error(`${w}.id "${id}" is used twice`);
+    seen.add(id);
+    const time = hhmm(a.time, `${w}.time`);
+    let days: number[] | undefined;
+    if (a.days !== undefined && a.days !== null) {
+      if (!Array.isArray(a.days)) throw new Error(`${w}.days must be an array`);
+      const ds = a.days.map((d: unknown, j: number) => num(d, `${w}.days[${j}]`, 0, 6));
+      days = [...new Set<number>(ds)].sort((x, y) => x - y);
+    }
+    let label: string | undefined;
+    if (a.label !== undefined && a.label !== null && a.label !== "") {
+      label = str(a.label, `${w}.label`);
+      if (label.length > 60) throw new Error(`${w}.label must be at most 60 characters`);
+    }
+    const sound = a.sound ?? "chime";
+    if (!ALARM_SOUNDS.includes(sound)) throw new Error(`${w}.sound must be one of ${ALARM_SOUNDS.join(", ")}`);
+    let devices: string[] | undefined;
+    if (a.devices !== undefined && a.devices !== null) {
+      if (!Array.isArray(a.devices)) throw new Error(`${w}.devices must be an array`);
+      devices = [...new Set<string>(a.devices.map((d: unknown, j: number) => str(d, `${w}.devices[${j}]`)))];
+    }
+    return {
+      id, time,
+      ...(days && days.length ? { days } : {}),
+      ...(label ? { label } : {}),
+      enabled: a.enabled === undefined ? true : bool(a.enabled, `${w}.enabled`),
+      sound,
+      sunriseMin: a.sunriseMin === undefined ? 0 : num(a.sunriseMin, `${w}.sunriseMin`, 0, 30),
+      snoozeMin: a.snoozeMin === undefined ? 9 : num(a.snoozeMin, `${w}.snoozeMin`, 1, 30),
+      ...(devices && devices.length ? { devices } : {}),
+    };
+  });
 }
 
 /**
@@ -643,5 +794,6 @@ export function validateLayout(raw: any): Layout {
   });
   const theme = validateTheme(raw.theme);
   const rules = validateRules(raw.rules, new Set(pages.map((p) => p.id)));
-  return { version: 1, ...(theme ? { theme } : {}), pages, ...(rules ? { rules } : {}) };
+  const alarms = validateAlarms(raw.alarms);
+  return { version: 1, ...(theme ? { theme } : {}), pages, ...(rules ? { rules } : {}), ...(alarms && alarms.length ? { alarms } : {}) };
 }

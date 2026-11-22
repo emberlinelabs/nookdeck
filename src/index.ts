@@ -171,6 +171,33 @@ if (argv[0] === "__ae") {
   console.log(realAutomation(String(argv[1] ?? ""), argv[2] === "ask"));
   process.exit(0);
 }
+// `phonedesk __native ping|volume|running|nowplaying`: internal, read-only self-check of the macOS native helper (also proves the worker is inside this binary).
+if (argv[0] === "__native") {
+  if (argv[1] === "nowplaying") {
+    // what every app is playing right now, read through the bundled adapter (read-only; prints one JSON line)
+    const { platform } = await import("./platform");
+    const status = await platform.nowPlayingStatus();
+    const media = status.ok ? await platform.readMedia() : null;
+    console.log(JSON.stringify({ status, media }));
+    platform.dispose();
+    process.exit(status.ok ? 0 : 1);
+  }
+  const { macNative } = await import("./platform/mac-client");
+  const mn = macNative();
+  try {
+    const op = argv[1] ?? "ping";
+    const out = op === "volume" ? await mn.call("volumeGet")
+      : op === "running" ? await mn.call("running", { bundles: argv.slice(2) })
+      : op === "ping" ? await mn.call("ping")
+      : (() => { throw new Error("use ping, volume or running <bundle-id>..."); })();
+    console.log(JSON.stringify(out));
+    mn.dispose();
+    process.exit(0);
+  } catch (e: any) {
+    console.error(e?.message ?? e);
+    process.exit(1);
+  }
+}
 // `phonedesk __ax [prompt]`: internal, same idea for the Accessibility check (prompt = show macOS's own prompt).
 if (argv[0] === "__ax") {
   const { realAxPrompt, realAxTrusted } = await import("./doctor");

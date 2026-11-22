@@ -257,6 +257,69 @@ function Cmd-NetCounters {
   $o
 }
 
+# ---- GPU: utilisation from the 3D engine counters, memory from the adapter counters, NVIDIA temperature from nvidia-smi ----
+$script:gpuStatic = $null
+$script:gpuTemp = $null
+$script:gpuTempAt = [DateTime]::MinValue
+function Gpu-Static {
+  # name and total VRAM of the adapter with the most memory; cached for the life of the helper
+  $name = $null; $total = $null
+  try {
+    $best = $null
+    foreach ($v in (Get-CimInstance Win32_VideoController -ErrorAction Stop)) {
+      if (-not $v.Name -or $v.Name -match 'Basic|Remote|Virtual|Parsec|Mirage') { continue }
+      if (-not $best -or [double]$v.AdapterRAM -gt [double]$best.AdapterRAM) { $best = $v }
+    }
+    if ($best) { $name = [string]$best.Name; if ($best.AdapterRAM -and [double]$best.AdapterRAM -gt 0) { $total = [double]$best.AdapterRAM } }
+  } catch { }
+  try {
+    # Win32_VideoController.AdapterRAM is a 32-bit field (capped at 4 GB); the driver key holds the real 64-bit size
+    $max = 0.0
+    foreach ($k in (Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction Stop)) {
+      $p = Get-ItemProperty -LiteralPath $k.PSPath -ErrorAction SilentlyContinue
+      if ($p -and $p.'HardwareInformation.qwMemorySize') { $q = [double]$p.'HardwareInformation.qwMemorySize'; if ($q -gt $max) { $max = $q } }
+    }
+    if ($max -gt 0) { $total = $max }
+  } catch { }
+  @{ name = $name; total = $total }
+}
+function Cmd-GpuRead {
+  $util = $null; $used = $null
+  try {
+    $e = (Get-Counter -Counter '\GPU Engine(*engtype_3D)\Utilization Percentage' -ErrorAction Stop).CounterSamples
+    $by = @{}
+    foreach ($s in $e) {
+      # instance: pid_123_luid_0x00000000_0x0000A5B2_phys_0_eng_0_engtype_3D ; sum per adapter (luid), cap 100
+      $luid = if ($s.InstanceName -match 'luid_(0x[0-9A-Fa-f]+_0x[0-9A-Fa-f]+)') { $Matches[1] } else { 'x' }
+      $by[$luid] = [double]$by[$luid] + [double]$s.CookedValue
+    }
+    foreach ($v in $by.Values) { $c = [Math]::Min(100.0, $v); if ($null -eq $util -or $c -gt $util) { $util = $c } }
+  } catch { }
+  if ($null -eq $util) { return $null }
+  try {
+    $m = (Get-Counter -Counter '\GPU Adapter Memory(*)\Dedicated Usage' -ErrorAction Stop).CounterSamples
+    $bm = @{}
+    foreach ($s in $m) { $luid = if ($s.InstanceName -match 'luid_(0x[0-9A-Fa-f]+_0x[0-9A-Fa-f]+)') { $Matches[1] } else { 'x' }; $bm[$luid] = [double]$bm[$luid] + [double]$s.CookedValue }
+    foreach ($v in $bm.Values) { if ($null -eq $used -or $v -gt $used) { $used = $v } }
+  } catch { }
+  if (-not $script:gpuStatic) { $script:gpuStatic = Gpu-Static }
+  $o = @{ util = [Math]::Round($util, 1) }
+  if ($null -ne $used) { $o['memUsed'] = $used }
+  if ($script:gpuStatic.total) { $o['memTotal'] = $script:gpuStatic.total }
+  if ($script:gpuStatic.name) { $o['name'] = $script:gpuStatic.name }
+  if (([DateTime]::UtcNow - $script:gpuTempAt).TotalSeconds -ge 10) {
+    $script:gpuTempAt = [DateTime]::UtcNow
+    $script:gpuTemp = $null
+    try {
+      $smi = Get-Command nvidia-smi.exe -ErrorAction Stop
+      $t = & $smi.Source --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>$null | Select-Object -First 1
+      if ($t -match '^\s*(\d+)\s*$') { $script:gpuTemp = [int]$Matches[1] }
+    } catch { }
+  }
+  if ($null -ne $script:gpuTemp) { $o['temp'] = $script:gpuTemp }
+  $o
+}
+
 function Cmd-Processes {
   $list = @()
   foreach ($p in (Get-CimInstance Win32_PerfFormattedData_PerfProc_Process)) {
@@ -337,6 +400,7 @@ function Handle($req) {
     'apps.open' { return Cmd-AppOpen $req }
     'image.resize' { return Cmd-ImageResize $req }
     'net.counters' { return Cmd-NetCounters }
+    'gpu.read' { return Cmd-GpuRead }
     'proc.list' { return Cmd-Processes }
     'window.list' { return Win-Windows }
     'window.focusnew' { return Cmd-WindowFocusNew $req }

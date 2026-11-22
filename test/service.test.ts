@@ -32,7 +32,7 @@ describe.skipIf(WIN)("plist", () => {
     expect(p).toMatch(/<key>KeepAlive<\/key>\s*<dict>\s*<key>SuccessfulExit<\/key>\s*<false\/>\s*<\/dict>/);
     expect(p).toContain("<string>/data/logs/agent.out.log</string>");
     expect(p).toContain("<string>/data/logs/agent.err.log</string>");
-    expect(p).toContain("/opt/homebrew/bin"); // PATH for nowplaying-cli, agy ...
+    expect(p).toContain("/opt/homebrew/bin"); // PATH for playerctl, agy ...
     expect(p).toContain("<string>/data &amp; &lt;x&gt;</string>"); // escaped
     expect(p.startsWith("<?xml")).toBe(true);
   });

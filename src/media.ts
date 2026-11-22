@@ -131,14 +131,12 @@ function appBlock(app: "Spotify" | "Music"): string[] {
   ];
 }
 
-/** Only touches Spotify/Music that are already running (`is running` never launches an app). */
-export const MAC_SCRIPT_LINES = [
-  `set US to ASCII character 31`,
-  `set res to ""`,
-  ...appBlock("Spotify"),
-  ...appBlock("Music"),
-  `return res`,
-];
+export const MEDIA_BUNDLES: Record<MediaApp, string> = { Music: "com.apple.Music", Spotify: "com.spotify.client" };
+
+/** The read script for one player (run in-process by NSAppleScript, and only when that player already runs, so it never launches an app). */
+export function macReadScript(app: MediaApp): string {
+  return [`set US to ASCII character 31`, `set res to ""`, ...appBlock(app), `return res`].join("\n");
+}
 
 /** Current media on this OS, or null when nothing is playing/open. Never throws. */
 export async function readMedia(): Promise<RawMedia | null> {
@@ -174,6 +172,8 @@ export interface PollResult {
   media: Media | null;
   /** True when the track (app/title/artist) differs from the previous published media: the message should carry artwork. */
   trackChanged: boolean;
+  /** True when the cached cover appeared or changed for the same track. */
+  artworkChanged: boolean;
 }
 
 /** While a playing track has less than this many seconds left, the agent polls every NEAR_END_MS. */
@@ -183,8 +183,13 @@ export const NEAR_END_MS = 300;
 /** A seek or stall bigger than this (s) versus the extrapolated position counts as a change. */
 export const SEEK_TOLERANCE = 3;
 
+/** How often, and for how long, a track whose cover came back empty is asked again (the player often publishes the cover a moment after the title). */
+export const ART_RETRY_MS = 2_000;
+export const ART_RETRY_WINDOW_MS = 60_000;
+
 /**
- * Polls a media reader and decides what is worth pushing. Position drift while playing is not a change
+ * Polls a media reader and decides what is worth pushing.
+ * Artwork retry for up to 60 s and keeping the old cover for the same app+title while metadata settles: based on PR #1 by Ron Ng (ronnhd). Position drift while playing is not a change
  * (the client extrapolates); play/pause, a new track, metadata changes and seeks are.
  * Artwork is resolved once per app+title+artist and cached.
  */
@@ -196,6 +201,9 @@ export class MediaTracker {
   private publishedAt = 0;
   private artKey = "";
   private art: string | undefined;
+  private artRetryAt = 0;
+  private artRetryUntil = 0;
+  private artPending = false;
   private now: () => number;
 
   constructor(private deps: TrackerDeps) {
@@ -214,22 +222,49 @@ export class MediaTracker {
       this.current = null;
       this.artKey = "";
       this.art = undefined;
-      return { changed: prev !== null, media: null, trackChanged: prev !== null && prev !== undefined };
+      this.artRetryAt = 0;
+      this.artRetryUntil = 0;
+      this.artPending = false;
+      return { changed: prev !== null, media: null, trackChanged: prev !== null && prev !== undefined, artworkChanged: !!prev?.artwork };
     }
 
     const k = this.key(raw);
+    const now = this.now();
     if (k !== this.artKey) {
+      const oldKey = this.artKey;
+      const oldArt = this.art;
       this.artKey = k;
-      this.art = undefined;
       this.art = await this.deps.artwork(raw).catch(() => undefined);
+      if (this.art) {
+        this.artRetryAt = 0;
+        this.artRetryUntil = 0;
+        this.artPending = false;
+      } else {
+        // the cover can be briefly empty while metadata settles: keep the old cover for the same app+title and ask again for up to 60 s
+        const sameTitle = oldKey && oldArt && oldKey.split("|").slice(0, 2).join("|") === k.split("|").slice(0, 2).join("|");
+        if (sameTitle) this.art = oldArt;
+        this.artPending = true;
+        this.artRetryAt = now + ART_RETRY_MS;
+        this.artRetryUntil = now + ART_RETRY_WINDOW_MS;
+      }
+    } else if (this.artPending && now >= this.artRetryAt && now < this.artRetryUntil) {
+      const fetched = await this.deps.artwork(raw).catch(() => undefined);
+      if (fetched) {
+        this.art = fetched;
+        this.artPending = false;
+        this.artRetryAt = 0;
+        this.artRetryUntil = 0;
+      } else {
+        this.artRetryAt = now + ART_RETRY_MS;
+      }
     }
     const { artworkUrl: _u, ...rest } = raw;
     const media: Media = this.art ? { ...rest, artwork: this.art } : rest;
     this.seen = media;
 
-    const now = this.now();
     let changed = true;
     let trackChanged = true;
+    const artworkChanged = !prev ? !!media.artwork : prev.artwork !== media.artwork;
     if (prev) {
       trackChanged = this.key(prev) !== k;
       const expected = prev.playing ? prev.position + (now - this.publishedAt) / 1000 : prev.position;
@@ -239,13 +274,13 @@ export class MediaTracker {
         prev.playing !== media.playing ||
         Math.abs(prev.duration - media.duration) > 1 ||
         Math.abs(media.position - expected) > SEEK_TOLERANCE ||
-        (!prev.artwork && !!media.artwork);
+        artworkChanged;
     }
     if (changed) {
       this.current = media;
       this.publishedAt = now;
     }
-    return { changed, media: changed ? media : (this.current as Media), trackChanged };
+    return { changed, media: changed ? media : (this.current as Media), trackChanged, artworkChanged };
   }
 }
 

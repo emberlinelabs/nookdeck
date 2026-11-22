@@ -52,6 +52,7 @@ const quota = (p: AiProvider, label: string, color?: string): PaletteEntry => ({
 export const STATIC_ENTRIES: PaletteEntry[] = [
   { key: "w-clock", group: "widget", path: ["Time"], label: "Clock", icon: "clock", size: [2, 1], tags: "clock time", make: () => widget("clock") },
   { key: "w-cpu", group: "widget", path: ["System"], label: "CPU", icon: "cpu", size: [2, 1], tags: "cpu processor", make: () => widget("cpu") },
+  { key: "w-gpu", group: "widget", path: ["System"], label: "GPU", hint: "Graphics card load and memory (no data on Linux)", icon: "device-desktop", size: [2, 1], tags: "gpu graphics card video", make: () => widget("gpu") },
   { key: "w-mem", group: "widget", path: ["System"], label: "RAM", icon: "server", size: [2, 1], tags: "ram memory", make: () => widget("memory") },
   { key: "w-uptime", group: "widget", path: ["System"], label: "Uptime", icon: "clock", size: [2, 1], tags: "uptime", make: () => widget("uptime") },
   { key: "w-net", group: "widget", path: ["System"], label: "Network", icon: "wifi", size: [2, 1], tags: "network", make: () => widget("network") },

@@ -1,6 +1,7 @@
 import { QuotaWidget, SessionsWidget } from './ai'
 import { t } from './i18n'
 import { getPlatform } from './platform'
+import { formatTemp } from './temp'
 import type { AiWidgetProps } from './ai'
 import { Rings, SlotSpark } from './charts'
 import { BarSpark, Donut, MeterBar, windowSeries } from './metric-charts'
@@ -20,6 +21,7 @@ export interface Hist {
   rx: number[]
   tx: number[]
   load: number[]
+  gpu?: number[]
 }
 
 /** ~15 min of 2 s samples (the longest chart window); charts downsample to their slot count */
@@ -29,6 +31,7 @@ const GB = 1024 * 1024 * 1024
 
 export const DEFAULT_COLOR: { [k: string]: string } = {
   cpu: '#2dd4bf',
+  gpu: '#a78bfa',
   memory: '#f472b6',
   network: '#f59e0b',
   load: '#34d399',
@@ -38,6 +41,7 @@ export const DEFAULT_COLOR: { [k: string]: string } = {
 const LABEL: { [k: string]: string } = {
   clock: 'Clock',
   cpu: 'CPU',
+  gpu: 'GPU',
   memory: 'RAM',
   network: 'Network',
   load: 'System load',
@@ -126,6 +130,18 @@ const deltaOf = (a: number[]): number | null => {
   return r.length >= 8 ? r[r.length - 1] - r[0] : null
 }
 
+const fmtVram = (b: number) => (b >= GB ? (b / GB).toFixed(1) + ' GB' : Math.round(b / (1024 * 1024)) + ' MB')
+/** 'VRAM 2.1 / 8 GB' | 'GPU mem 420 MB', plus the temperature when known */
+function gpuSub(g: NonNullable<Stats['gpu']>): string {
+  let m = ''
+  if (typeof g.memUsed === 'number') {
+    if (g.memTotal && g.memTotal > 0) m = t('VRAM') + ' ' + (g.memUsed >= GB || g.memTotal >= GB ? (g.memUsed / GB).toFixed(1) + ' / ' + Math.round(g.memTotal / GB) + ' GB' : Math.round(g.memUsed / 1048576) + ' / ' + Math.round(g.memTotal / 1048576) + ' MB')
+    else m = t('GPU mem') + ' ' + fmtVram(g.memUsed)
+  }
+  const tp = typeof g.temp === 'number' ? formatTemp(g.temp, 'C', undefined, 0) : ''
+  return m && tp ? m + ' · ' + tp : m || tp
+}
+
 /** cpu < 60 good, < 85 watch, else risk (agent-health-utils.ts: statusFromThresholds with lower-is-better cuts). */
 const cpuBand = (v: number): Band => (v < 60 ? 'good' : v < 85 ? 'watch' : 'risk')
 const LOAD_LABEL: { [k: string]: string } = { loadavg: 'System load', queue: 'CPU queue', estimate: 'Load (est.)' }
@@ -151,7 +167,17 @@ function Metric(props: WidgetProps) {
   let max: number | undefined
   let delta: { v: number; unit: string; dec: number; tone?: 'warn' | 'bad' } | null = null
   if (s) {
-    if (kind === 'cpu') {
+    if (kind === 'gpu') {
+      if (s.gpu) {
+        num = Math.round(s.gpu.util)
+        unit = '%'
+        sub = gpuSub(s.gpu)
+        data = props.hist.gpu || []
+        max = 100
+        const d = deltaOf(data)
+        if (d !== null) delta = { v: d, unit: '%', dec: 0, tone: d >= 20 ? 'bad' : undefined }
+      }
+    } else if (kind === 'cpu') {
       num = Math.round(s.cpu)
       unit = '%'
       data = props.hist.cpu
@@ -199,12 +225,14 @@ function Metric(props: WidgetProps) {
 
   // ----- chart choice (item.metric): defaults cpu gauge on square-ish tiles, else sparkline -----
   const mo = props.metric || {}
-  const pctKind = kind === 'cpu' || kind === 'memory'
-  const pct = !s ? 0 : kind === 'cpu' ? s.cpu : kind === 'memory' && s.memTotal ? (s.memUsed / s.memTotal) * 100 : 0
-  const base = kind === 'cpu' && props.tw >= 140 && props.th >= 140 ? 'gauge' : 'sparkline'
+  const noGpu = kind === 'gpu' && !(s && s.gpu)
+  const pctKind = kind === 'cpu' || kind === 'memory' || kind === 'gpu'
+  const pct = !s ? 0 : kind === 'gpu' ? (s.gpu ? s.gpu.util : 0) : kind === 'cpu' ? s.cpu : kind === 'memory' && s.memTotal ? (s.memUsed / s.memTotal) * 100 : 0
+  const base = (kind === 'cpu' || kind === 'gpu') && props.tw >= 140 && props.th >= 140 ? 'gauge' : 'sparkline'
   let chart: string = mo.chart || base
   if (!pctKind && (chart === 'gauge' || chart === 'ring' || chart === 'bar' || chart === 'donut')) chart = base
-  if (kind === 'cpu' && chart === 'donut') chart = 'ring'
+  if ((kind === 'cpu' || kind === 'gpu') && chart === 'donut') chart = 'ring'
+  if (noGpu) chart = 'number'
   if (kind === 'uptime') chart = 'number'
   const showDeltaOpt = mo.showDelta !== false
   const showSubOpt = mo.showSub !== false
@@ -227,7 +255,7 @@ function Metric(props: WidgetProps) {
 
   // gauge: agent-health arc
   if (chart === 'gauge' && s) {
-    const sparkRoom = props.th >= 210 && data && kind === 'cpu' ? 40 : 0
+    const sparkRoom = props.th >= 210 && data && (kind === 'cpu' || kind === 'gpu') ? 40 : 0
     const statH = props.th >= 120 ? 30 : 0
     const gSize = Math.max(44, Math.min(avail, Math.floor((props.th - pad * 2 - lh - statH - sparkRoom) / 0.7), 210))
     return (
@@ -236,7 +264,7 @@ function Metric(props: WidgetProps) {
         <div class="pd-gwrap" style={{ width: gSize + 'px', height: Math.round(gSize * 0.7) + 'px' }}>
           <Gauge value={pct} size={gSize} band={band} />
           <div class="pd-gwrap__c">
-            <AnimatedNumber value={kind === 'cpu' ? num : Math.round(pct)} class="pd-gwrap__n" style={{ fontSize: Math.round(gSize * 0.22) + 'px' }} suffix="%" />
+            <AnimatedNumber value={kind === 'cpu' || kind === 'gpu' ? num : Math.round(pct)} class="pd-gwrap__n" style={{ fontSize: Math.round(gSize * 0.22) + 'px' }} suffix="%" />
           </div>
         </div>
         {statH ? (
@@ -324,6 +352,8 @@ function Metric(props: WidgetProps) {
 
   const isNet = kind === 'network'
   const noChart = chart === 'number' || !data
+  const dash = noGpu
+  if (dash) sub = t('No GPU data')
   // tall tiles (2x3...): the chart takes the height the text does not need, and the number grows with it
   const tallM = props.th >= props.tw * 1.25 && props.th >= 200
   const sparkH = noChart ? 0 : tallM ? Math.round(props.th * 0.5) : !compact ? Math.max(16, Math.min(isNet ? 70 : 60, Math.round(props.th * (isNet ? 0.34 : 0.22)))) : Math.max(12, Math.round(props.th * 0.2))
@@ -351,7 +381,7 @@ function Metric(props: WidgetProps) {
     }
   }
   return (
-    <div class={'pd-metric' + (tallM && noChart ? ' pd-metric--mid' : '')} style={{ padding: pad + 'px', paddingBottom: pad + 'px' }}>
+    <div class={'pd-metric' + (tallM && noChart ? ' pd-metric--mid' : '')} style={{ padding: pad + 'px', paddingBottom: pad + 'px' }} title={kind === 'gpu' && s && s.gpu && s.gpu.name ? s.gpu.name : undefined}>
       {props.showLabel ? (
         <div class="pd-ml" style={{ fontSize: lSize + 'px', color: props.textColor || color }}>
           {label}
@@ -359,8 +389,8 @@ function Metric(props: WidgetProps) {
       ) : null}
       <div class="pd-mrow">
         <div class="pd-mv" style={{ fontSize: vSize + 'px', color: tc }}>
-          <AnimatedNumber value={num} format={fmt} />
-          {unit ? <span class="pd-mu" style={{ fontSize: Math.max(9, Math.round(vSize * 0.42)) + 'px' }}>{' ' + unit}</span> : null}
+          {dash ? '-' : <AnimatedNumber value={num} format={fmt} />}
+          {unit && !dash ? <span class="pd-mu" style={{ fontSize: Math.max(9, Math.round(vSize * 0.42)) + 'px' }}>{' ' + unit}</span> : null}
         </div>
         {showDelta && delta ? <DeltaPill value={delta.v} unit={delta.unit} decimals={delta.dec} tone={delta.tone} size={11} /> : null}
       </div>

@@ -49,6 +49,8 @@ export interface Probes {
   /** The prompting variants, only for an explicit request: AXIsProcessTrustedWithOptions(prompt) / AEDetermine...(ask=true). */
   requestAccessibility(): boolean | null | Promise<boolean | null>;
   requestAutomation(bundleId: string): AutomationState | Promise<AutomationState>;
+  /** Can the Now Playing of every app be read (the bundled mediaremote adapter)? */
+  nowPlaying(): Promise<{ ok: boolean; why?: string }>;
   installed(bundleId: string): boolean;
   which(name: string): string | null;
   hookFiles(): Partial<Record<HookTool, string>>;
@@ -77,9 +79,9 @@ export const PANES = {
 } as const;
 
 export const AUTOMATION_TARGETS = [
-  { id: "automation-system-events", name: "System Events", bundle: "com.apple.systemevents", why: "key presses, typing and volume tiles" },
-  { id: "automation-music", name: "Music", bundle: "com.apple.Music", why: "the Now Playing tile and media keys for Music" },
-  { id: "automation-spotify", name: "Spotify", bundle: "com.spotify.client", why: "the Now Playing tile and media keys for Spotify" },
+  // Keys, typing and volume are native calls now: System Events is no longer used, so it is not checked. Only Now Playing needs Automation.
+  { id: "automation-music", name: "Music", bundle: "com.apple.Music" },
+  { id: "automation-spotify", name: "Spotify", bundle: "com.spotify.client" },
 ] as const;
 
 const who = (p: Probes) => (p.asService ? t("the phonedesk program") : t("the terminal app you started PhoneDesk from"));
@@ -99,16 +101,27 @@ async function accessibility(p: Probes): Promise<DoctorItem> {
 async function automation(p: Probes, tg: (typeof AUTOMATION_TARGETS)[number]): Promise<DoctorItem> {
   const title = t("Automation: {app}", { app: tg.name });
   if (p.platform !== "darwin") return { id: tg.id, title, status: "n/a", detail: t("macOS only") };
-  if (tg.bundle !== "com.apple.systemevents" && !p.installed(tg.bundle)) return { id: tg.id, title, status: "n/a", detail: t("{app} is not installed", { app: tg.name }) };
+  if (!p.installed(tg.bundle)) return { id: tg.id, title, status: "n/a", detail: t("{app} is not installed", { app: tg.name }) };
   const s = await p.automation(tg.bundle);
   const fix = { text: t("Open System Settings > Privacy & Security > Automation and allow {who} to control {app}.", { who: p.asService ? "phonedesk" : t("your terminal app"), app: tg.name }), settingsUrl: PANES.automation };
   switch (s) {
-    case "granted": return { id: tg.id, title, status: "ok", detail: t("allowed (used for {why})", { why: t(tg.why) }) };
-    case "denied": return { id: tg.id, title, status: "denied", detail: t("denied: {why} will not work", { why: t(tg.why) }), fix };
+    case "granted": return { id: tg.id, title, status: "ok", detail: t("allowed: phonedesk itself reads {app} for Now Playing", { app: tg.name }) };
+    case "denied": return { id: tg.id, title, status: "denied", detail: t("denied: Now Playing for {app} will not work", { app: tg.name }), fix };
     case "not-asked": return { id: tg.id, title, status: "missing", detail: t("not asked yet: macOS asks the first time a tile needs it"), fix: { ...fix, text: t("Press a tile that uses {app}, or run `phonedesk doctor --request {id}`, then click Allow.", { app: tg.name, id: tg.id }) } };
     case "not-running": return { id: tg.id, title, status: "unknown", detail: t("{app} is not running, so macOS cannot say; open it and run the check again", { app: tg.name }) };
     default: return { id: tg.id, title, status: "unknown", detail: t("macOS did not answer") };
   }
+}
+
+async function nowPlayingAll(p: Probes): Promise<DoctorItem> {
+  const title = t("Now Playing (all apps)");
+  if (p.platform !== "darwin") return { id: "now-playing", title, status: "n/a", detail: t("macOS only") };
+  const r = await p.nowPlaying().catch(() => ({ ok: false, why: t("the check failed") }));
+  if (r.ok) return { id: "now-playing", title, status: "ok", detail: t("reads what Safari, Chrome, YouTube, Spotify, Music and other apps play") };
+  return {
+    id: "now-playing", title, status: "missing", detail: t("only Spotify and Music can be read: {why}", { why: r.why ?? "?" }),
+    fix: { text: t("Update phonedesk (`phonedesk update`); if it persists, check that /usr/bin/perl exists and report it.") },
+  };
 }
 
 async function keychainClaude(p: Probes, ctx: DoctorCtx): Promise<DoctorItem> {
@@ -223,20 +236,13 @@ export async function runDoctor(p: Probes, ctx: DoctorCtx): Promise<DoctorReport
   });
   items.push(await signature(p));
   items.push(await accessibility(p));
-  // System Events starts on demand, so launch it silently before asking; Music and Spotify are only reported when running
-  if (p.platform === "darwin" && (await p.automation("com.apple.systemevents")) === "not-running") {
-    await p.run(["open", "-gj", "-b", "com.apple.systemevents"]);
-    await new Promise((r) => setTimeout(r, 800));
-  }
+  // Music and Spotify are only reported when running (macOS cannot say otherwise)
   items.push(...(await Promise.all(AUTOMATION_TARGETS.map((tg) => automation(p, tg)))));
+  items.push(await nowPlayingAll(p));
   items.push(await keychainClaude(p, ctx));
   items.push(keychainHass(p, ctx));
   items.push(localNetwork(p, ctx));
   items.push(await firewall(p));
-  const np = p.which("nowplaying-cli");
-  items.push(np
-    ? { id: "nowplaying-cli", title: "nowplaying-cli", status: "ok", detail: np }
-    : { id: "nowplaying-cli", title: "nowplaying-cli", status: "n/a", detail: t("not installed (optional: Now Playing for apps other than Music and Spotify)"), ...(p.platform === "darwin" ? { fix: { text: t("Install it with `brew install nowplaying-cli`.") } } : {}) });
   items.push(...(await hooks(p, ctx)));
   return { version: p.version, exe: p.exe, asService: p.asService, platform: p.platform, items };
 }
@@ -350,9 +356,12 @@ export function realAutomation(bundleId: string, ask = false): AutomationState {
  * macOS permission calls (Apple Events, Accessibility) are synchronous and can block for good: tccd stuck, a target app that is
  * launching or hung. On the agent's main thread that freezes Bun.serve, so they never run there: each is asked of a short-lived
  * child (`phonedesk __ae <bundle> [ask]`, `phonedesk __ax [prompt]`) with a hard timeout, killed when it does not answer.
- * Results are cached for 60 s and at most one child per question is in flight.
+ * A granted answer is cached for 60 s; any other answer for 3 s, so a permission the user just turned on shows up at once.
+ * At most one child per question is in flight.
  */
 const PROBE_TTL_MS = 60_000;
+const PROBE_TTL_NOT_OK_MS = 3_000;
+const GRANTED = new Set(["true", "granted"]);
 const probeCache = new Map<string, { at: number; value: string }>();
 const probeFlight = new Map<string, Promise<string>>();
 export const resetProbeCache = () => { probeCache.clear(); probeFlight.clear(); };
@@ -361,7 +370,7 @@ async function childProbe(args: string[], ms: number, o: { cache?: boolean } = {
   const key = args.join(" ");
   const useCache = o.cache !== false;
   const hit = probeCache.get(key);
-  if (useCache && hit && Date.now() - hit.at < PROBE_TTL_MS) return hit.value;
+  if (useCache && hit && Date.now() - hit.at < (GRANTED.has(hit.value) ? PROBE_TTL_MS : PROBE_TTL_NOT_OK_MS)) return hit.value;
   const running = probeFlight.get(key);
   if (running) return running;
   const job = (async () => {
@@ -380,7 +389,7 @@ async function childProbe(args: string[], ms: number, o: { cache?: boolean } = {
   return job;
 }
 
-/** The process name to look for before asking: only a target that is running is probed (System Events starts on demand). */
+/** The process name to look for before asking: only a target that is running is probed. */
 const TARGET_PROCESS: Record<string, string> = { "com.apple.Music": "Music", "com.spotify.client": "Spotify" };
 
 export async function boundedAutomation(bundleId: string, ms = 3000): Promise<AutomationState> {
@@ -462,6 +471,7 @@ export function realProbes(version: string): Probes {
       }
     },
     axTrusted: () => (platform === "darwin" ? boundedAx() : null),
+    nowPlaying: () => osPlatform.nowPlayingStatus(),
     automation: (b) => (platform === "darwin" ? boundedAutomation(b) : "unknown"),
     installed: (b) => (APP_PATHS[b] ?? []).some((x) => existsSync(x)),
     which: (n) => Bun.which(n),

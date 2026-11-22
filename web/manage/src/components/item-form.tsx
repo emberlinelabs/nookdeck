@@ -18,7 +18,7 @@ import { HotkeyField } from "@/components/hotkey-field";
 import { MacroEditor } from "@/components/macro-editor";
 import { IconPicker } from "@/components/icon-picker";
 import {
-  ACTION_ICON, ACTION_SHORT, MEDIA_LABEL, PROVIDER_LABEL, VOLUME_LABEL, WIDGET_LABEL, defaultAction,
+  ACTION_ICON, ACTION_SHORT, MEDIA_LABEL, PROVIDER_LABEL, VOLUME_LABEL, WIDGET_LABEL, defaultAction, tileName,
 } from "@/lib/layout";
 import { cn } from "@/lib/utils";
 import { t, useLanguage } from "@/lib/i18n";
@@ -31,7 +31,7 @@ import { Slider } from "@/components/ui/knowns/slider";
 import { useSounds } from "@/lib/sounds";
 import { ACTION_TYPES, AI_PROVIDERS, WIDGET_KINDS, METRIC_WIDGETS, type MetricWidget, type EntityOptions, type GeoPlace, type PushOptions, type WeatherOptions, type MacApp, type Action, type ActionType, type AiProvider, type Item, type Page, type WidgetKind } from "@/types";
 
-export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onDelete, onResize, onWidgetKind }: {
+export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onDelete, onResize, onWidgetKind, onMoveToPage }: {
   item: Item;
   page: Page;
   pages: Page[];
@@ -40,6 +40,8 @@ export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onD
   onChange: (next: Item) => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  /** Moves the tile to another screen; "full" means that screen has no room and a tile to swap with must be picked. */
+  onMoveToPage?: (pageId: string, swapWith?: string) => "ok" | "full" | "error";
   /** Applies a new span; returns an error message when it does not fit. */
   onResize: (w: number, h: number) => string | null;
   /** Changes the widget kind and applies its default size. */
@@ -86,6 +88,8 @@ export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onD
         <Button size="sm" variant="secondary" icon={<Copy />} onClick={onDuplicate} aria-label={t("Duplicate")} title={t("Duplicate")} />
         <Button size="sm" variant="destructive" icon={<Trash />} onClick={() => (armed ? onDelete() : setArmed(true))}>{armed ? t("Sure?") : t("Delete")}</Button>
       </div>
+
+      {onMoveToPage && pages.length > 1 && <MoveToScreen item={item} page={page} pages={pages} onMove={onMoveToPage} />}
 
       <Section title={t("Display")}>
         {item.kind === "widget" ? (
@@ -515,5 +519,38 @@ function ValueForm({ value, onChange }: { value: PushOptions | undefined; onChan
         </div>
       </Field>
     </>
+  );
+}
+
+/** "Move to screen…": pick another screen; when it is full, pick the tile to trade places with. */
+function MoveToScreen({ item, page, pages, onMove }: { item: Item; page: Page; pages: Page[]; onMove: (pageId: string, swapWith?: string) => "ok" | "full" | "error" }) {
+  useLanguage();
+  const [target, setTarget] = useState<Page | null>(null);
+  const others = pages.filter((p) => p.id !== page.id);
+  const tryMove = (p: Page) => { if (onMove(p.id) === "full") setTarget(p); };
+  return (
+    <div className="flex flex-col gap-2">
+      <Select
+        id="f-move"
+        aria-label={t("Move to screen…")}
+        value=""
+        placeholder={t("Move to screen…")}
+        onChange={(e) => { const p = others.find((x) => x.id === e.target.value); if (p) tryMove(p); }}
+        options={others.map((p) => ({ value: p.id, label: p.name }))}
+      />
+      {target && (
+        <div className="flex flex-col gap-2 rounded-xl border p-3">
+          <p className="text-[13px] font-medium">{t("{name} is full. Pick a tile to swap with:", { name: target.name })}</p>
+          <div className="grid gap-1 rounded-lg bg-muted/30 p-1.5" style={{ gridTemplateColumns: `repeat(${target.columns}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${target.rows}, 26px)` }} role="group" aria-label={t("Tiles on {name}", { name: target.name })}>
+            {target.items.map((o) => (
+              <button key={o.id} type="button" title={tileName(o)} onClick={() => { const r = onMove(target.id, o.id); if (r !== "full") setTarget(null); }}
+                className="min-w-0 truncate rounded-[5px] border bg-card px-1 text-[10.5px] transition-colors hover:border-primary hover:bg-primary/10"
+                style={{ gridColumn: `${(o.x ?? 0) + 1} / span ${o.w ?? 1}`, gridRow: `${(o.y ?? 0) + 1} / span ${o.h ?? 1}` }}>{tileName(o)}</button>
+            ))}
+          </div>
+          <Button size="sm" variant="ghost" className="self-start" onClick={() => setTarget(null)}>{t("Cancel")}</Button>
+        </div>
+      )}
+    </div>
   );
 }

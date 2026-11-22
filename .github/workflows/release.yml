@@ -54,8 +54,11 @@ jobs:
       - name: Build and sign (macOS arm64 + x64), cross-compile Windows x64
         run: |
           mkdir -p dist
+          # the Now Playing adapter (vendor/mediaremote-adapter): a universal dylib, embedded into every binary below
+          bun scripts/build-mediaremote.ts
+          bun run gen-assets
           for arch in arm64 x64; do
-            bun build src/index.ts --compile --target="bun-darwin-$arch" --outfile "dist/phonedesk-darwin-$arch"
+            bun build src/index.ts src/platform/mac-worker.ts --compile --target="bun-darwin-$arch" --outfile "dist/phonedesk-darwin-$arch"
             bun scripts/sign-macos.ts "dist/phonedesk-darwin-$arch"
           done
           bun build src/index.ts --compile --target=bun-windows-x64 --outfile dist/phonedesk-windows-x64.exe

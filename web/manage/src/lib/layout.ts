@@ -77,7 +77,7 @@ export function findFree(page: Page, w = 1, h = 1): { x: number; y: number } | u
 
 /** Preferred size of a widget: big for clock and now-playing, 2x1 for the metrics. */
 export const WIDGET_SIZE: Record<WidgetKind, [number, number]> = {
-  clock: [4, 2], nowplaying: [4, 2], cpu: [2, 1], memory: [2, 1], uptime: [2, 1], load: [2, 1], network: [2, 1], quota: [2, 2], sessions: [2, 3], entity: [1, 1], weather: [2, 2], value: [2, 1], notifications: [2, 2],
+  clock: [4, 2], nowplaying: [4, 2], cpu: [2, 1], gpu: [2, 1], memory: [2, 1], uptime: [2, 1], load: [2, 1], network: [2, 1], quota: [2, 2], sessions: [2, 3], entity: [1, 1], weather: [2, 2], value: [2, 1], notifications: [2, 2],
 };
 
 /** Candidate sizes, largest first, ending with 1x1. */
@@ -135,11 +135,126 @@ const replace = (page: Page, items: Item[]): Page => ({ ...page, items });
 const full = () => t("The page is full, there is no room for the displaced tiles. Delete some tiles or increase the grid size.");
 const reflowError = (reason: string) => (reason === "outside" ? t("This tile does not fit there (it would go outside the grid)") : full());
 
-/** Moves a tile to (x, y); tiles in the way are pushed to the nearest free spots of the same page, or the move is refused. */
-export function moveTile(page: Page, id: string, x: number, y: number): GridResult {
-  if (!page.items.some((i) => i.id === id)) return { ok: false, error: t("Tile to move not found") };
+const area = (r: Rect) => r.w * r.h;
+const within = (a: Rect, b: Rect) => a.x >= b.x && a.y >= b.y && a.x + a.w <= b.x + b.w && a.y + a.h <= b.y + b.h;
+
+/** True when every cell of `t` is covered by whole tiles that lie inside `t` (so a swap replaces them one for one). */
+function exactlyCovered(others: Item[], t: Rect): boolean {
+  return others.length > 0 && others.every((o) => within(rectOf(o), t)) && others.reduce((n, o) => n + area(rectOf(o)), 0) === area(t);
+}
+
+/** Valid when every tile is inside the grid and none overlap. */
+function validItems(page: Page, items: Item[]): boolean {
+  const rs = items.map(rectOf);
+  return rs.every((r, i) => inside(r, page) && rs.every((o, j) => i === j || !overlaps(r, o)));
+}
+
+/**
+ * Swap: the dragged tile takes (x, y); the tiles that were there move into the dragged tile's old rectangle, keeping their
+ * relative offsets when that fits, otherwise packed inside it. Null when the result would overlap or leave the grid.
+ */
+export function swapTiles(page: Page, id: string, x: number, y: number): { page: Page; swapped: Item[] } | null {
+  const d = page.items.find((i) => i.id === id);
+  if (!d) return null;
+  const from = rectOf(d);
+  const to: Rect = { x, y, w: from.w, h: from.h };
+  if (!inside(to, page)) return null;
+  const others = itemsIn(page, to, id);
+  if (!others.length) return null;
+  const rest = page.items.filter((i) => i.id !== id && !others.includes(i));
+  const moved = (list: Item[]) => ({ ...page, items: [...rest, ...list, { ...d, x, y }] });
+  // 1) same relative offsets
+  const kept = others.map((o) => ({ ...o, x: from.x + (o.x ?? 0) - x, y: from.y + (o.y ?? 0) - y }));
+  if (validItems(page, [...rest, ...kept, { ...d, x, y }]) && kept.every((k) => within(rectOf(k), from))) {
+    return { page: { ...page, items: page.items.map((i) => kept.find((k) => k.id === i.id) ?? (i.id === id ? { ...d, x, y } : i)) }, swapped: others };
+  }
+  // 2) pack them row by row inside the old rectangle
+  let cur: Page = { id: page.id, name: page.name, columns: from.w, rows: from.h, items: [] };
+  const sorted = others.slice().sort((a, b) => (a.y ?? 0) - (b.y ?? 0) || (a.x ?? 0) - (b.x ?? 0));
+  for (const o of sorted) {
+    const r = rectOf(o);
+    const cell = findFree(cur, r.w, r.h);
+    if (!cell) return null;
+    cur = { ...cur, items: [...cur.items, { ...o, ...cell }] };
+  }
+  const packed = cur.items.map((o) => ({ ...o, x: from.x + (o.x ?? 0), y: from.y + (o.y ?? 0) }));
+  if (!validItems(page, [...rest, ...packed, { ...d, x, y }])) return null;
+  const out = moved(packed);
+  return { page: { ...out, items: page.items.map((i) => out.items.find((n) => n.id === i.id)!) }, swapped: others };
+}
+
+/** What the tile would swap with if dropped at (x, y), or null when a plain move (or nothing) happens. Used for the drop preview. */
+export function swapPreview(page: Page, id: string, x: number, y: number): Item[] | null {
+  const d = page.items.find((i) => i.id === id);
+  if (!d) return null;
+  const to: Rect = { x, y, w: d.w ?? 1, h: d.h ?? 1 };
+  const others = itemsIn(page, to, id);
+  const r = swapTiles(page, id, x, y);
+  if (!r) return null;
+  if (exactlyCovered(others, to)) return r.swapped;
+  return pageMove(page, id, x, y).ok ? null : r.swapped;
+}
+
+export type MoveResult = { ok: true; page: Page; swapped?: Item[] } | { ok: false; error: string };
+
+/**
+ * Moves a tile to (x, y). Tiles in the way are swapped into its old spot when they exactly fill the target, otherwise
+ * pushed to the nearest free spots; when pushing fails (full page) a swap is tried before refusing.
+ */
+export function moveTile(page: Page, id: string, x: number, y: number): MoveResult {
+  const d = page.items.find((i) => i.id === id);
+  if (!d) return { ok: false, error: t("Tile to move not found") };
+  const to: Rect = { x, y, w: d.w ?? 1, h: d.h ?? 1 };
+  const others = itemsIn(page, to, id);
+  if (exactlyCovered(others, to)) {
+    const sw = swapTiles(page, id, x, y);
+    if (sw) return { ok: true, ...sw };
+  }
   const r = pageMove(page, id, x, y);
-  return r.ok ? { ok: true, page: replace(page, r.items) } : { ok: false, error: reflowError(r.reason) };
+  if (r.ok) return { ok: true, page: replace(page, r.items) };
+  const sw = swapTiles(page, id, x, y);
+  if (sw) return { ok: true, ...sw };
+  return { ok: false, error: reflowError(r.reason) };
+}
+
+/** Display name of a tile for messages. */
+export const tileName = (it: Item): string => (it.kind === "button" ? it.label || it.id : t(WIDGET_LABEL[it.widget] ?? it.widget));
+
+export type PageMoveResult = { ok: true; layout: Layout; swapped?: Item } | { ok: false; error: string; full?: boolean };
+
+/**
+ * Moves a tile to another page, at its first free spot. When that page has no room and `swapWith` names one of its tiles,
+ * the two tiles trade pages (the other lands where this one was, or at the first free spot there when sizes differ).
+ */
+export function moveToPage(layout: Layout, fromId: string, itemId: string, toId: string, swapWith?: string): PageMoveResult {
+  const src = layout.pages.find((p) => p.id === fromId);
+  const dst = layout.pages.find((p) => p.id === toId);
+  const it = src?.items.find((i) => i.id === itemId);
+  if (!src || !dst || !it || src === dst) return { ok: false, error: t("Tile to move not found") };
+  const fresh = (x: Item, on: Page, ignore?: string): Item => {
+    const taken = new Set(on.items.filter((i) => i.id !== ignore).map((i) => i.id));
+    return taken.has(x.id) ? { ...x, id: randomId(x.kind === "widget" ? "w" : "b", taken) } : x;
+  };
+  const w = it.w ?? 1, h = it.h ?? 1;
+  const put = (page: Page, item: Item, at: { x: number; y: number }): Page => ({ ...page, items: [...page.items, { ...fresh(item, page), x: at.x, y: at.y }] });
+  const pages = (a: Page, b: Page) => layout.pages.map((p) => (p === src ? a : p === dst ? b : p));
+  if (!swapWith) {
+    const at = findFree(dst, w, h);
+    if (!at) return { ok: false, full: true, error: t("That screen is full. Pick a tile to swap with.") };
+    const srcNext = { ...src, items: src.items.filter((i) => i !== it) };
+    return { ok: true, layout: { ...layout, pages: pages(srcNext, put(dst, it, at)) } };
+  }
+  const other = dst.items.find((i) => i.id === swapWith);
+  if (!other) return { ok: false, error: t("Tile to move not found") };
+  const dstBase = { ...dst, items: dst.items.filter((i) => i !== other) };
+  const srcBase = { ...src, items: src.items.filter((i) => i !== it) };
+  const o = rectOf(other);
+  const atDst = itemsIn(dstBase, { x: o.x, y: o.y, w, h }).length === 0 && o.x + w <= dst.columns && o.y + h <= dst.rows ? { x: o.x, y: o.y } : findFree(dstBase, w, h);
+  if (!atDst) return { ok: false, error: t("The tile does not fit on that screen, even after the swap.") };
+  const ow = o.w, oh = o.h, f = rectOf(it);
+  const atSrc = itemsIn(srcBase, { x: f.x, y: f.y, w: ow, h: oh }).length === 0 && f.x + ow <= src.columns && f.y + oh <= src.rows ? { x: f.x, y: f.y } : findFree(srcBase, ow, oh);
+  if (!atSrc) return { ok: false, error: t("\"{name}\" does not fit back on this screen, so the swap was refused.", { name: tileName(other) }) };
+  return { ok: true, swapped: other, layout: { ...layout, pages: pages(put(srcBase, other, atSrc), put(dstBase, it, atDst)) } };
 }
 
 /** Resizes a tile (and optionally moves its top-left corner); neighbours are pushed away, or the change is refused. */
@@ -225,12 +340,12 @@ export function itemTitle(it: Item): string {
 export const PROVIDER_LABEL: Record<string, string> = { claude: "Claude", codex: "Codex", antigravity: "Antigravity", opencode: "OpenCode", grok: "Grok" };
 
 export const WIDGET_HINT: Record<WidgetKind, string> = {
-  clock: "Time and date", nowplaying: "Current track", cpu: "CPU usage (click to see processes)", memory: "Memory in use",
+  clock: "Time and date", nowplaying: "Current track", cpu: "CPU usage (click to see processes)", gpu: "Graphics card load and memory (no data on Linux)", memory: "Memory in use",
   uptime: "How long the Mac has been running", load: "System load", network: "Network speed", quota: "Claude / Codex / Antigravity quota", sessions: "Running AI sessions", entity: "Home Assistant device", weather: "Weather", value: "Value pushed from outside (webhook)", notifications: "Recent notifications",
 };
 
 export const WIDGET_LABEL: Record<string, string> = {
-  clock: "Clock", cpu: "CPU", memory: "Memory", uptime: "Uptime", load: "System load", network: "Network", nowplaying: "Now playing", quota: "AI quota", sessions: "AI sessions", entity: "Home (Home Assistant)", weather: "Weather", value: "Pushed value", notifications: "Notifications",
+  clock: "Clock", cpu: "CPU", gpu: "GPU", memory: "Memory", uptime: "Uptime", load: "System load", network: "Network", nowplaying: "Now playing", quota: "AI quota", sessions: "AI sessions", entity: "Home (Home Assistant)", weather: "Weather", value: "Pushed value", notifications: "Notifications",
 };
 
 export const ACTION_LABEL: Record<ActionType, string> = {

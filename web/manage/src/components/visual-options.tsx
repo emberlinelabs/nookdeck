@@ -66,6 +66,17 @@ export function orientationOptions(): { value: "landscape" | "portrait" | "auto"
   ];
 }
 
+export function headerOptions(): { value: "full" | "minimal" | "hidden"; label: string; art: ReactNode } [] {
+  const bar = (w: number) => <span className="h-1.5 rounded-full bg-foreground/60" style={{ width: w }} />;
+  const frame = (children: ReactNode) => <span aria-hidden className="flex flex-col gap-1 rounded-[5px] border border-black/20 bg-black/70 p-[3px]" style={{ width: 52, height: 34 }}>{children}</span>;
+  const grid = <span className="grid flex-1 grid-cols-3 gap-[2px]">{[0, 1, 2, 3, 4, 5].map((i) => <span key={i} className="rounded-[1px] bg-zinc-600" />)}</span>;
+  return [
+    { value: "full", label: t("Top bar: full"), art: frame(<><span className="flex items-center justify-between">{bar(14)}{bar(18)}</span>{grid}</>) },
+    { value: "minimal", label: t("Top bar: minimal"), art: frame(<><span className="flex items-center justify-between">{bar(6)}{bar(10)}</span>{grid}</>) },
+    { value: "hidden", label: t("Top bar: hidden"), art: frame(<>{grid}</>) },
+  ];
+}
+
 export function radiusOptions(color: string): { value: string; label: string; art: ReactNode }[] {
   const tile = (r: number) => <span aria-hidden style={{ width: 34, height: 26, borderRadius: r, background: `${color}33`, boxShadow: `inset 0 0 0 1.5px ${color}` }} />;
   return [

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import {
-  buildCommand, buildMacMediaFallback, escapeAppleScript, escapePowerShell, escapeSendKeys, parseHotkey, runAction,
+  buildCommand, MAC_NATIVE, escapePowerShell, escapeSendKeys, parseHotkey, runAction,
 } from "../src/actions.ts";
 
 test("parseHotkey", () => {
@@ -15,26 +15,11 @@ test("parseHotkey", () => {
   expect(() => parseHotkey("cmd+banana")).toThrow();
 });
 
-test("darwin hotkey", () => {
-  expect(buildCommand({ type: "hotkey", keys: "cmd+shift+4" }, "darwin")).toEqual([
-    "osascript", "-e", 'tell application "System Events" to keystroke "4" using {command down, shift down}',
-  ]);
-  expect(buildCommand({ type: "hotkey", keys: "return" }, "darwin")[2]).toBe('tell application "System Events" to key code 36');
-  expect(buildCommand({ type: "hotkey", keys: "ctrl+up" }, "darwin")[2]).toBe(
-    'tell application "System Events" to key code 126 using {control down}',
-  );
-  expect(buildCommand({ type: "hotkey", keys: "f5" }, "darwin")[2]).toContain("key code 96");
-});
-
-test("darwin type escapes quotes, backslashes, newlines", () => {
-  expect(escapeAppleScript('say "hi" \\ now')).toBe('say \\"hi\\" \\\\ now');
-  expect(escapeAppleScript("a\nb")).toBe('a" & return & "b');
-  const argv = buildCommand({ type: "type", text: 'a"b' }, "darwin");
-  expect(argv).toEqual(["osascript", "-e", 'tell application "System Events" to keystroke "a\\"b"']);
-});
-
-test("darwin hotkey key char is escaped", () => {
-  expect(buildCommand({ type: "hotkey", keys: 'cmd+"' }, "darwin")[2]).toContain('keystroke "\\""');
+test("darwin keys, typing, media and volume are native, not commands", () => {
+  for (const a of [
+    { type: "hotkey", keys: "cmd+shift+4" }, { type: "type", text: "hi" }, { type: "media", command: "playpause" },
+    { type: "volume", command: "up" }, { type: "volume", command: "mute" },
+  ] as const) expect(() => buildCommand(a, "darwin")).toThrow(MAC_NATIVE);
 });
 
 test("darwin open", () => {
@@ -42,19 +27,6 @@ test("darwin open", () => {
   expect(buildCommand({ type: "open", target: "/Applications/Foo.app" }, "darwin")).toEqual(["open", "/Applications/Foo.app"]);
   expect(buildCommand({ type: "open", target: "Safari" }, "darwin")).toEqual(["open", "-a", "Safari"]);
   expect(buildCommand({ type: "open", target: "~/x" }, "darwin")[1]).not.toStartWith("~");
-});
-
-test("darwin volume and media", () => {
-  expect(buildCommand({ type: "volume", command: "mute" }, "darwin")[2]).toContain("output muted");
-  const up = buildCommand({ type: "volume", command: "up" }, "darwin");
-  expect(up[0]).toBe("osascript");
-  expect(up.join(" ")).toContain("+ 6");
-  expect(buildCommand({ type: "volume", command: "down" }, "darwin").join(" ")).toContain("- 6");
-  expect(buildCommand({ type: "media", command: "playpause" }, "darwin")).toEqual(["nowplaying-cli", "togglePlayPause"]);
-  expect(buildCommand({ type: "media", command: "next" }, "darwin")).toEqual(["nowplaying-cli", "next"]);
-  const fb = buildMacMediaFallback("previous").join("\n");
-  expect(fb).toContain('Spotify');
-  expect(fb).toContain("previous track");
 });
 
 test("linux mappings", () => {
