@@ -30,7 +30,9 @@ type Ops struct {
 	Run func(ctx context.Context, exe string, args ...string) (string, int)
 	// StopService stops the agent (and frees its exe). Must work on an agent too old to know `service stop`.
 	StopService func(ctx context.Context, exe string) error
-	Logf        func(format string, args ...any)
+	// Running reports whether something answers on the agent's local port. nil skips the check.
+	Running func(ctx context.Context, port int) bool
+	Logf    func(format string, args ...any)
 }
 
 type Action string
@@ -119,6 +121,17 @@ func EnsureAgent(ctx context.Context, p Paths, bundled string, o Ops) Result {
 			// the launcher may point at a program that has just changed place: install writes it again
 			if out2, code2 := o.Run(ctx, target, args...); code2 != 0 {
 				res.Err = &runError{"service restart", out + out2}
+				return res
+			}
+		}
+	}
+	// "adopted" or "ok" must never leave the deck down: an agent that is installed but not running (stopped by hand, killed by an
+	// upgrade, a crash before the task restarted it) is started, even when its version did not change
+	if haveService && !needCopy && o.Running != nil && !o.Running(ctx, port) {
+		o.Logf("the agent is not answering on port %d: starting it", port)
+		if out, code := o.Run(ctx, target, "service", "start"); code != 0 {
+			if out2, code2 := o.Run(ctx, target, args...); code2 != 0 {
+				res.Err = &runError{"service start", out + out2}
 				return res
 			}
 		}

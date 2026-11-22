@@ -5,12 +5,14 @@ package main
 import (
 	"context"
 	"embed"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/howznguyen/nookdeck/apps/windows/internal/core"
 	"golang.org/x/sys/windows"
@@ -42,6 +44,22 @@ func run(ctx context.Context, exe string, args ...string) (string, int) {
 		return string(out), ee.ExitCode()
 	}
 	return err.Error(), 127
+}
+
+// agentRunning: anything that answers on the port (even a 404) counts; a refused connection does not.
+func agentRunning(ctx context.Context, port int) bool {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:"+strconv.Itoa(port)+"/", nil)
+	if err != nil {
+		return false
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return true
 }
 
 func powershell(ctx context.Context, script string) (string, int) {
@@ -81,6 +99,7 @@ func ops() core.Ops {
 		Copy:        copyFile,
 		Run:         run,
 		StopService: stopService,
+		Running:     agentRunning,
 		Logf:        logf,
 	}
 }

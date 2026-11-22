@@ -70,6 +70,7 @@ type fakeSys struct {
 	runs     []string
 	stopped  []string
 	failRun  map[string]int
+	down     bool // the agent does not answer on its port
 }
 
 func (f *fakeSys) ops() Ops {
@@ -99,6 +100,7 @@ func (f *fakeSys) ops() Ops {
 			return "ok", 0
 		},
 		StopService: func(_ context.Context, exe string) error { f.stopped = append(f.stopped, exe); return nil },
+		Running:     func(context.Context, int) bool { return !f.down },
 		Logf:        func(string, ...any) {},
 	}
 }
@@ -397,4 +399,48 @@ func (r rewrite) RoundTrip(req *http.Request) (*http.Response, error) {
 	req2 := req.Clone(req.Context())
 	req2.URL = &u
 	return r.next.RoundTrip(req2)
+}
+
+// "adopted" must never leave the deck down: an installed agent that does not answer is started, whatever the version says
+func TestEnsureAgentStartsAStoppedAgent(t *testing.T) {
+	adopted := func() (*fakeSys, Paths) {
+		f, p := newSys()
+		f.files[p.Exe()], f.versions[p.Exe()] = "cli", "nookdeck 0.4.0 (zzz)" // same version as the bundled one
+		f.files[p.Launcher()] = `cmd /s /c ""` + p.Exe() + `"" --port 7430 >> x`
+		return f, p
+	}
+	// running: untouched
+	f, p := adopted()
+	if r := EnsureAgent(context.Background(), p, `B\nookdeck.exe`, f.ops()); r.Err != nil || r.Action != ActionAdopted || has(f.runs, "service start") {
+		t.Fatalf("a running agent is left alone: %v", f.runs)
+	}
+	// not answering: started, no reinstall, no copy
+	f, p = adopted()
+	f.down = true
+	r := EnsureAgent(context.Background(), p, `B\nookdeck.exe`, f.ops())
+	if r.Err != nil || r.Action != ActionAdopted || !has(f.runs, p.Exe()+" service start") || has(f.runs, "service install") || f.files[p.Exe()] != "cli" {
+		t.Fatalf("a stopped agent is started: %+v %v", r, f.runs)
+	}
+	// `service start` fails (the launcher is gone, an old agent): the install step writes it again and starts it
+	f, p = adopted()
+	f.down = true
+	f.failRun["service start"] = 1
+	if r = EnsureAgent(context.Background(), p, `B\nookdeck.exe`, f.ops()); r.Err != nil || !has(f.runs, "service install --port 7430") {
+		t.Fatalf("fallback to install: %+v %v", r, f.runs)
+	}
+	// both fail: an error, never a silent "adopted"
+	f, p = adopted()
+	f.down = true
+	f.failRun["service"] = 1
+	if r = EnsureAgent(context.Background(), p, `B\nookdeck.exe`, f.ops()); r.Err == nil {
+		t.Fatalf("a deck that stays down is an error: %+v", r)
+	}
+	// a service that runs another program is started the same way
+	f, p = newSys()
+	f.files[`D:\mine\nookdeck.exe`], f.versions[`D:\mine\nookdeck.exe`] = "mine", "nookdeck 0.1.0"
+	f.files[p.Launcher()] = `cmd /s /c ""D:\mine\nookdeck.exe"" >> x`
+	f.down = true
+	if r = EnsureAgent(context.Background(), p, `B\nookdeck.exe`, f.ops()); r.Err != nil || !has(f.runs, `D:\mine\nookdeck.exe service start`) {
+		t.Errorf("custom install: %+v %v", r, f.runs)
+	}
 }
