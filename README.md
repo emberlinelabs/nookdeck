@@ -12,7 +12,7 @@
   <img alt="macOS and Windows" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows-0b0d10">
 </p>
 
-<p align="center"><b>English</b> · <a href="README.vi.md">Tiếng Việt</a></p>
+<p align="center"><b>English</b> · <a href="README.vi.md">Tiếng Việt</a> · <a href="README.zh.md">中文</a></p>
 
 Turn an old phone or tablet into a Stream Deck-style control panel and dashboard for your Mac or Windows PC. PhoneDesk is a small
 agent that runs on your computer and serves a touch overlay to any browser on the same Wi-Fi. There is no app to
@@ -257,11 +257,44 @@ bun run test    # unit tests
 Layout: `src/` agent (Bun + TypeScript), `web/deck` phone overlay (Preact, Safari 12+), `web/manage` management page
 (React), `web/shared` code used by both.
 
+## Contributing
+
+Pull requests are welcome. Build and test from a clone (needs [Bun](https://bun.sh) 1.3+):
+
+```sh
+bun install
+bun run dev      # agent with watch mode
+bun run test     # unit tests
+bun run build    # web apps and dist/phonedesk
+```
+
+Rules a pull request must follow:
+
+- **Small, focused PRs.** One change per PR, with tests where it makes sense. `bun run test` must pass.
+- **The deck stays Safari 12 safe.** In `web/deck` there is no optional chaining (`?.`) and no nullish coalescing (`??`), and the built bundle is checked for them.
+- **Every UI string exists in English and Vietnamese.** Chinese is welcome too. English is the key.
+- **Only `src/platform` reads `process.platform`.** Platform differences live there.
+
+Translation PRs are welcome. The files are `web/manage/src/i18n/<lang>` (management page), `web/deck/src/i18n-<lang>.ts` (phone) and `src/i18n.ts` (agent messages). Bugs and ideas go to [GitHub issues](https://github.com/howznguyen/phonedesk/issues).
+
+### Contributors
+
+<a href="https://github.com/howznguyen/phonedesk/graphs/contributors"><img src="https://contrib.rocks/image?repo=howznguyen/phonedesk" alt="PhoneDesk contributors"></a>
+
+Thanks to:
+
+- [Ron Ng (ronnhd)](https://github.com/ronnhd): vinyl artwork and Now Playing artwork fixes.
+- [Howie989](https://github.com/Howie989): Simplified Chinese translation.
+
 ## Credits
 
 - Icons: [Tabler Icons](https://tabler.io/icons) (MIT) and [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT).
 - UI components: [Knowns UI](https://ui.knowns.dev).
 - Weather data: [Open-Meteo](https://open-meteo.com) (CC BY 4.0).
+
+## Author
+
+[howznguyen](https://github.com/howznguyen) | Vietnamese
 
 ## License
 

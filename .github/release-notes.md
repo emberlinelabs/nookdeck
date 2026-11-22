@@ -36,4 +36,4 @@ hand: download the file for your machine, check it with `shasum -a 256 -c SHA256
 `gunzip`, make it executable (`chmod +x`) and run it. The macOS binaries are signed ad hoc, not notarized: a file
 downloaded in a browser needs `xattr -d com.apple.quarantine <file>` first.
 
-Full guide: [README](https://github.com/howznguyen/phonedesk#readme) · Tiếng Việt: [README.vi](https://github.com/howznguyen/phonedesk/blob/main/README.vi.md)
+Full guide: [README](https://github.com/howznguyen/phonedesk#readme) · Tiếng Việt: [README.vi](https://github.com/howznguyen/phonedesk/blob/main/README.vi.md) · 中文: [README.zh](https://github.com/howznguyen/phonedesk/blob/main/README.zh.md)

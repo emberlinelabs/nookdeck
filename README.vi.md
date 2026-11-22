@@ -12,7 +12,7 @@
   <img alt="macOS and Windows" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows-0b0d10">
 </p>
 
-<p align="center"><a href="README.md">English</a> · <b>Tiếng Việt</b></p>
+<p align="center"><a href="README.md">English</a> · <b>Tiếng Việt</b> · <a href="README.zh.md">中文</a></p>
 
 Biến điện thoại hoặc máy tính bảng cũ thành bảng điều khiển kiểu Stream Deck và màn hình theo dõi cho Mac hoặc PC Windows. PhoneDesk
 là một agent nhỏ chạy trên máy tính, phục vụ giao diện cảm ứng cho trình duyệt bất kỳ trong cùng mạng Wi-Fi. Không cần
@@ -33,7 +33,7 @@ cài app trên điện thoại, không cần tài khoản hay dịch vụ đám 
 | **Hằng ngày** | Đang phát kèm ảnh bìa và nút phát tiếp, 6 kiểu đồng hồ và giờ thế giới, thời tiết (theo giờ, theo ngày, °C hoặc °F), soundboard, thông báo |
 | **Home Assistant** | Đèn có màu, nhiệt độ màu, cảnh và hiệu ứng; điều hòa (chế độ, quạt, đảo gió), quạt, rèm, robot hút bụi, khóa và cảm biến (tùy chọn) |
 | **Tự động hóa** | Webhook đẩy giá trị và thông báo, rule phản ứng theo hoạt động trên máy |
-| **Tùy biến** | Lưới kéo thả (8×4, 8×3, 5×3…) có xem trước theo từng cỡ màn hình, 4 kiểu ô (Soft, Solid, Outline, iOS), màu riêng cho từng ô, hơn 5.000 icon, tiếng Anh hoặc tiếng Việt |
+| **Tùy biến** | Lưới kéo thả (8×4, 8×3, 5×3…) có xem trước theo từng cỡ màn hình, 4 kiểu ô (Soft, Solid, Outline, iOS), màu riêng cho từng ô, hơn 5.000 icon, tiếng Anh, tiếng Việt và tiếng Trung |
 
 Layout là lưới ô vuông cố định, sắp xếp bằng kéo thả ở trang quản lý `http://localhost:7420/manage/`. Có MCP server để
 trợ lý AI sắp xếp layout giúp bạn. Chạy trên macOS, và Windows 10/11 (thử nghiệm).
@@ -244,11 +244,44 @@ Các tool: `get_layout`, `add_page`, `add_item`, `update_item`, `move_item`, `re
 - API quản lý chỉ trả lời trên `localhost`, chặn request từ trang khác và DNS rebinding.
 - Ô có thể chạy lệnh shell do bạn cấu hình. Chỉ ghép đôi thiết bị bạn tin tưởng.
 
+## Đóng góp
+
+Pull request luôn được chào đón. Build và test từ bản clone (cần [Bun](https://bun.sh) 1.3+):
+
+```sh
+bun install
+bun run dev      # agent chạy ở chế độ watch
+bun run test     # unit test
+bun run build    # các web app và dist/phonedesk
+```
+
+Quy tắc cho một pull request:
+
+- **PR nhỏ, tập trung.** Mỗi PR một thay đổi, kèm test khi hợp lý. `bun run test` phải qua.
+- **Deck phải chạy được trên Safari 12.** Trong `web/deck` không dùng optional chaining (`?.`) và nullish coalescing (`??`); bundle sau khi build được kiểm tra.
+- **Mọi chuỗi giao diện đều có tiếng Anh và tiếng Việt.** Thêm tiếng Trung thì càng tốt. Tiếng Anh là khóa.
+- **Chỉ `src/platform` được đọc `process.platform`.** Khác biệt giữa các hệ điều hành nằm ở đó.
+
+Rất hoan nghênh PR bản dịch. Các tệp là `web/manage/src/i18n/<lang>` (trang quản lý), `web/deck/src/i18n-<lang>.ts` (điện thoại) và `src/i18n.ts` (thông báo của agent). Lỗi và ý tưởng gửi vào [GitHub issues](https://github.com/howznguyen/phonedesk/issues).
+
+### Người đóng góp
+
+<a href="https://github.com/howznguyen/phonedesk/graphs/contributors"><img src="https://contrib.rocks/image?repo=howznguyen/phonedesk" alt="Người đóng góp cho PhoneDesk"></a>
+
+Cảm ơn:
+
+- [Ron Ng (ronnhd)](https://github.com/ronnhd): ảnh đĩa than và các bản sửa ảnh bìa cho Đang phát.
+- [Howie989](https://github.com/Howie989): bản dịch tiếng Trung giản thể.
+
 ## Ghi công
 
 - Icon: [Tabler Icons](https://tabler.io/icons) (MIT) và [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT).
 - Component giao diện: [Knowns UI](https://ui.knowns.dev).
 - Dữ liệu thời tiết: [Open-Meteo](https://open-meteo.com) (CC BY 4.0).
+
+## Tác giả
+
+[howznguyen](https://github.com/howznguyen) | Người Việt Nam
 
 ## Giấy phép
 
