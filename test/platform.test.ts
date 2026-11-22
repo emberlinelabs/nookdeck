@@ -435,6 +435,23 @@ describe("win32 service (Task Scheduler)", () => {
     expect(await WS.winUninstall(a.c)).toEqual({ removed: true }); // the fake task still "exists"
   });
 
+  test("stop and start (the tray app's Stop / Start): the task is ended / run, never uninstalled", async () => {
+    const a = ctx();
+    await expect(WS.winStopService(a.c)).rejects.toThrow("not installed");
+    await expect(WS.winStartService(a.c)).rejects.toThrow("not installed");
+    await WS.winInstall(a.c);
+    a.calls.length = 0;
+    await WS.winStopService(a.c);
+    expect(a.calls.some((c) => c[1] === "/End")).toBe(true);
+    expect(a.calls.some((c) => c[1] === "/Delete")).toBe(false);
+    expect(a.log.at(-1)).toBe("Service stopped.");
+    a.calls.length = 0;
+    await WS.winStartService(a.c);
+    expect(a.calls.some((c) => c[1] === "/Run")).toBe(true);
+    expect(a.log.at(-1)).toBe("Service started.");
+    expect(existsSync(WS.launcherPath(a.dir))).toBe(true);
+  });
+
   test("service.ts dispatches to it for win32 deps (and refuses other OSes)", async () => {
     const dir = mkdtempSync(join(sandbox, "svc2-"));
     const calls: string[][] = [];

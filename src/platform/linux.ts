@@ -26,7 +26,7 @@ export function createLinux(id: NodeJS.Platform = "linux", which: (n: string) =>
     label: "Linux",
     keyNames: { cmd: "Super", alt: "Alt", ctrl: "Ctrl" },
 
-    async runAction(a) { await runCapture(buildCommand(a, "linux")); },
+    async runAction(a) { await runCapture(buildCommand(a, "linux"), undefined, undefined, a.type === "shell" ? a.env : undefined); },
 
     async readVolume() {
       try {

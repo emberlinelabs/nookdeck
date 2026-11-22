@@ -70,7 +70,8 @@ export type MacroStep =
   | { kind: "type"; text: string }
   | { kind: "wait"; ms: number }
   | { kind: "open"; target: string }
-  | { kind: "shell"; command: string }
+  /** `env`: set only by the plugin runtime, never read from a stored macro. */
+  | { kind: "shell"; command: string; env?: Record<string, string> }
   | { kind: "media"; command: "playpause" | "next" | "previous" }
   | { kind: "volume"; command: "up" | "down" | "mute" }
   | { kind: "hass"; service: string; entityId?: string; data?: Record<string, unknown> }

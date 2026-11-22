@@ -40,7 +40,10 @@ describe("manifest", () => {
     expect(() => parseManifest({ ...mk(), id: "core.weather" })).toThrow("reserved");
     expect(() => parseManifest({ ...mk(), version: "1" })).toThrow("version");
     expect(() => parseManifest({ ...mk(), name: "" })).toThrow("name");
-    bad({ main: "index.js" }, "has code");
+    bad({ main: "../evil.js" }, "main must be a relative path");
+    bad({ main: "/etc/x.js" }, "main must be a relative path");
+    bad({ main: "run.sh" }, "main must be a relative path");
+    bad({ widgets: [{ id: "w", render: "stat", source: { agent: true } }] }, "needs a code plugin");
     bad({ nookdeck: ">=9.0.0" }, "needs Nookdeck >=9.0.0");
     bad({ permissions: { root: true } }, "not a known permission");
     bad({ permissions: { network: ["not a host"] } }, "host name");
@@ -520,7 +523,8 @@ describe("server: REST, the plugin WS message and plugin buttons", () => {
   });
 
   test("install, grant, enable, settings, delete over REST (AC-1, AC-2, AC-5)", async () => {
-    expect(await (await fetch(`${base}/api/plugins`)).json()).toEqual([]);
+    // only the built-in (core) plugins are there before the first install
+    expect(((await (await fetch(`${base}/api/plugins`)).json()) as any[]).filter((p) => !p.builtin)).toEqual([]);
     expect((await fetch(`${base}/api/plugins`, J({}))).status).toBe(400);
     const bad = await fetch(`${base}/api/plugins`, J({ source: join(dir, "nowhere") }));
     expect(bad.status).toBe(400);

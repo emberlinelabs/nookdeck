@@ -6,10 +6,15 @@ import { ASK_EVENT, ASK_MARKER, HOOK_EVENT, HOOK_MARKER, LEGACY_ASK_MARKER, LEGA
 import { copyFile } from "node:fs/promises";
 import { platform } from "./platform";
 import { runCode } from "./platform/exec";
-import { winInstall, winRestart, winStatus, winUninstall, type WinServiceCtx } from "./platform/win32/service";
+import { winInstall, winRestart, winStartService, winStatus, winStopService, winUninstall, type WinServiceCtx } from "./platform/win32/service";
 
-/** launchd label and plist name of the background service (macOS). */
-export const SERVICE_LABEL = "dev.nookdeck.agent";
+/**
+ * launchd label and plist name of the background service (macOS). NOOKDECK_SERVICE_LABEL overrides it for a dev sandbox (the menu
+ * bar app's sandbox mode), so a test run never touches the real login service; it must look like a reverse-DNS label.
+ */
+export const DEFAULT_SERVICE_LABEL = "dev.nookdeck.agent";
+const labelOverride = process.env.NOOKDECK_SERVICE_LABEL;
+export const SERVICE_LABEL = labelOverride && /^[A-Za-z0-9][A-Za-z0-9._-]{2,80}$/.test(labelOverride) ? labelOverride : DEFAULT_SERVICE_LABEL;
 
 /** Where the plist goes. NOOKDECK_LAUNCH_AGENTS_DIR overrides it (tests, a relocated install). */
 export const launchAgentsDir = (): string => process.env.NOOKDECK_LAUNCH_AGENTS_DIR ?? join(homedir(), "Library", "LaunchAgents");
@@ -133,6 +138,7 @@ export async function serviceInstall(d: ServiceDeps, opts: { port?: number } = {
   if (opts.port !== undefined && opts.port !== 7420) args.push("--port", String(opts.port));
   const env: Record<string, string> = {};
   if (process.env.NOOKDECK_HOME) env.NOOKDECK_HOME = process.env.NOOKDECK_HOME;
+  if (SERVICE_LABEL !== DEFAULT_SERVICE_LABEL) env.NOOKDECK_SERVICE_LABEL = SERVICE_LABEL; // the agent it starts must know its own label (doctor)
   const file = plistPath();
   await mkdir(dirname(file), { recursive: true });
   await mkdir(logsDir(), { recursive: true, mode: 0o700 });
@@ -167,6 +173,26 @@ export async function serviceRestart(d: ServiceDeps): Promise<void> {
     if (b.code !== 0) throw new Error(`launchctl kickstart failed (${r.code}): ${r.out || "no output"}`);
   }
   d.log("Service restarted.");
+}
+
+/** Stops the agent now; it starts again at the next sign-in (the service stays installed). The menu bar / tray apps use this. */
+export async function serviceStop(d: ServiceDeps): Promise<void> {
+  needMac(d);
+  if (d.platform === "win32") return winStopService(winCtx(d));
+  if (!(await stat(plistPath()).then(() => true, () => false))) throw new Error("The service is not installed. Run `nookdeck service install`.");
+  await d.launchctl(["bootout", target(d)]); // not loaded is fine
+  d.log("Service stopped.");
+}
+
+/** Starts the agent now (after `service stop`). */
+export async function serviceStart(d: ServiceDeps): Promise<void> {
+  needMac(d);
+  if (d.platform === "win32") return winStartService(winCtx(d));
+  if (!(await stat(plistPath()).then(() => true, () => false))) throw new Error("The service is not installed. Run `nookdeck service install`.");
+  const r = await d.launchctl(["bootstrap", domain(d), plistPath()]);
+  // already loaded is fine: kick it so it runs
+  if (r.code !== 0) await d.launchctl(["kickstart", target(d)]);
+  d.log("Service started.");
 }
 
 export interface ServiceStatus { installed: boolean; running: boolean; pid?: number; plist: string; program?: string }

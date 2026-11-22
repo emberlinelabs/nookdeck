@@ -9,6 +9,7 @@ import { join, resolve } from "node:path";
 import { HOME, PLUGIN_ID_RE } from "../config";
 import { MANIFEST_MAX_BYTES, covers, describePermissions, parseManifest, parsePermissions } from "./manifest";
 import { coerce } from "./sources";
+import { materializePreview } from "./core";
 import type { Manifest, Permissions, PluginState, SettingField, Settings, StateFile } from "./types";
 
 export const MAX_FILES = 200;
@@ -25,7 +26,7 @@ export function packageHash(files: Files): string {
   return h.digest("hex");
 }
 
-async function readFolder(root: string): Promise<Files> {
+export async function readFolder(root: string): Promise<Files> {
   const files: Files = new Map();
   let total = 0;
   const walk = async (rel: string): Promise<void> => {
@@ -76,6 +77,10 @@ export interface PluginSummary {
   source: string; sha256: string; installedAt: number;
   /** Not reviewed by the Nookdeck registry (every P1 install is). */
   unreviewed: boolean;
+  /** Ships with Nookdeck (core.*): shown as "Built-in", can be disabled but not removed. */
+  builtin?: boolean;
+  /** The registry version these exact files were reviewed at (unreviewed is then false). */
+  registryVersion?: string;
   enabled: boolean;
   permissions: Permissions;
   granted: Permissions;
@@ -87,12 +92,18 @@ export interface PluginSummary {
   fields: Array<SettingField & { isSet?: boolean }>;
   /** Current plugin-wide values, secrets left out. */
   settings: Settings;
-  widgets: Array<{ id: string; name: string; render: string; sizes: string[]; settings: SettingField[] }>;
+  widgets: Array<{ id: string; name: string; render: string; sizes: string[]; settings: SettingField[]; preview?: unknown }>;
   actions: Array<{ id: string; name: string; settings: SettingField[] }>;
   themes: Array<{ id: string; name: string; theme: unknown }>;
   layouts: Array<{ id: string; name: string; layout: unknown }>;
   /** Why it cannot run (files changed since install, manifest unreadable). */
   error?: string;
+  /** The plugin runs code (`main`): trusted code, not a sandbox. */
+  code: boolean;
+  /** The entry file of a code plugin (relative), else null. */
+  main: string | null;
+  /** `nookdeck plugin dev`: read in place from the author's folder. */
+  linked: boolean;
 }
 
 export class PluginError extends Error {
@@ -104,6 +115,8 @@ interface Loaded { manifest: Manifest; error?: string }
 export class PluginStore {
   private state: StateFile = { version: 1, plugins: {} };
   private manifests = new Map<string, Loaded>();
+  private builtin = new Set<string>();
+  private coreSaved: NonNullable<StateFile["core"]> = {};
   private listeners = new Set<() => void>();
   private chain: Promise<unknown> = Promise.resolve();
   readonly dir: string;
@@ -125,19 +138,30 @@ export class PluginStore {
     try { raw = JSON.parse(await readFile(this.stateFile, "utf8")); } catch { raw = null; }
     this.state = { version: 1, plugins: {} };
     this.manifests.clear();
+    this.builtin.clear();
+    this.coreSaved = {};
+    if (raw && typeof raw === "object" && raw.core && typeof raw.core === "object") {
+      for (const [id, c] of Object.entries<any>(raw.core)) {
+        if (!id.startsWith("core.") || !c || typeof c !== "object") continue;
+        this.coreSaved[id] = { enabled: c.enabled !== false, settings: c.settings && typeof c.settings === "object" ? c.settings : {} };
+      }
+    }
     const plugins = raw && typeof raw === "object" && raw.plugins && typeof raw.plugins === "object" ? raw.plugins : {};
     for (const [id, s] of Object.entries<any>(plugins)) {
-      if (!PLUGIN_ID_RE.test(id) || !s || typeof s.version !== "string" || typeof s.sha256 !== "string") continue;
+      if (id.startsWith("core.") || !PLUGIN_ID_RE.test(id) || !s || typeof s.version !== "string" || typeof s.sha256 !== "string") continue;
       const st: PluginState = {
         version: s.version, sha256: s.sha256, source: String(s.source ?? ""), installedAt: Number(s.installedAt) || 0,
         enabled: s.enabled === true, granted: s.granted ? parsePermissionsSafe(s.granted) : null,
         settings: s.settings && typeof s.settings === "object" ? s.settings : {},
+        ...(s.linked === true ? { linked: true } : {}),
+        ...(s.reviewed === true && typeof s.registryVersion === "string" ? { reviewed: true, registryVersion: s.registryVersion } : {}),
       };
       this.state.plugins[id] = st;
       try {
-        const files = await readFolder(this.versionDir(id, st.version));
+        const files = await readFolder(this.dirOf(id));
         const manifest = parseManifest(JSON.parse(new TextDecoder().decode(files.get(MANIFEST_FILE))), { allowCore: false });
-        if (packageHash(files) !== st.sha256) { st.enabled = false; this.manifests.set(id, { manifest, error: "the plugin's files changed after install: reinstall it" }); }
+        if (st.linked) { st.sha256 = packageHash(files); st.version = manifest.version; this.manifests.set(id, { manifest }); }
+        else if (packageHash(files) !== st.sha256) { st.enabled = false; this.manifests.set(id, { manifest, error: "the plugin's files changed after install: reinstall it" }); }
         else this.manifests.set(id, { manifest });
       } catch (e: any) {
         st.enabled = false;
@@ -146,10 +170,38 @@ export class PluginStore {
     }
   }
 
+  /**
+   * Adds the plugins that ship with the agent (call after load()). They are enabled unless the user turned one off, hold every
+   * permission they declare, and keep their enabled flag and settings in plugins.json under `core`.
+   */
+  registerCore(manifests: Manifest[]): void {
+    for (const m of manifests) {
+      const saved = this.coreSaved[m.id];
+      this.builtin.add(m.id);
+      this.manifests.set(m.id, { manifest: m });
+      this.state.plugins[m.id] = { version: m.version, sha256: "", source: "built-in", installedAt: 0, enabled: saved ? saved.enabled : true, granted: m.permissions, settings: saved ? saved.settings : {} };
+    }
+    this.changed();
+  }
+
+  isBuiltin(id: string): boolean { return this.builtin.has(id); }
+
   private versionDir(id: string, version: string): string { return join(this.dir, id, version); }
 
+  /** Where a plugin's files are: its install folder, or (a linked dev plugin) the author's own folder. */
+  dirOf(id: string): string {
+    const s = this.state.plugins[id];
+    return s?.linked ? s.source : this.versionDir(id, s?.version ?? "");
+  }
+
   private save(): Promise<void> {
-    const snapshot = JSON.stringify(this.state, null, 2);
+    const plugins: Record<string, PluginState> = {};
+    const core: NonNullable<StateFile["core"]> = { ...this.coreSaved };
+    for (const [id, st] of Object.entries(this.state.plugins)) {
+      if (this.builtin.has(id)) core[id] = { enabled: st.enabled, settings: st.settings };
+      else plugins[id] = st;
+    }
+    const snapshot = JSON.stringify({ version: 1, plugins, ...(Object.keys(core).length ? { core } : {}) }, null, 2);
     this.chain = this.chain.then(async () => {
       await mkdir(resolve(this.stateFile, ".."), { recursive: true, mode: 0o700 });
       const tmp = `${this.stateFile}.tmp`;
@@ -191,12 +243,12 @@ export class PluginStore {
     });
     return {
       id, name: m.name, version: s.version, ...(m.author ? { author: m.author } : {}), ...(m.description ? { description: m.description } : {}), ...(m.icon ? { icon: m.icon } : {}),
-      source: s.source, sha256: s.sha256, installedAt: s.installedAt, unreviewed: true, enabled: s.enabled && !e.error,
+      source: s.source, sha256: s.sha256, installedAt: s.installedAt, unreviewed: !this.builtin.has(id) && !s.reviewed, ...(this.builtin.has(id) ? { builtin: true } : {}), ...(s.reviewed ? { registryVersion: s.registryVersion } : {}), enabled: s.enabled && !e.error,
       permissions: m.permissions, granted: s.granted ?? { network: [] }, needsApproval: !covers(s.granted, m.permissions),
       permissionLines: describePermissions(m.permissions), fields, settings: values,
-      widgets: m.widgets.map((w) => ({ id: w.id, name: w.name, render: w.render, sizes: w.sizes, settings: w.settings })),
+      widgets: m.widgets.map((w) => ({ id: w.id, name: w.name, render: w.render, sizes: w.sizes, settings: w.settings, ...(w.preview !== undefined ? { preview: this.builtin.has(id) ? materializePreview(String(w.render), w.preview) : w.preview } : {}) })),
       actions: m.actions.map((a) => ({ id: a.id, name: a.name, settings: a.settings })),
-      themes: m.themes, layouts: m.layouts, ...(e.error ? { error: e.error } : {}),
+      themes: m.themes, layouts: m.layouts, ...(e.error ? { error: e.error } : {}), code: m.main !== null, main: m.main, linked: s.linked === true,
     };
   }
 
@@ -245,14 +297,19 @@ export class PluginStore {
    * Installs (or updates) from a folder, a manifest file or an https address. A new install starts disabled. An update keeps
    * settings and the enabled flag, unless it asks for permissions the user has not granted: then it is disabled until granted.
    */
-  async install(source: string): Promise<{ plugin: PluginSummary; updated: boolean; unchanged: boolean }> {
+  async install(source: string, from?: { sha256: string; version: string }): Promise<{ plugin: PluginSummary; updated: boolean; unchanged: boolean }> {
     const { files, shown } = await this.resolveSource(source);
     let manifest: Manifest;
     try { manifest = parseManifest(JSON.parse(new TextDecoder().decode(files.get(MANIFEST_FILE))), { agentVersion: this.opts.agentVersion }); }
     catch (e: any) { throw new PluginError(e instanceof SyntaxError ? `${MANIFEST_FILE} is not valid JSON: ${e.message}` : `${MANIFEST_FILE}: ${e?.message ?? e}`); }
+    if (manifest.main && !files.has(manifest.main)) throw new PluginError(`${MANIFEST_FILE}: main is "${manifest.main}", but that file is not in the plugin`);
+    if (manifest.main && /^https?:/i.test(source.trim())) throw new PluginError("a plugin with code cannot be installed from a single manifest address: use a GitHub repository, a folder or a package");
     const sha = packageHash(files);
+    // a registry install must be exactly what was reviewed: nothing is written when the files differ
+    if (from && (sha !== from.sha256.toLowerCase() || manifest.version !== from.version)) throw new PluginError("the plugin files do not match the reviewed version", 409);
     const prev = this.state.plugins[manifest.id];
     if (prev && prev.version === manifest.version && prev.sha256 === sha && !this.manifests.get(manifest.id)?.error) {
+      if (from && !prev.reviewed) { prev.reviewed = true; prev.registryVersion = from.version; await this.save(); this.changed(); }
       return { plugin: this.summary(manifest.id)!, updated: false, unchanged: true };
     }
     const dest = this.versionDir(manifest.id, manifest.version);
@@ -273,6 +330,7 @@ export class PluginStore {
       version: manifest.version, sha256: sha, source: shown, installedAt: this.now(),
       enabled: prev ? prev.enabled && covers(granted, manifest.permissions) : false,
       granted, settings: prev?.settings ?? {},
+      ...(from ? { reviewed: true, registryVersion: from.version } : {}),
     };
     this.manifests.set(manifest.id, { manifest });
     await this.save();
@@ -280,11 +338,59 @@ export class PluginStore {
     return { plugin: this.summary(manifest.id)!, updated: !!prev, unchanged: false };
   }
 
+  /**
+   * `nookdeck plugin dev`: uses a folder in place (nothing is copied, no hash pin). Granted and enabled at once with exactly what
+   * the manifest declares: this is the author's own code on the author's own computer.
+   */
+  async link(folder: string): Promise<{ plugin: PluginSummary; updated: boolean }> {
+    const path = resolve(folder.startsWith("~") ? join(homedir(), folder.slice(1)) : folder);
+    let files: Files;
+    try { files = await readFolder(path); } catch (e: any) { throw new PluginError(e?.code === "ENOENT" ? "that folder does not exist" : String(e?.message ?? e)); }
+    if (!files.has(MANIFEST_FILE)) throw new PluginError(`there is no ${MANIFEST_FILE} in that folder`);
+    let manifest: Manifest;
+    try { manifest = parseManifest(JSON.parse(new TextDecoder().decode(files.get(MANIFEST_FILE))), { agentVersion: this.opts.agentVersion }); }
+    catch (e: any) { throw new PluginError(e instanceof SyntaxError ? `${MANIFEST_FILE} is not valid JSON: ${e.message}` : `${MANIFEST_FILE}: ${e?.message ?? e}`); }
+    if (manifest.main && !files.has(manifest.main)) throw new PluginError(`${MANIFEST_FILE}: main is "${manifest.main}", but that file is not in the folder`);
+    const prev = this.state.plugins[manifest.id];
+    if (prev && !prev.linked) throw new PluginError(`${manifest.id} is already installed from a package: remove it first, then link the folder`, 409);
+    this.state.plugins[manifest.id] = {
+      version: manifest.version, sha256: packageHash(files), source: path, installedAt: prev?.installedAt ?? this.now(), enabled: true,
+      granted: manifest.permissions, settings: prev?.settings ?? {}, linked: true,
+    };
+    this.manifests.set(manifest.id, { manifest });
+    await this.save();
+    this.changed();
+    return { plugin: this.summary(manifest.id)!, updated: !!prev };
+  }
+
+  /** A linked plugin changed on disk: reads it again (manifest, hash) and tells the runtime, which restarts its process. */
+  async reload(id: string): Promise<PluginSummary> {
+    const s = this.state.plugins[id];
+    if (!s) throw new PluginError("that plugin is not installed", 404);
+    if (!s.linked) throw new PluginError("only a plugin linked with `nookdeck plugin dev` can be reloaded", 409);
+    const files = await readFolder(s.source).catch((e) => { throw new PluginError(String(e?.message ?? e)); });
+    let manifest: Manifest;
+    try { manifest = parseManifest(JSON.parse(new TextDecoder().decode(files.get(MANIFEST_FILE))), { agentVersion: this.opts.agentVersion }); }
+    catch (e: any) {
+      this.manifests.set(id, { manifest: this.manifests.get(id)?.manifest ?? placeholder(id, s.version), error: `${MANIFEST_FILE}: ${String(e?.message ?? e).slice(0, 160)}` });
+      this.changed();
+      throw new PluginError(`${MANIFEST_FILE}: ${e?.message ?? e}`);
+    }
+    if (manifest.id !== id) throw new PluginError(`the id changed to ${manifest.id}; link the folder again`);
+    s.version = manifest.version; s.sha256 = packageHash(files); s.granted = manifest.permissions; s.enabled = true;
+    this.manifests.set(id, { manifest });
+    await this.save();
+    this.changed();
+    return this.summary(id)!;
+  }
+
   async remove(id: string): Promise<void> {
     if (!this.state.plugins[id]) throw new PluginError("that plugin is not installed", 404);
+    if (this.builtin.has(id)) throw new PluginError("a built-in plugin cannot be removed, only turned off", 409);
+    const linked = this.state.plugins[id]?.linked === true;
     delete this.state.plugins[id];
     this.manifests.delete(id);
-    await rm(join(this.dir, id), { recursive: true, force: true });
+    if (!linked) await rm(join(this.dir, id), { recursive: true, force: true });
     await this.save();
     this.changed();
   }

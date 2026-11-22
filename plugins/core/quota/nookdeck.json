@@ -1,0 +1,89 @@
+{
+  "id": "core.quota",
+  "name": "AI usage",
+  "version": "1.0.0",
+  "author": "Nookdeck",
+  "description": "How much of your Claude, Codex, Antigravity or OpenCode usage window is left",
+  "permissions": {
+    "network": []
+  },
+  "widgets": [
+    {
+      "id": "quota",
+      "name": "AI usage",
+      "render": "custom:quota",
+      "sizes": [
+        "2x1",
+        "2x2"
+      ],
+      "settings": [
+        {
+          "key": "provider",
+          "type": "select",
+          "label": "Provider",
+          "default": "claude",
+          "options": [
+            "claude",
+            "codex",
+            "antigravity",
+            "opencode",
+            "grok"
+          ]
+        },
+        {
+          "key": "chart",
+          "type": "select",
+          "label": "Chart",
+          "default": "auto",
+          "options": [
+            "auto",
+            "bars",
+            "rings",
+            "gauge",
+            "meter",
+            "number",
+            "history"
+          ]
+        },
+        {
+          "key": "windows",
+          "type": "string",
+          "label": "Windows (all, main, or ids like five_hour,seven_day)",
+          "default": "all"
+        },
+        {
+          "key": "showReset",
+          "type": "boolean",
+          "label": "Show reset countdown",
+          "default": true
+        },
+        {
+          "key": "account",
+          "type": "string",
+          "label": "Account (when the provider has several)"
+        }
+      ],
+      "preview": {
+        "id": "claude",
+        "name": "Claude",
+        "plan": "Max",
+        "windows": [
+          {
+            "id": "five_hour",
+            "label": "5 hours",
+            "usedPercent": 62,
+            "windowMinutes": 300,
+            "resetsInMinutes": 140
+          },
+          {
+            "id": "seven_day",
+            "label": "7 days",
+            "usedPercent": 34,
+            "windowMinutes": 10080,
+            "resetsInMinutes": 3300
+          }
+        ]
+      }
+    }
+  ]
+}

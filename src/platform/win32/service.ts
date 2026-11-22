@@ -112,6 +112,21 @@ export async function winInstall(c: WinServiceCtx): Promise<{ launcher: string; 
   return { launcher, method };
 }
 
+/** Stops the agent now (the task stays installed and starts again at the next sign-in). */
+export async function winStopService(c: WinServiceCtx): Promise<void> {
+  if (!(await stat(launcherPath(c.dir)).then(() => true, () => false))) throw new Error("The service is not installed. Run `nookdeck service install`.");
+  await winStop(c);
+  c.log("Service stopped.");
+}
+
+/** Starts the agent now (the task, or the Run-key launcher). */
+export async function winStartService(c: WinServiceCtx): Promise<void> {
+  if (!(await stat(launcherPath(c.dir)).then(() => true, () => false))) throw new Error("The service is not installed. Run `nookdeck service install`.");
+  const r = await c.run(schtasksRun());
+  if (r.code !== 0) await c.run(["wscript.exe", "//B", "//Nologo", launcherPath(c.dir)]);
+  c.log("Service started.");
+}
+
 async function winStop(c: WinServiceCtx) {
   await c.run(schtasksEnd());
   const exe = c.program[0]!;

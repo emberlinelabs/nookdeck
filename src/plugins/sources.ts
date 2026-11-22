@@ -8,7 +8,7 @@ import type { ActionDef, Permissions, Renderer, SettingField, Settings, SettingV
 export interface SourceDeps {
   fetch: typeof fetch;
   /** Runs a shell command line on this computer; resolves with the exit code and stdout. */
-  shell: (command: string, timeoutMs: number) => Promise<{ code: number; stdout: string }>;
+  shell: (command: string, timeoutMs: number, env?: Record<string, string>) => Promise<{ code: number; stdout: string }>;
 }
 
 export const HTTP_TIMEOUT_MS = 10_000;
@@ -129,7 +129,7 @@ export function cleanRender(render: Renderer, data: unknown): { data: unknown } 
 
 /** The renderer's data from a response: through `map` when the widget has one, otherwise the response itself (or the text as the main field). */
 export function mapResponse(w: WidgetDef, root: unknown, settings: Settings): Record<string, unknown> {
-  const map = w.source.map;
+  const map = "map" in w.source ? w.source.map : undefined;
   if (!map) {
     if (root !== null && typeof root === "object" && !Array.isArray(root)) return root as Record<string, unknown>;
     const main = w.render === "text" ? "body" : w.render === "image" ? "url" : "value";
@@ -212,10 +212,12 @@ const parseBody = (text: string): unknown => {
 
 // ---------- widgets and actions ----------
 
-export const widgetEvery = (w: WidgetDef): number => ("http" in w.source ? w.source.http.every : w.source.command.every) ?? EVERY_DEFAULT;
+export const widgetEvery = (w: WidgetDef): number => ("http" in w.source ? w.source.http.every : "command" in w.source ? w.source.command.every : w.source.agent.every) ?? EVERY_DEFAULT;
 
 /** Fetches (or runs) the widget's source once and returns what the deck shows. Never throws: a failure is `{error}`. */
 export async function evaluateWidget(w: WidgetDef, settings: Settings, perms: Permissions, deps: SourceDeps): Promise<TileItem> {
+  if (w.render.startsWith("custom:")) return { error: "plugin widget missing" }; // core plugins are served by the core host, never by a source
+  if ("agent" in w.source) return { error: "plugin host unavailable" }; // code plugins are served by the plugin host (runtime.ts)
   try {
     let root: unknown;
     if ("http" in w.source) {
@@ -225,13 +227,13 @@ export async function evaluateWidget(w: WidgetDef, settings: Settings, perms: Pe
     } else {
       if (!perms.shell) throw new Error("this plugin has not been allowed to run commands");
       const c = w.source.command;
-      const r = await deps.shell(expand(c.run, settings), COMMAND_TIMEOUT_MS);
+      const r = await deps.shell(c.run, COMMAND_TIMEOUT_MS, settingsEnv(settings)); // never {{templates}} in a command: values go in the environment
       if (r.code !== 0) throw new Error(`the command failed (exit ${r.code})`);
       const out = r.stdout.slice(0, HTTP_MAX_BYTES);
       root = c.parse === "text" ? out.trim() : c.parse === "json" ? JSON.parse(out) : parseBody(out);
     }
-    const cleaned = cleanRender(w.render, mapResponse(w, root, settings));
-    return "error" in cleaned ? { error: cleaned.error } : { render: w.render, data: cleaned.data };
+    const cleaned = cleanRender(w.render as Renderer, mapResponse(w, root, settings));
+    return "error" in cleaned ? { error: cleaned.error } : { render: w.render as Renderer, data: cleaned.data };
   } catch (e: any) {
     const name = e?.name === "TimeoutError" ? "the request timed out" : String(e?.message ?? e);
     return { error: name.slice(0, 120) };
@@ -246,8 +248,21 @@ export async function runHttpAction(a: ActionDef, settings: Settings, perms: Per
   await guardedRequest(expand(h.url, settings, true), { method: h.method ?? "GET", headers, ...(h.body !== undefined ? { body: expand(h.body, settings) } : {}) }, perms, deps);
 }
 
-/** The macro steps of an action with {{settings}} filled into every text field. */
+/**
+ * The settings a command may read: NOOKDECK_SETTING_<KEY> (key upper-cased). A command line never contains a setting's value
+ * itself ({{key}} is refused in commands at install), so a value with a quote, a `;` or a `$(...)` cannot become code.
+ */
+export function settingsEnv(settings: Settings): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(settings)) out[`NOOKDECK_SETTING_${k.toUpperCase()}`] = String(v);
+  return out;
+}
+
+/** The macro steps of an action with {{settings}} filled into every text field (a shell step gets its settings as environment instead). */
 export function actionSteps(a: ActionDef, settings: Settings) {
   if (!("macro" in a.run)) throw new Error("not a macro action");
-  return a.run.macro.map((st) => Object.fromEntries(Object.entries(st).map(([k, v]) => [k, typeof v === "string" ? expand(v, settings) : v])) as typeof st);
+  return a.run.macro.map((st) => {
+    if (st.kind === "shell") return { kind: "shell" as const, command: st.command, env: settingsEnv(settings) };
+    return Object.fromEntries(Object.entries(st).map(([k, v]) => [k, typeof v === "string" ? expand(v, settings) : v])) as typeof st;
+  });
 }

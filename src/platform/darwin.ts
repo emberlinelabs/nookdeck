@@ -166,7 +166,7 @@ export function createDarwin(): Platform {
         }
         case "volume": return void (await mac().call("volumeStep", { command: a.command }));
       }
-      await runCapture(buildCommand(a, "darwin"));
+      await runCapture(buildCommand(a, "darwin"), undefined, undefined, a.type === "shell" ? a.env : undefined);
     },
 
     async readVolume() {

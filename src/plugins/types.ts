@@ -10,6 +10,8 @@ import type { Layout, MacroStep, Theme } from "../config";
 
 export const RENDERERS = ["stat", "gauge", "text", "list", "chart", "image", "status"] as const;
 export type Renderer = (typeof RENDERERS)[number];
+/** A renderer only core plugins may use: the deck draws its own tile (custom:weather, custom:quota). parseManifest never produces one. */
+export type CustomRenderer = `custom:${string}`;
 
 /** What a plugin may do. The manifest declares it, the user grants it, the agent enforces it on every call. */
 export interface Permissions {
@@ -34,20 +36,26 @@ export type Settings = Record<string, SettingValue>;
 
 export interface HttpSource { http: { url: string; every?: number; headers?: Record<string, string> }; map?: Record<string, unknown> }
 export interface CommandSource { command: { run: string; every?: number; parse?: "json" | "text" }; map?: Record<string, unknown> }
-export type WidgetSource = HttpSource | CommandSource;
+/** The data comes from the plugin's code (`main`): `every` is the default refresh in seconds (the plugin may change it in provide()). */
+export interface AgentSource { agent: { every?: number } }
+export type WidgetSource = HttpSource | CommandSource | AgentSource;
 
 export interface WidgetDef {
   id: string;
   name: string;
-  render: Renderer;
+  render: Renderer | CustomRenderer;
   sizes: string[]; // "2x1"
   settings: SettingField[];
+  /** Sample `data` for the renderer (validated at parse time), so the UI can show the tile before install. */
+  preview?: unknown;
   source: WidgetSource;
 }
 
 export type PluginActionRun =
   | { macro: MacroStep[] }
-  | { http: { url: string; method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; headers?: Record<string, string>; body?: string } };
+  | { http: { url: string; method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; headers?: Record<string, string>; body?: string } }
+  /** Handled by the plugin's code: ctx.actions.handle(id, fn). */
+  | { agent: true };
 export interface ActionDef { id: string; name: string; settings: SettingField[]; run: PluginActionRun }
 
 export interface Manifest {
@@ -65,8 +73,8 @@ export interface Manifest {
   actions: ActionDef[];
   themes: { id: string; name: string; theme: Theme }[];
   layouts: { id: string; name: string; layout: Layout }[];
-  /** Code entry (P2). P1 only accepts null. */
-  main: null;
+  /** Code entry, a relative path inside the plugin folder (P2); null for a no-code plugin. */
+  main: string | null;
 }
 
 /** One entry of ~/.nookdeck/plugins.json. */
@@ -80,8 +88,15 @@ export interface PluginState {
   granted: Permissions | null;
   /** Plugin-level settings (the layout tile can override per tile). Secret values live here and are never sent to phones. */
   settings: Settings;
+  /** `nookdeck plugin dev`: the files are read in place from `source` (a folder), not copied, and not pinned by hash. */
+  linked?: boolean;
+  /** Installed from the registry with files that matched its sha256: shown as reviewed. A plain install clears it. */
+  reviewed?: boolean;
+  /** The registry version it was reviewed at (only with `reviewed`). */
+  registryVersion?: string;
 }
-export interface StateFile { version: 1; plugins: Record<string, PluginState> }
+/** `core` keeps what the user changed on a built-in plugin (the plugin itself ships with the agent and is never stored in `plugins`). */
+export interface StateFile { version: 1; plugins: Record<string, PluginState>; core?: Record<string, { enabled: boolean; settings: Settings }> }
 
 /** What the deck gets for one tile. `error` is a short human message. */
 export type TileItem = { render: Renderer; data: unknown } | { error: string };

@@ -10,7 +10,8 @@ export type Action =
   | { type: "open"; target: string }
   | { type: "hotkey"; keys: string }
   | { type: "type"; text: string }
-  | { type: "shell"; command: string }
+  /** `env`: set only by the plugin runtime (values of a plugin's settings as NOOKDECK_SETTING_<KEY>); never read from a layout file. */
+  | { type: "shell"; command: string; env?: Record<string, string> }
   | { type: "media"; command: "playpause" | "next" | "previous" }
   | { type: "volume"; command: "up" | "down" | "mute" }
   | { type: "page"; page: string }

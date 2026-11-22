@@ -1,0 +1,165 @@
+{
+  "id": "core.weather",
+  "name": "Weather",
+  "version": "1.0.0",
+  "author": "Nookdeck",
+  "description": "Current weather, hourly and daily forecast from Home Assistant or Open-Meteo",
+  "permissions": {
+    "network": [
+      "api.open-meteo.com",
+      "geocoding-api.open-meteo.com"
+    ]
+  },
+  "widgets": [
+    {
+      "id": "weather",
+      "name": "Weather",
+      "render": "custom:weather",
+      "sizes": [
+        "2x1",
+        "2x2",
+        "4x2"
+      ],
+      "settings": [
+        {
+          "key": "source",
+          "type": "select",
+          "label": "Source",
+          "default": "auto",
+          "options": [
+            "auto",
+            "hass",
+            "open-meteo"
+          ]
+        },
+        {
+          "key": "entity",
+          "type": "entity",
+          "label": "Home Assistant weather entity"
+        },
+        {
+          "key": "locationName",
+          "type": "string",
+          "label": "Location"
+        },
+        {
+          "key": "lat",
+          "type": "number",
+          "label": "Latitude"
+        },
+        {
+          "key": "lon",
+          "type": "number",
+          "label": "Longitude"
+        },
+        {
+          "key": "show",
+          "type": "select",
+          "label": "Show",
+          "default": "auto",
+          "options": [
+            "auto",
+            "now",
+            "hourly",
+            "daily"
+          ]
+        },
+        {
+          "key": "units",
+          "type": "select",
+          "label": "Units",
+          "options": [
+            "metric",
+            "imperial"
+          ]
+        }
+      ],
+      "preview": {
+        "now": {
+          "temp": 31,
+          "feels": 34,
+          "condition": "Partly cloudy",
+          "code": 2,
+          "icon": "cloud-sun",
+          "humidity": 62,
+          "wind": 11,
+          "isDay": true
+        },
+        "hourly": [
+          {
+            "inHours": 1,
+            "temp": 31,
+            "condition": "Partly cloudy",
+            "code": 2,
+            "icon": "cloud-sun"
+          },
+          {
+            "inHours": 2,
+            "temp": 32,
+            "condition": "Partly cloudy",
+            "code": 2,
+            "icon": "cloud-sun"
+          },
+          {
+            "inHours": 3,
+            "temp": 31,
+            "condition": "Cloudy",
+            "code": 3,
+            "icon": "cloud"
+          },
+          {
+            "inHours": 4,
+            "temp": 29,
+            "condition": "Cloudy",
+            "code": 3,
+            "icon": "cloud"
+          },
+          {
+            "inHours": 5,
+            "temp": 28,
+            "condition": "Light rain",
+            "code": 61,
+            "icon": "rain"
+          },
+          {
+            "inHours": 6,
+            "temp": 27,
+            "condition": "Light rain",
+            "code": 61,
+            "icon": "rain"
+          }
+        ],
+        "daily": [
+          {
+            "inDays": 0,
+            "min": 25,
+            "max": 33,
+            "condition": "Partly cloudy",
+            "code": 2,
+            "icon": "cloud-sun"
+          },
+          {
+            "inDays": 1,
+            "min": 24,
+            "max": 31,
+            "condition": "Light rain",
+            "code": 61,
+            "icon": "rain"
+          },
+          {
+            "inDays": 2,
+            "min": 24,
+            "max": 32,
+            "condition": "Mostly clear",
+            "code": 1,
+            "icon": "sun"
+          }
+        ],
+        "source": "open-meteo",
+        "location": "Home",
+        "units": "metric",
+        "tempUnit": "c"
+      }
+    }
+  ]
+}

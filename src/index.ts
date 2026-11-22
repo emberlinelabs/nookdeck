@@ -85,6 +85,17 @@ if (argv[0] === "mcp") {
   await runMcp({ port: parsePort(argv.slice(1)) });
   process.exit(0);
 }
+// `nookdeck __plugin-host <dir>`: the child process of one code plugin (started by the agent; speaks JSON-RPC on stdio). Never run by hand.
+if (argv[0] === "__plugin-host") {
+  const { runPluginHostFromStdio } = await import("./plugins/host");
+  await runPluginHostFromStdio();
+  process.exit(0);
+}
+// `nookdeck plugin new|dev|pack|logs`: tools for plugin authors.
+if (argv[0] === "plugin") {
+  const { runPluginCli } = await import("./plugins/cli");
+  process.exit(await runPluginCli(argv.slice(1), parsePort));
+}
 // `nookdeck pair [--port N] [--all] [--plain]`: the phone addresses and the PIN of the running agent (the setup scripts print them).
 if (argv[0] === "pair") {
   const port = parsePort(argv.slice(1));
@@ -113,7 +124,7 @@ if (argv.includes("--version") || argv.includes("-v") || argv[0] === "version") 
   console.log((await import("./about")).versionLine());
   process.exit(0);
 }
-// `nookdeck service install|uninstall|status|restart [--port N]`: run the agent in the background at login (macOS launchd).
+// `nookdeck service install|uninstall|status|start|stop|restart [--port N]`: run the agent in the background at login (macOS launchd).
 if (argv[0] === "service") {
   const svc = await import("./service");
   const deps = svc.realServiceDeps();
@@ -128,8 +139,10 @@ if (argv[0] === "service") {
       for (const r of await svc.repointHooks(tg.files, deps.program, svc.currentInstance(port))) if (r.changed) console.log(`Hook updated: ${r.file}`);
     } else if (cmd === "uninstall") await svc.serviceUninstall(deps);
     else if (cmd === "restart") await svc.serviceRestart(deps);
+    else if (cmd === "stop") await svc.serviceStop(deps);
+    else if (cmd === "start") await svc.serviceStart(deps);
     else if (cmd === "status") console.log(svc.formatStatus(await svc.serviceStatus(deps)));
-    else { console.error("Usage: nookdeck service install [--port N] | uninstall | status | restart"); process.exit(2); }
+    else { console.error("Usage: nookdeck service install [--port N] | uninstall | status | start | stop | restart"); process.exit(2); }
   } catch (err: any) {
     console.error(err?.message ?? String(err));
     process.exit(1);

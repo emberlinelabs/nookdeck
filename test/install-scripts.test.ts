@@ -1,10 +1,13 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+// These tests run the real shell scripts (several processes, some deliberate 2-3 s waits). Bun's 5 s default fails them on a busy machine.
+setDefaultTimeout(30_000);
 
 // setup.sh / uninstall.sh against a temp release directory and a temp install home. launchctl is `echo`, and every
 // directory the binary touches is inside the sandbox: never the real ~/.nookdeck, ~/.claude or ~/Library/LaunchAgents.

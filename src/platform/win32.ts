@@ -71,7 +71,7 @@ export interface Win32Deps {
   scan?: VkScan;
   cred?: CredApi;
   idle?: () => number | null;
-  run?: (argv: string[]) => Promise<string>;
+  run?: (argv: string[], env?: Record<string, string>) => Promise<string>;
 }
 
 export function createWin32(d: Win32Deps = {}): Platform {
@@ -91,7 +91,7 @@ export function createWin32(d: Win32Deps = {}): Platform {
     }
   };
   const scan = d.scan ?? vkScan;
-  const run = d.run ?? ((argv: string[]) => runCapture(argv, 10_000));
+  const run = d.run ?? ((argv: string[], env?: Record<string, string>) => runCapture(argv, 10_000, undefined, env));
   const ids = new Map<string, string>(); // win-<hash> -> AppID
 
   const apps: AppCatalog = {
@@ -174,7 +174,7 @@ export function createWin32(d: Win32Deps = {}): Platform {
 
     async runAction(a) {
       switch (a.type) {
-        case "shell": await run(["cmd", "/c", a.command]); return;
+        case "shell": await run(["cmd", "/c", a.command], a.env); return;
         case "open": {
           const target = a.target.trim();
           if (!target) throw new Error("open target is empty");

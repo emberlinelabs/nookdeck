@@ -59,6 +59,10 @@ import pkg from "../package.json" with { type: "json" };
 import { aboutInfo } from "./about";
 import { PluginStore, PluginError } from "./plugins/store";
 import { PluginRuntime, realShell } from "./plugins/runtime";
+import { PluginHosts, type HostsDeps } from "./plugins/hosts";
+import { CoreHost, legacyRef } from "./plugins/core";
+import { Registry, compareVersions, type RegistryEntry } from "./plugins/registry";
+import { ERR_DISABLED, ERR_MISSING, ERR_NOT_GRANTED } from "./plugins/types";
 import type { SourceDeps } from "./plugins/sources";
 import { forbiddenPage, pickLanguage, wantsPage } from "./forbidden-page";
 
@@ -142,7 +146,11 @@ export interface StartOptions {
   questionTimeoutMs?: number;
   /** Plugin store and the network/shell the plugins use (tests: temp dirs and fakes). */
   plugins?: PluginStore;
+  /** The community registry (tests: a fake address or fetch). */
+  registry?: Registry;
   pluginDeps?: Partial<SourceDeps>;
+  /** Code plugins (tests: fake spawn, temp log/data folders, short timers). */
+  pluginHostDeps?: Partial<HostsDeps>;
 }
 
 interface WsData {
@@ -266,7 +274,35 @@ export async function startServer(opts: StartOptions = {}) {
   // ----- plugins (no-code, P1): installed plugins, their tiles' data, their buttons -----
   const pluginStore = opts.plugins ?? new PluginStore({ agentVersion: aboutInfo().version });
   await pluginStore.load().catch((e) => console.error("plugins", e));
+  // core plugins (core.weather, core.quota) run in this process through the same PluginContext as community code; the services
+  // are read lazily because the weather service and the AI hub are built a little later than the runtime
+  const coreHost = new CoreHost({
+    weather: { get: (o, force, unit) => weather.get(o, force, unit), tempUnit: () => layout.theme?.temperatureUnit },
+    quota: { quota: (provider) => hub.snapshot().providers.find((x) => x.id === provider) },
+    shell: opts.pluginDeps?.shell ?? realShell,
+    fetch: opts.pluginDeps?.fetch ?? fetch,
+    settings: (id) => (pluginStore.entry(id)?.state.settings ?? {}) as Record<string, string | number | boolean>,
+  });
+  pluginStore.registerCore(coreHost.manifests());
+  await coreHost.activate();
+  const pluginHosts = new PluginHosts(pluginStore, {
+    fetch: opts.pluginDeps?.fetch ?? fetch,
+    shell: opts.pluginDeps?.shell ?? realShell,
+    keys: { hotkey: (keys) => platform.runAction({ type: "hotkey", keys }), type: (text) => platform.runAction({ type: "type", text }) },
+    ...opts.pluginHostDeps,
+  });
+  // a plugin that keeps crashing is switched off (the owner can turn it on again on the Plugins tab)
+  pluginHosts.onFailed((id) => { void pluginStore.setEnabled(id, false).catch(() => {}); });
+  const registry = opts.registry ?? new Registry();
+  /** A registry entry with what this computer has of it. */
+  const annotate = (e: RegistryEntry) => {
+    const have = pluginStore.has(e.id) && !pluginStore.isBuiltin(e.id) ? pluginStore.entry(e.id) : undefined;
+    const installedVersion = have?.state.version;
+    return { ...e, installed: !!have, ...(installedVersion ? { installedVersion } : {}), updateAvailable: !!installedVersion && compareVersions(e.version, installedVersion) > 0 };
+  };
   const pluginRuntime = new PluginRuntime(pluginStore, {
+    core: coreHost,
+    hosts: pluginHosts,
     fetch: opts.pluginDeps?.fetch ?? fetch,
     shell: opts.pluginDeps?.shell ?? realShell,
     onItems: (items) => broadcast({ type: "plugin", items }),
@@ -334,7 +370,11 @@ export async function startServer(opts: StartOptions = {}) {
     for (const page of layout.pages) for (const it of page.items) {
       if (it.kind !== "widget" || it.widget !== "weather") continue;
       const id = it.id;
-      jobs.push(weather.get(it.weather ?? {}, false, layout.theme?.temperatureUnit).then((d) => { out[id] = d; }, (e) => { out[id] = { error: e?.message ?? String(e) }; }));
+      // the legacy widget stands for core.weather (D7): off, or not runnable, shows the plugin's error instead of data
+      const ref = legacyRef(it)!;
+      const status = pluginStore.runnable(ref.id);
+      if (status !== "ok") { out[id] = { error: status === "missing" ? ERR_MISSING : status === "disabled" ? ERR_DISABLED : ERR_NOT_GRANTED }; continue; }
+      jobs.push(coreHost.get(ref.id, ref.widget, ref.settings ?? {}).then((u) => { out[id] = u.data; }, (e) => { out[id] = { error: e?.message ?? String(e) }; }));
     }
     await Promise.all(jobs);
     return out;
@@ -345,6 +385,8 @@ export async function startServer(opts: StartOptions = {}) {
     if (stopped || !Object.keys(items).length) return;
     if (to) send(to, { type: "weather", items }); else broadcast({ type: "weather", items });
   }
+  // turning core.weather off or on re-sends the weather tiles at once
+  pluginStore.onChange(() => { if (sockets.size) void pushWeather(); });
 
   const pairingInfo = async (all = false) => {
     const ip = lanIp();
@@ -853,8 +895,43 @@ export async function startServer(opts: StartOptions = {}) {
         return json({ ok: true });
       }
 
+      // ----- plugin registry (read, install a reviewed plugin, README) -----
+      const regRoute = /^\/api\/plugins\/(registry|install-from-registry)(?:\/([^/]+)\/(readme|manifest))?$/.exec(path);
+      if (regRoute) {
+        const denied = guardLocal(server, req);
+        if (denied) return denied;
+        const fail = (err: unknown) => json({ error: err instanceof Error ? err.message : String(err) }, err instanceof PluginError ? err.status : 400);
+        try {
+          if (regRoute[1] === "registry" && !regRoute[2] && req.method === "GET") {
+            const r = await registry.get(url.searchParams.get("refresh") === "1");
+            return json({ plugins: r.plugins.map(annotate), fetchedAt: r.fetchedAt, ...(r.stale ? { stale: true } : {}) });
+          }
+          if (regRoute[1] === "registry" && regRoute[2] && regRoute[3] === "manifest" && req.method === "GET") {
+            const entry = await registry.entry(regRoute[2]);
+            if (!entry) return json({ error: "that plugin is not in the registry" }, 404);
+            return json(await registry.manifest(entry));
+          }
+          if (regRoute[1] === "registry" && regRoute[2] && regRoute[3] === "readme" && req.method === "GET") {
+            const entry = await registry.entry(regRoute[2]);
+            if (!entry) return json({ error: "that plugin is not in the registry" }, 404);
+            const text = await registry.readme(entry);
+            if (text === null) return json({ error: "that plugin has no README" }, 404);
+            return new Response(text, { headers: { "content-type": "text/markdown; charset=utf-8", "x-content-type-options": "nosniff" } });
+          }
+          if (regRoute[1] === "install-from-registry" && req.method === "POST") {
+            const id = (await readBody(req))?.id;
+            if (typeof id !== "string") return json({ error: "id must be a plugin id" }, 400);
+            const entry = await registry.entry(id);
+            if (!entry) return json({ error: "that plugin is not in the registry" }, 404);
+            const r = await pluginStore.install(entry.repo, { sha256: entry.sha256, version: entry.version });
+            return json(r.plugin, r.updated || r.unchanged ? 200 : 201);
+          }
+        } catch (err) { return fail(err); }
+        return json({ error: "method not allowed" }, 405);
+      }
+
       // ----- plugins -----
-      const pluginRoute = /^\/api\/plugins(?:\/([^/]+)(?:\/(grant|enabled|settings))?)?$/.exec(path);
+      const pluginRoute = /^\/api\/plugins(?:\/([^/]+)(?:\/(grant|enabled|settings|process|logs|restart|stop|reload|update))?)?$/.exec(path);
       if (pluginRoute) {
         const denied = guardLocal(server, req);
         if (denied) return denied;
@@ -866,6 +943,7 @@ export async function startServer(opts: StartOptions = {}) {
             if (req.method === "POST") {
               const body = await readBody(req);
               if (typeof body?.source !== "string") return json({ error: "source must be a folder path or an https address" }, 400);
+              if (body.link === true) { const r = await pluginStore.link(body.source); return json(r.plugin, r.updated ? 200 : 201); } // nookdeck plugin dev
               const r = await pluginStore.install(body.source);
               return json(r.plugin, r.updated || r.unchanged ? 200 : 201);
             }
@@ -877,6 +955,24 @@ export async function startServer(opts: StartOptions = {}) {
           if (sub === "enabled" && req.method === "POST") return json(await pluginStore.setEnabled(pid, (await readBody(req))?.enabled));
           if (sub === "settings" && req.method === "PUT") return json(await pluginStore.setSettings(pid, await readBody(req)));
           if (!sub && req.method === "GET") return json(pluginStore.summary(pid));
+          if (sub === "process" && req.method === "GET") return json(pluginHosts.info(pid));
+          if (sub === "logs" && req.method === "GET") return json({ lines: pluginHosts.logs(pid, Math.max(1, Math.min(1000, Number(url.searchParams.get("lines")) || 50))) });
+          if (sub === "restart" && req.method === "POST") {
+            if (pluginStore.runnable(pid) !== "ok") return json({ error: "the plugin is not enabled" }, 409);
+            await pluginHosts.restart(pid);
+            return json(pluginHosts.info(pid));
+          }
+          if (sub === "stop" && req.method === "POST") { await pluginHosts.stop(pid); return json(pluginHosts.info(pid)); }
+          if (sub === "reload" && req.method === "POST") return json(await pluginStore.reload(pid));
+          if (sub === "update" && req.method === "POST") {
+            // registry plugins only: the newer reviewed files, same checks, settings kept, a re-grant when permissions grew
+            if (!pluginStore.summary(pid)?.registryVersion) return json({ error: "only plugins installed from the registry can be updated here" }, 409);
+            const entry = await registry.entry(pid);
+            if (!entry) return json({ error: "that plugin is not in the registry any more" }, 404);
+            if (compareVersions(entry.version, pluginStore.summary(pid)!.version) < 0) return json({ error: "the registry has an older version than the one installed" }, 409);
+            const r = await pluginStore.install(entry.repo, { sha256: entry.sha256, version: entry.version });
+            return json(r.plugin, 200);
+          }
         } catch (err) { return fail(err); }
         return json({ error: "method not allowed" }, 405);
       }
@@ -1337,6 +1433,8 @@ export async function startServer(opts: StartOptions = {}) {
       void lastMedia.persist(true);
       stopMediaLoop();
       pluginRuntime.stop();
+      void pluginHosts.stopAll();
+      void coreHost.deactivate();
       player.stopAll();
       stopCtl.abort();
       clearInterval(rulesTimer);

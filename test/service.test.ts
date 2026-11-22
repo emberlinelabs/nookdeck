@@ -259,3 +259,12 @@ describe("hooks that point at an older binary", () => {
     expect((await S.removeHooks({ claude: f, codex })).every((x) => !x.changed)).toBe(true);
   });
 });
+
+describe("NOOKDECK_SERVICE_LABEL (dev sandbox)", () => {
+  const run = (env: Record<string, string>) => Bun.spawnSync([process.execPath, "-e", `const s = await import(${JSON.stringify(join(import.meta.dir, "../src/service.ts"))}); console.log(s.SERVICE_LABEL)`], { env: { ...process.env, ...env }, stdout: "pipe" }).stdout.toString().trim();
+  test("defaults to dev.nookdeck.agent, takes a sane override, refuses a junk one", () => {
+    expect(run({ NOOKDECK_SERVICE_LABEL: "" })).toBe("dev.nookdeck.agent");
+    expect(run({ NOOKDECK_SERVICE_LABEL: "dev.nookdeck.sandbox" })).toBe("dev.nookdeck.sandbox");
+    expect(run({ NOOKDECK_SERVICE_LABEL: "../../etc/x y" })).toBe("dev.nookdeck.agent");
+  });
+});

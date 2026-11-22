@@ -8,7 +8,7 @@
     "id": "mood",
     "name": "Status",
     "render": "status",
-    "source": { "command": { "run": "echo {\"state\":\"ok\",\"label\":\"{{label}}\"}", "parse": "json" } },
+    "source": { "command": { "run": "echo {\"state\":\"ok\",\"label\":\"fine\"}", "parse": "json" } },
     "settings": [{ "key": "label", "type": "string", "label": "Label", "default": "fine" }]
   }],
   "actions": [{

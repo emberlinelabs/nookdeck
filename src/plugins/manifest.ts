@@ -1,5 +1,6 @@
 import { PLUGIN_ID_RE, validateLayout, validateTheme, type MacroStep } from "../config";
 import { macroSteps } from "../automation";
+import { cleanRender } from "./sources";
 import {
   RENDERERS, SETTING_TYPES, type ActionDef, type Manifest, type Permissions, type PluginActionRun, type Renderer, type SettingField, type WidgetDef, type WidgetSource,
 } from "./types";
@@ -82,7 +83,7 @@ export function describePermissions(p: Permissions): string[] {
   return out;
 }
 
-function settingFields(v: unknown, where: string): SettingField[] {
+export function settingFields(v: unknown, where: string): SettingField[] {
   if (v === undefined || v === null) return [];
   if (!Array.isArray(v) || v.length > 20) return fail(`${where} must be a list of up to 20 fields`);
   const seen = new Set<string>();
@@ -117,6 +118,14 @@ export const templateKeys = (s: string): string[] => [...s.matchAll(/\{\{\s*([A-
 function checkTemplates(strs: string[], fields: SettingField[], where: string): void {
   const known = new Set(fields.map((f) => f.key));
   for (const s of strs) for (const k of templateKeys(s)) if (!known.has(k)) fail(`${where} uses {{${k}}} but no setting named "${k}" is declared`);
+}
+
+/**
+ * A command line never carries {{settings}}: a value with a quote or a `;` would become code. A command reads its settings from the
+ * environment instead: $NOOKDECK_SETTING_<KEY> (macOS/Linux sh) or $env:NOOKDECK_SETTING_<KEY> (PowerShell), key upper-cased.
+ */
+function noTemplates(command: string, where: string): void {
+  if (/\{\{/.test(command)) fail(`${where} must not use {{settings}}: a value could contain quotes and run as code. Read it from the environment instead: "$NOOKDECK_SETTING_<KEY>" in sh, or $env:NOOKDECK_SETTING_<KEY> in PowerShell (key in capitals)`);
 }
 
 /** The host a URL template calls. It must be fixed text (no {{...}}), so the install dialog can show it and the permission can be checked. */
@@ -154,7 +163,8 @@ function need(perms: Permissions, host: string | null, shell: boolean, keyboard:
   if (keyboard && !perms.keyboard) fail(`${where} presses keys or types, so permissions.keyboard must be true`);
 }
 
-function parseSource(v: unknown, fields: SettingField[], perms: Permissions, where: string): WidgetSource {
+function parseSource(v: unknown, fields: SettingField[], perms: Permissions, where: string, hasMain = false): WidgetSource {
+  if (v === undefined && hasMain) return { agent: {} };
   if (!isObj(v)) return fail(`${where} must be an object`);
   const map = v.map === undefined ? undefined : isObj(v.map) ? v.map : fail(`${where}.map must be an object`);
   if (map) for (const [k, val] of Object.entries(map)) if (typeof val === "string") checkTemplates([val], fields, `${where}.map.${k}`);
@@ -170,11 +180,15 @@ function parseSource(v: unknown, fields: SettingField[], perms: Permissions, whe
     if (!isObj(v.command)) fail(`${where}.command must be an object`);
     const run = text(v.command.run, `${where}.command.run`, 2000);
     need(perms, null, true, false, where);
-    checkTemplates([run], fields, `${where}.command`);
+    noTemplates(run, `${where}.command.run`);
     if (v.command.parse !== undefined && !["json", "text"].includes(v.command.parse)) fail(`${where}.command.parse must be json or text`);
     return { command: { run, ...everyField(v.command.every, `${where}.command.every`), ...(v.command.parse ? { parse: v.command.parse } : {}) }, ...(map ? { map } : {}) };
   }
-  if (v.agent !== undefined) return fail(`${where}.agent needs a code plugin, which this version of Nookdeck cannot run yet`);
+  if (v.agent !== undefined) {
+    if (!hasMain) return fail(`${where}.agent needs a code plugin: set "main" to the entry file`);
+    const a = v.agent === true ? {} : isObj(v.agent) ? v.agent : fail(`${where}.agent must be true or an object`);
+    return { agent: { ...everyField(a.every, `${where}.agent.every`) } };
+  }
   return fail(`${where} needs "http" or "command"`);
 }
 
@@ -190,19 +204,23 @@ function macroNeeds(steps: MacroStep[], perms: Permissions, where: string): void
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 
-function parseAction(a: unknown, perms: Permissions, shared: SettingField[], i: number): ActionDef {
+function parseAction(a: unknown, perms: Permissions, shared: SettingField[], i: number, hasMain = false): ActionDef {
   const where = `actions[${i}]`;
   if (!isObj(a)) return fail(`${where} must be an object`);
   const id = text(a.id, `${where}.id`, 48);
   if (!ID_PART_RE.test(id)) fail(`${where}.id must be lowercase letters, digits, - and _`);
   const settings = settingFields(a.settings, `${where}.settings`);
-  const r = a.run;
+  const r = a.run === undefined && hasMain ? { agent: true } : a.run;
   if (!isObj(r)) return fail(`${where}.run must be an object with "macro" or "http"`);
   let run: PluginActionRun;
-  if (r.macro !== undefined) {
+  if (r.agent !== undefined) {
+    if (!hasMain) return fail(`${where}.run.agent needs a code plugin: set "main" to the entry file`);
+    run = { agent: true };
+  } else if (r.macro !== undefined) {
     const steps = macroSteps(r.macro, `${where}.run.macro`);
     macroNeeds(steps, perms, `${where}.run.macro`);
-    checkTemplates(steps.flatMap((s) => Object.values(s).filter((x): x is string => typeof x === "string")), [...shared, ...settings], `${where}.run.macro`);
+    steps.forEach((s, i) => { if (s.kind === "shell") noTemplates(s.command, `${where}.run.macro[${i}].command`); });
+    checkTemplates(steps.filter((s) => s.kind !== "shell").flatMap((s) => Object.values(s).filter((x): x is string => typeof x === "string")), [...shared, ...settings], `${where}.run.macro`);
     run = { macro: steps };
   } else if (r.http !== undefined) {
     if (!isObj(r.http)) return fail(`${where}.run.http must be an object`);
@@ -217,7 +235,7 @@ function parseAction(a: unknown, perms: Permissions, shared: SettingField[], i: 
   return { id, name: text(a.name ?? id, `${where}.name`, 60), settings, run };
 }
 
-function parseWidget(w: unknown, perms: Permissions, shared: SettingField[], i: number): WidgetDef {
+function parseWidget(w: unknown, perms: Permissions, shared: SettingField[], i: number, hasMain = false): WidgetDef {
   const where = `widgets[${i}]`;
   if (!isObj(w)) return fail(`${where} must be an object`);
   const id = text(w.id, `${where}.id`, 48);
@@ -225,7 +243,25 @@ function parseWidget(w: unknown, perms: Permissions, shared: SettingField[], i: 
   if (!(RENDERERS as readonly string[]).includes(w.render)) fail(`${where}.render must be one of ${RENDERERS.join(", ")}`);
   const sizes = w.sizes === undefined ? ["2x1"] : Array.isArray(w.sizes) && w.sizes.length && w.sizes.length <= 12 && w.sizes.every((s: unknown) => typeof s === "string" && SIZE_RE.test(s)) ? (w.sizes as string[]) : fail(`${where}.sizes must be a list like ["2x1","2x2"]`);
   const settings = settingFields(w.settings, `${where}.settings`);
-  return { id, name: text(w.name ?? id, `${where}.name`, 60), render: w.render as Renderer, sizes, settings, source: parseSource(w.source, [...shared, ...settings], perms, `${where}.source`) };
+  // `preview`: sample data (the renderer's `data` object) shown before install. Checked with the same rules as live data; never fetched.
+  let preview: unknown;
+  if (w.preview !== undefined) {
+    if (!isObj(w.preview)) return fail(`${where}.preview must be an object with sample data for the "${w.render}" renderer`);
+    const cleaned = cleanRender(w.render as Renderer, w.preview);
+    if ("error" in cleaned) return fail(`${where}.preview is not valid ${w.render} data: ${cleaned.error}`);
+    preview = cleaned.data;
+  }
+  return { id, name: text(w.name ?? id, `${where}.name`, 60), render: w.render as Renderer, sizes, settings, ...(preview !== undefined ? { preview } : {}), source: parseSource(w.source, [...shared, ...settings], perms, `${where}.source`, hasMain) };
+}
+
+const MAIN_RE = /^[A-Za-z0-9_][A-Za-z0-9_./-]{0,98}\.(?:js|mjs|cjs|ts|mts)$/;
+/** `main`: a relative path to the entry module inside the plugin folder, normalized (no "..", no leading "/", forward slashes). */
+export function parseMain(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "string") return fail("main must be a path like \"index.ts\"");
+  const p = v.replace(/^\.\//, "");
+  if (!MAIN_RE.test(p) || p.split("/").some((s) => s === ".." || s === "." || s === "")) return fail('main must be a relative path to a .js, .mjs, .cjs, .ts or .mts file inside the plugin folder, like "index.ts"');
+  return p;
 }
 
 /**
@@ -245,11 +281,11 @@ export function parseManifest(raw: unknown, opts: { agentVersion?: string; allow
     if (!/^[>=^~\s]*\d+(\.\d+){0,2}\s*$/.test(nookdeck)) fail('nookdeck must look like ">=0.2.0"');
     if (opts.agentVersion && !versionAtLeast(opts.agentVersion, nookdeck)) fail(`this plugin needs Nookdeck ${nookdeck}, you have ${opts.agentVersion}. Update Nookdeck first.`);
   }
-  if (raw.main !== undefined && raw.main !== null) fail("this plugin has code (main), which this version of Nookdeck cannot run yet. Only no-code plugins can be installed.");
+  const main = parseMain(raw.main);
   const permissions = parsePermissions(raw.permissions);
   const settings = settingFields(raw.settings, "settings");
-  const widgets = (raw.widgets === undefined ? [] : Array.isArray(raw.widgets) && raw.widgets.length <= 20 ? raw.widgets : fail("widgets must be a list of up to 20 widgets")).map((w: unknown, i: number) => parseWidget(w, permissions, settings, i));
-  const actions = (raw.actions === undefined ? [] : Array.isArray(raw.actions) && raw.actions.length <= 20 ? raw.actions : fail("actions must be a list of up to 20 actions")).map((a: unknown, i: number) => parseAction(a, permissions, settings, i));
+  const widgets = (raw.widgets === undefined ? [] : Array.isArray(raw.widgets) && raw.widgets.length <= 20 ? raw.widgets : fail("widgets must be a list of up to 20 widgets")).map((w: unknown, i: number) => parseWidget(w, permissions, settings, i, main !== null));
+  const actions = (raw.actions === undefined ? [] : Array.isArray(raw.actions) && raw.actions.length <= 20 ? raw.actions : fail("actions must be a list of up to 20 actions")).map((a: unknown, i: number) => parseAction(a, permissions, settings, i, main !== null));
   for (const [name, list] of [["widgets", widgets], ["actions", actions]] as const) {
     const seen = new Set<string>();
     for (const x of list) { if (seen.has(x.id)) fail(`${name}: id "${x.id}" is used twice`); seen.add(x.id); }
@@ -277,6 +313,6 @@ export function parseManifest(raw: unknown, opts: { agentVersion?: string; allow
     ...(raw.author !== undefined ? { author: text(raw.author, "author", 80, false) } : {}),
     ...(raw.description !== undefined ? { description: text(raw.description, "description", 300, false) } : {}),
     ...(raw.icon !== undefined ? { icon: text(raw.icon, "icon", 140, false) } : {}),
-    permissions, settings, widgets, actions, themes, layouts, main: null,
+    permissions, settings, widgets, actions, themes, layouts, main,
   };
 }

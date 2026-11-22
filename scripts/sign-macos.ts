@@ -44,10 +44,11 @@ function sh(argv: string[], secrets: string[] = []): string {
   return out;
 }
 
-export function signMacos(file: string, env: Record<string, string | undefined> = process.env): SignMode {
+/** `identifier`: the code-signing identifier (the agent's dev.nookdeck.agent, or dev.nookdeck.app for the menu bar app bundle). */
+export function signMacos(file: string, env: Record<string, string | undefined> = process.env, identifier: string = IDENTIFIER): SignMode {
   const mode = chooseMode(env);
   checkRequired(mode, env);
-  sh(["codesign", "--remove-signature", file]);
+  try { sh(["codesign", "--remove-signature", file]); } catch { /* an unsigned bundle has nothing to remove */ }
   if (mode === "adhoc") {
     sh(["codesign", "--force", "-s", "-", file]);
     console.warn(`signed ${file} AD-HOC: no signing identity found. Accessibility resets on every update. Set MACOS_SIGN_P12 (CI) or create ${signDir(env)}.`);
@@ -57,7 +58,7 @@ export function signMacos(file: string, env: Record<string, string | undefined> 
     const pw = readFileSync(join(dir, "keychain-password.txt"), "utf8").trim();
     const hash = readFileSync(join(dir, "sha1.txt"), "utf8").trim();
     sh(["security", "unlock-keychain", "-p", pw, kc], [pw]);
-    sh(["codesign", "--force", "-s", hash, "-i", IDENTIFIER, "--keychain", kc, file], [pw]);
+    sh(["codesign", "--force", "-s", hash, "-i", identifier, "--keychain", kc, file], [pw]);
     console.log(`signed ${file} with the local identity ${hash.slice(0, 8)}...`);
   } else {
     const work = mkdtempSync(join(tmpdir(), "nookdeck-sign-"));
@@ -78,7 +79,7 @@ export function signMacos(file: string, env: Record<string, string | undefined> 
       sh(["security", "list-keychains", "-d", "user", "-s", kc, ...listed]);
       const hash = /\b([0-9A-F]{40})\b/.exec(sh(["security", "find-identity", "-p", "codesigning", kc]))?.[1];
       if (!hash) throw new Error("the imported .p12 has no signing identity");
-      sh(["codesign", "--force", "-s", hash, "-i", IDENTIFIER, "--keychain", kc, file], [pw, p12Pass]);
+      sh(["codesign", "--force", "-s", hash, "-i", identifier, "--keychain", kc, file], [pw, p12Pass]);
       console.log(`signed ${file} with the CI identity ${hash.slice(0, 8)}...`);
     } finally {
       if (listed.length) Bun.spawnSync(["security", "list-keychains", "-d", "user", "-s", ...listed]);

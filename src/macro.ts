@@ -28,7 +28,7 @@ function toAction(st: MacroStep): Action | null {
     case "hotkey": return { type: "hotkey", keys: st.keys };
     case "type": return { type: "type", text: st.text };
     case "open": return { type: "open", target: st.target };
-    case "shell": return { type: "shell", command: st.command };
+    case "shell": return { type: "shell", command: st.command, ...(st.env ? { env: st.env } : {}) };
     case "media": return { type: "media", command: st.command };
     case "volume": return { type: "volume", command: st.command };
     case "hass": return { type: "hass", service: st.service, ...(st.entityId ? { entityId: st.entityId } : {}), ...(st.data ? { data: st.data } : {}) };

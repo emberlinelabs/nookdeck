@@ -1,10 +1,10 @@
 /** Runs argv and returns stdout. Throws on a non-zero exit, a missing binary or a timeout. (Shared by every platform.) */
 export const ACTION_TIMEOUT_MS = 10_000;
 
-export async function runCapture(argv: string[], timeoutMs = ACTION_TIMEOUT_MS, stdin?: string): Promise<string> {
+export async function runCapture(argv: string[], timeoutMs = ACTION_TIMEOUT_MS, stdin?: string, env?: Record<string, string>): Promise<string> {
   let proc: ReturnType<typeof Bun.spawn>;
   try {
-    proc = Bun.spawn(argv, { stdin: stdin === undefined ? "ignore" : new Response(stdin), stdout: "pipe", stderr: "pipe", windowsHide: true } as any);
+    proc = Bun.spawn(argv, { stdin: stdin === undefined ? "ignore" : new Response(stdin), stdout: "pipe", stderr: "pipe", windowsHide: true, ...(env ? { env: { ...process.env, ...env } } : {}) } as any);
   } catch (err: any) {
     if (err?.code === "ENOENT" || /not found|ENOENT/i.test(String(err?.message))) {
       throw new Error(`${argv[0]} not found; is it installed?`);
