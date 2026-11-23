@@ -1,3 +1,26 @@
+## Nookdeck 0.4.0: desktop apps and themes
+
+Upgrading: run the install command below again, or `nookdeck update`. Or install the new app (below).
+
+### New
+
+- **Desktop apps.** A menu bar app for macOS (`Nookdeck.dmg`) and a tray app for Windows (`Nookdeck-Setup.exe`). They start and stop Nookdeck, show its state, open the management page and the pairing QR, and adopt an agent that is already installed, so your layout, phones and permissions stay as they are. The command-line install keeps working.
+- **Themes.** A theme is a pack of looks: pick one under **Theme**, and it is saved at once (with Undo). Each pack can have light and dark variants, an **Auto** mode that follows the phone, and options such as Catppuccin's accent colour. In the box: Nookdeck, Nookdeck Classic (the old presets) and, from the Store, Catppuccin, Tokyo Night, Night Owl, One Dark Pro, JellyFish, SynthWave '84, Cyberpunk, Terminal, Brutalist, Blueprint, Sketchbook, Pixel and Aurora. Browse them with live previews at [nookdeck.app/themes](https://nookdeck.app/themes).
+- **More to customize.** Fonts, background gradients and images, frosted tiles, borders, shadows, state and chart colours, icon style, and a look for one screen only.
+- **Make your own theme.** **Export this look** turns your settings into a theme pack. Packs can bring fonts, icons and their own CSS (checked on install, with no network access and no code). Guide: [docs/themes.md](https://github.com/howznguyen/nookdeck/blob/main/docs/themes.md). If a theme ever makes the phone unreadable, open `/?theme=off` on the phone or run `nookdeck theme reset`.
+- **Plugin tile styles.** Every plugin tile has a **Style** picker (for example line, area, bars or dots for a chart), and tiles look right at every size. A richer status card shows a title, a big value, a detail line and a sparkline: see Uptime ping 1.1.0.
+- **Plugins page.** Discover shows cover cards with each plugin's live tile, and filters by what a plugin may do.
+
+### Fixed
+
+- Text always fits its tile, whatever the theme's font: clocks, numbers, ring charts and button labels.
+- The page dots at the bottom of the phone screen could not be tapped.
+- The robot vacuum's Start, Pause and Dock buttons were stacked and cut off.
+- Now Playing lost its volume control on some tile sizes.
+- `nookdeck install` (Homebrew) could leave the background service stopped when it ran while Nookdeck was running.
+- Permissions page: **Open Settings** answered "not found"; a Claude rate limit was shown as a blocked Keychain; the firewall row was named "Windows Firewall" on a Mac.
+- The menu bar icon was drawn as a dot.
+
 ## Nookdeck 0.3.1
 
 Upgrading: run the install command below again, or `nookdeck update`.
@@ -62,6 +85,9 @@ the QR with the Camera app), and add the page to the home screen.
 | `nookdeck-darwin-arm64.gz` / `nookdeck-darwin-arm64` | macOS on Apple silicon (M1 and later) |
 | `nookdeck-darwin-x64.gz` / `nookdeck-darwin-x64` | macOS on Intel |
 | `nookdeck-windows-x64.exe.gz` / `nookdeck-windows-x64.exe` | Windows 10/11 x64 |
+| `Nookdeck.dmg` | The macOS menu bar app (Apple silicon and Intel): open it and drag Nookdeck to Applications |
+| `Nookdeck-Setup.exe` | The Windows tray app and installer. Not code-signed yet: SmartScreen may ask, choose **More info**, then **Run anyway** |
+| `nookdeck-demo.tgz` | The phone screen as static files, for previewing themes without Nookdeck (used by nookdeck.app) |
 | `SHA256SUMS` | Checksums of every file |
 
 The `.gz` files are the same programs compressed (about a third of the size); the installers use them. To install by

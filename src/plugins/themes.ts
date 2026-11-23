@@ -95,7 +95,7 @@ export function buildThemePackage(theme: Theme | undefined, meta: { id: string; 
   const manifest: Record<string, unknown> = {
     type: "theme", id: meta.id, name: meta.name, version: meta.version ?? "1.0.0",
     ...(meta.author ? { author: meta.author } : {}), ...(meta.description ? { description: meta.description } : {}),
-    nookdeck: ">=0.3.1", theme: look,
+    nookdeck: ">=0.4.0", theme: look,
   };
   if (extra.preview && extra.preview.length <= THEME_PREVIEW_MAX) {
     const name = extra.previewName && /\.(png|jpe?g)$/i.test(extra.previewName) ? extra.previewName : "preview.png";
