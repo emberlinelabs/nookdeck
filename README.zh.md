@@ -18,6 +18,10 @@
 
 <p align="center"><a href="https://nookdeck.app">nookdeck.app</a></p>
 
+<p align="center">
+  <a href="https://macgrove.app/apps/nookdeck"><img src="https://macgrove.app/badge/nookdeck.svg" alt="Featured on MacGrove" width="263" height="32" /></a>
+</p>
+
 把旧手机或平板变成 Stream Deck 风格的控制面板和仪表盘，用来控制你的 Mac 或 Windows 电脑。Nookdeck 是一个运行在电脑上的小型
 agent，向同一 Wi-Fi 下的任意浏览器提供触控界面。手机上无需安装 app，也不需要账号或云服务。
 

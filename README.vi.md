@@ -18,6 +18,10 @@
 
 <p align="center"><a href="https://nookdeck.app">nookdeck.app</a></p>
 
+<p align="center">
+  <a href="https://macgrove.app/apps/nookdeck"><img src="https://macgrove.app/badge/nookdeck.svg" alt="Featured on MacGrove" width="263" height="32" /></a>
+</p>
+
 Biến điện thoại hoặc máy tính bảng cũ thành bảng điều khiển kiểu Stream Deck và màn hình theo dõi cho Mac hoặc PC Windows. Nookdeck
 là một agent nhỏ chạy trên máy tính, phục vụ giao diện cảm ứng cho trình duyệt bất kỳ trong cùng mạng Wi-Fi. Không cần
 cài app trên điện thoại, không cần tài khoản hay dịch vụ đám mây.

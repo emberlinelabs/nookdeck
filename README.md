@@ -18,6 +18,10 @@
 
 <p align="center"><a href="https://nookdeck.app">nookdeck.app</a></p>
 
+<p align="center">
+  <a href="https://macgrove.app/apps/nookdeck"><img src="https://macgrove.app/badge/nookdeck.svg" alt="Featured on MacGrove" width="263" height="32" /></a>
+</p>
+
 Turn an old phone or tablet into a Stream Deck-style control panel and dashboard for your Mac or Windows PC. Nookdeck is a small
 agent that runs on your computer and serves a touch overlay to any browser on the same Wi-Fi. There is no app to
 install on the phone and no account or cloud service.
