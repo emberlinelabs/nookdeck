@@ -6,29 +6,34 @@
 
 <p align="center"><b>Your old phone, a control panel for your computer.</b></p>
 
-<p align="center"><sub>Formerly PhoneDesk. Existing installs migrate automatically on update.</sub></p>
-
 <p align="center">
   <a href="https://github.com/howznguyen/nookdeck/releases"><img alt="Release" src="https://img.shields.io/github/v/release/howznguyen/nookdeck?color=22d3ee&label=release"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-22d3ee"></a>
+  <a href="https://github.com/howznguyen/nookdeck/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/howznguyen/nookdeck?style=flat&color=22d3ee"></a>
   <img alt="macOS and Windows" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows-0b0d10">
 </p>
 
 <p align="center"><b>English</b> · <a href="README.vi.md">Tiếng Việt</a> · <a href="README.zh.md">中文</a></p>
 
-<p align="center"><a href="https://nookdeck.app">nookdeck.app</a></p>
+<p align="center">
+  <a href="https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck.dmg"><b>Download for Mac</b></a> ·
+  <a href="https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck-Setup.exe"><b>Windows</b></a> ·
+  <a href="https://nookdeck.app/themes"><b>Live theme previews</b></a> ·
+  <a href="https://nookdeck.app">nookdeck.app</a>
+</p>
 
 <p align="center">
   <a href="https://macgrove.app/apps/nookdeck"><img src="https://macgrove.app/badge/nookdeck.svg" alt="Featured on MacGrove" width="263" height="32" /></a>
 </p>
 
-Turn an old phone or tablet into a Stream Deck-style control panel and dashboard for your Mac or Windows PC. Nookdeck is a small
-agent that runs on your computer and serves a touch overlay to any browser on the same Wi-Fi. There is no app to
-install on the phone and no account or cloud service.
+Turn an old phone or tablet into a Stream Deck-style control panel and dashboard for your Mac or Windows PC.
+**It runs in the phone's browser, so iPhones, iPads and Android phones all work, even an old iPhone stuck on iOS 12.**
+Nookdeck is a small agent on your computer that serves the touch panel over your Wi-Fi: no app on the phone, no
+account, no cloud.
 
 > **Status:** early (0.x). macOS is the main target, Windows is experimental. Builds are not signed with a Developer ID or notarized: see [Install](#install).
 
-<p align="center"><img src="docs/images/promo-hero.png" alt="Nookdeck: your old phone, a control panel for your computer"></p>
+<p align="center"><img src="docs/images/demo.gif" alt="A 16-second tour with demo data: pages, AI quotas, keys, Home Assistant and a Claude Code question." width="820"></p>
 
 ## What you can do
 
@@ -43,13 +48,16 @@ install on the phone and no account or cloud service.
 | **Automation** | Webhooks that push values and notifications, rules that react to activity on the computer |
 | **Make it yours** | Drag-and-drop grid (8×4, 8×3, 5×3…) with a preview for every screen size, 4 tile styles (Soft, Solid, Outline, iOS), any colour per tile, 5,000+ icons, English, Vietnamese or Simplified Chinese |
 | **Plugins** | Add tiles and buttons from the [plugin Store](https://nookdeck.app/plugins) ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)), or build your own in TypeScript: see the [plugin guide](docs/plugins.md) |
+| **Themes** | 15 theme packs (Catppuccin, Tokyo Night, Cyberpunk, Sketchbook, Pixel…) with light and dark variants, an Auto mode that follows the phone, fonts and backgrounds; [preview them live](https://nookdeck.app/themes) or make your own |
 
 The layout is a fixed grid of square tiles built in a drag-and-drop management page at `http://localhost:7420/manage/`.
 An MCP server lets an AI assistant arrange the layout for you. Runs on macOS, and on Windows 10/11 (experimental).
 
 ## Screenshots
 
-<p align="center"><img src="docs/images/demo.gif" alt="A 16-second tour with demo data: pages, AI quotas, keys, Home Assistant and a Claude Code question." width="820"><br><sub>A 16-second tour with demo data: pages, AI quotas, keys, Home Assistant and a Claude Code question.</sub></p>
+<p align="center"><img src="docs/images/promo-hero.png" alt="Nookdeck: your old phone, a control panel for your computer"></p>
+
+<p align="center"><img src="docs/images/themes-grid.png" alt="Nine of the theme packs: Tokyo Night, Catppuccin Latte, Cyberpunk, SynthWave '84, Sketchbook, Terminal, One Dark Pro, Pixel and Blueprint" width="820"><br><sub>A few of the 15 theme packs. <a href="https://nookdeck.app/themes">Preview them all live</a>.</sub></p>
 
 <table>
 <tr>
@@ -160,6 +168,8 @@ Privacy & Security → Accessibility). Windows asks once to allow Nookdeck on th
 | `port 7420 is in use` | Another program uses that port. Run the installer again with `--port 7421` (Mac: `… \| bash -s -- --port 7421`). |
 
 ### Update or remove
+
+Coming from PhoneDesk? Nookdeck is its new name: an update moves your layout, phones and settings over automatically.
 
 - **Update:** run the same install line again. Your layout and paired phones are kept.
 - **Remove (Mac):** `curl -fsSL https://nookdeck.app/scripts/uninstall | bash`. Your data is kept; add `-s -- --purge` after `bash` to delete it too.

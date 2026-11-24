@@ -6,29 +6,34 @@
 
 <p align="center"><b>Điện thoại cũ thành bảng điều khiển cho máy tính.</b></p>
 
-<p align="center"><sub>Trước đây là PhoneDesk. Bản cài sẵn tự động chuyển sang tên mới khi cập nhật.</sub></p>
-
 <p align="center">
   <a href="https://github.com/howznguyen/nookdeck/releases"><img alt="Release" src="https://img.shields.io/github/v/release/howznguyen/nookdeck?color=22d3ee&label=release"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-22d3ee"></a>
+  <a href="https://github.com/howznguyen/nookdeck/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/howznguyen/nookdeck?style=flat&color=22d3ee"></a>
   <img alt="macOS and Windows" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows-0b0d10">
 </p>
 
 <p align="center"><a href="README.md">English</a> · <b>Tiếng Việt</b> · <a href="README.zh.md">中文</a></p>
 
-<p align="center"><a href="https://nookdeck.app">nookdeck.app</a></p>
+<p align="center">
+  <a href="https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck.dmg"><b>Tải cho Mac</b></a> ·
+  <a href="https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck-Setup.exe"><b>Windows</b></a> ·
+  <a href="https://nookdeck.app/vi/themes"><b>Xem trước giao diện</b></a> ·
+  <a href="https://nookdeck.app/vi">nookdeck.app</a>
+</p>
 
 <p align="center">
   <a href="https://macgrove.app/apps/nookdeck"><img src="https://macgrove.app/badge/nookdeck.svg" alt="Featured on MacGrove" width="263" height="32" /></a>
 </p>
 
-Biến điện thoại hoặc máy tính bảng cũ thành bảng điều khiển kiểu Stream Deck và màn hình theo dõi cho Mac hoặc PC Windows. Nookdeck
-là một agent nhỏ chạy trên máy tính, phục vụ giao diện cảm ứng cho trình duyệt bất kỳ trong cùng mạng Wi-Fi. Không cần
-cài app trên điện thoại, không cần tài khoản hay dịch vụ đám mây.
+Biến điện thoại hoặc máy tính bảng cũ thành bảng điều khiển kiểu Stream Deck và màn hình theo dõi cho Mac hoặc PC Windows.
+**Chạy trên trình duyệt của điện thoại, nên iPhone, iPad hay Android đều dùng được, kể cả iPhone cũ chỉ lên được iOS 12.**
+Nookdeck là một agent nhỏ trên máy tính, phục vụ bảng cảm ứng qua Wi-Fi: không cần cài app trên điện thoại, không cần
+tài khoản, không dùng đám mây.
 
 > **Trạng thái:** bản đầu (0.x). Hỗ trợ chính là macOS, Windows đang thử nghiệm. Binary chưa ký bằng Developer ID và chưa notarize: xem [Cài đặt](#cài-đặt).
 
-<p align="center"><img src="docs/images/promo-hero.png" alt="Nookdeck: điện thoại cũ thành bảng điều khiển cho máy tính"></p>
+<p align="center"><img src="docs/images/demo.gif" alt="Một vòng 16 giây với dữ liệu mẫu: các trang, quota AI, phím, Home Assistant và câu hỏi của Claude Code." width="820"></p>
 
 ## Làm được gì
 
@@ -43,13 +48,16 @@ cài app trên điện thoại, không cần tài khoản hay dịch vụ đám 
 | **Tự động hóa** | Webhook đẩy giá trị và thông báo, rule phản ứng theo hoạt động trên máy |
 | **Tùy biến** | Lưới kéo thả (8×4, 8×3, 5×3…) có xem trước theo từng cỡ màn hình, 4 kiểu ô (Soft, Solid, Outline, iOS), màu riêng cho từng ô, hơn 5.000 icon, tiếng Anh, tiếng Việt và tiếng Trung |
 | **Plugin** | Thêm ô và nút từ [Cửa hàng plugin](https://nookdeck.app/plugins) ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)), hoặc tự viết bằng TypeScript: xem [hướng dẫn plugin](docs/plugins.md) |
+| **Giao diện** | 15 bộ giao diện (Catppuccin, Tokyo Night, Cyberpunk, Sketchbook, Pixel…) có bản sáng và tối, chế độ Tự động theo điện thoại, font và hình nền; [xem trước trực tiếp](https://nookdeck.app/vi/themes) hoặc tự làm |
 
 Layout là lưới ô vuông cố định, sắp xếp bằng kéo thả ở trang quản lý `http://localhost:7420/manage/`. Có MCP server để
 trợ lý AI sắp xếp layout giúp bạn. Chạy trên macOS, và Windows 10/11 (thử nghiệm).
 
 ## Ảnh chụp
 
-<p align="center"><img src="docs/images/demo.gif" alt="Một vòng 16 giây với dữ liệu mẫu: các trang, quota AI, phím, Home Assistant và câu hỏi của Claude Code." width="820"><br><sub>Một vòng 16 giây với dữ liệu mẫu: các trang, quota AI, phím, Home Assistant và câu hỏi của Claude Code.</sub></p>
+<p align="center"><img src="docs/images/promo-hero.png" alt="Nookdeck: điện thoại cũ thành bảng điều khiển cho máy tính"></p>
+
+<p align="center"><img src="docs/images/themes-grid.png" alt="Chín bộ giao diện: Tokyo Night, Catppuccin Latte, Cyberpunk, SynthWave '84, Sketchbook, Terminal, One Dark Pro, Pixel và Blueprint" width="820"><br><sub>Một vài trong 15 bộ giao diện. <a href="https://nookdeck.app/vi/themes">Xem trước tất cả</a>.</sub></p>
 
 <table>
 <tr>
@@ -160,6 +168,8 @@ tư & Bảo mật → Trợ năng). Windows hỏi một lần cho Nookdeck dùng
 | `port 7420 is in use` | Có chương trình khác đang dùng cổng đó. Chạy lại bộ cài với `--port 7421` (Mac: `… \| bash -s -- --port 7421`). |
 
 ### Cập nhật hoặc gỡ
+
+Đang dùng PhoneDesk? Nookdeck là tên mới của nó: khi cập nhật, bố cục, điện thoại đã ghép và cài đặt được chuyển sang tự động.
 
 - **Cập nhật:** chạy lại đúng dòng lệnh cài. Layout và điện thoại đã ghép đôi vẫn giữ nguyên.
 - **Gỡ (Mac):** `curl -fsSL https://nookdeck.app/scripts/uninstall | bash`. Dữ liệu được giữ lại; thêm `-s -- --purge` sau `bash` để xóa luôn.

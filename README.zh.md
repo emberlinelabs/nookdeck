@@ -6,28 +6,33 @@
 
 <p align="center"><b>把旧手机变成电脑的控制面板。</b></p>
 
-<p align="center"><sub>原名 PhoneDesk。已有安装在更新时会自动迁移。</sub></p>
-
 <p align="center">
   <a href="https://github.com/howznguyen/nookdeck/releases"><img alt="Release" src="https://img.shields.io/github/v/release/howznguyen/nookdeck?color=22d3ee&label=release"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-22d3ee"></a>
+  <a href="https://github.com/howznguyen/nookdeck/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/howznguyen/nookdeck?style=flat&color=22d3ee"></a>
   <img alt="macOS and Windows" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows-0b0d10">
 </p>
 
 <p align="center"><a href="README.md">English</a> · <a href="README.vi.md">Tiếng Việt</a> · <b>中文</b></p>
 
-<p align="center"><a href="https://nookdeck.app">nookdeck.app</a></p>
+<p align="center">
+  <a href="https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck.dmg"><b>下载 Mac 版</b></a> ·
+  <a href="https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck-Setup.exe"><b>Windows</b></a> ·
+  <a href="https://nookdeck.app/zh/themes"><b>在线预览主题</b></a> ·
+  <a href="https://nookdeck.app/zh">nookdeck.app</a>
+</p>
 
 <p align="center">
   <a href="https://macgrove.app/apps/nookdeck"><img src="https://macgrove.app/badge/nookdeck.svg" alt="Featured on MacGrove" width="263" height="32" /></a>
 </p>
 
-把旧手机或平板变成 Stream Deck 风格的控制面板和仪表盘，用来控制你的 Mac 或 Windows 电脑。Nookdeck 是一个运行在电脑上的小型
-agent，向同一 Wi-Fi 下的任意浏览器提供触控界面。手机上无需安装 app，也不需要账号或云服务。
+把旧手机或平板变成 Stream Deck 风格的控制面板和仪表盘，用来控制你的 Mac 或 Windows 电脑。
+**它运行在手机浏览器里，所以 iPhone、iPad 和 Android 都能用，连停留在 iOS 12 的旧 iPhone 也可以。**
+Nookdeck 是电脑上的一个小型 agent，通过 Wi-Fi 提供触控面板：手机上无需安装 app，不需要账号，也不用云服务。
 
 > **状态：** 早期版本（0.x）。macOS 是主要目标平台，Windows 为实验性支持。安装包没有使用 Developer ID 签名，也没有经过公证：见[安装](#安装)。
 
-<p align="center"><img src="docs/images/promo-hero.png" alt="Nookdeck：把旧手机变成电脑的控制面板"></p>
+<p align="center"><img src="docs/images/demo.gif" alt="16 秒演示（演示数据）：页面、AI 额度、按键、Home Assistant 和一个 Claude Code 提问。" width="820"></p>
 
 ## 你可以做什么
 
@@ -42,13 +47,16 @@ agent，向同一 Wi-Fi 下的任意浏览器提供触控界面。手机上无�
 | **自动化** | 推送数值和通知的 Webhook，以及根据电脑上的活动触发的规则 |
 | **个性化** | 可拖放的网格（8×4、8×3、5×3…），可按每种屏幕尺寸预览，4 种磁贴样式（Soft、Solid、Outline、iOS），每个磁贴可设任意颜色，5,000+ 图标，English、Vietnamese 和 Chinese |
 | **插件** | 从[插件商店](https://nookdeck.app/plugins)（[nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)）添加磁贴和按钮，或用 TypeScript 自己开发：参阅[插件指南](docs/plugins.md) |
+| **主题** | 15 套主题（Catppuccin、Tokyo Night、Cyberpunk、Sketchbook、Pixel…），有浅色和深色版本、跟随手机的自动模式、字体和背景；可[在线预览](https://nookdeck.app/zh/themes)，也可以自己制作 |
 
 布局是由方形磁贴组成的固定网格，在 `http://localhost:7420/manage/` 的拖放式管理页面中编排。MCP 服务器可以让 AI 助手帮你排布局。
 支持 macOS，以及 Windows 10/11（实验性）。
 
 ## 截图
 
-<p align="center"><img src="docs/images/demo.gif" alt="16 秒演示（演示数据）：页面、AI 额度、按键、Home Assistant 和一个 Claude Code 提问。" width="820"><br><sub>16 秒演示（演示数据）：页面、AI 额度、按键、Home Assistant 和一个 Claude Code 提问。</sub></p>
+<p align="center"><img src="docs/images/promo-hero.png" alt="Nookdeck：把旧手机变成电脑的控制面板"></p>
+
+<p align="center"><img src="docs/images/themes-grid.png" alt="九套主题：Tokyo Night、Catppuccin Latte、Cyberpunk、SynthWave '84、Sketchbook、Terminal、One Dark Pro、Pixel 和 Blueprint" width="820"><br><sub>15 套主题中的几套。<a href="https://nookdeck.app/zh/themes">在线预览全部主题</a>。</sub></p>
 
 <table>
 <tr>
@@ -155,6 +163,8 @@ irm https://nookdeck.app/scripts/install.ps1 | iex
 | `port 7420 is in use` | 另一个程序占用了该端口。用 `--port 7421` 重新运行安装程序（Mac：`… \| bash -s -- --port 7421`）。 |
 
 ### 更新或卸载
+
+以前用过 PhoneDesk？Nookdeck 是它的新名字：更新时会自动迁移你的布局、已配对的手机和设置。
 
 - **更新：** 再运行一遍同样的安装命令。你的布局和已配对的手机会保留。
 - **卸载（Mac）：** `curl -fsSL https://nookdeck.app/scripts/uninstall | bash`。数据会保留；在 `bash` 后加上 `-s -- --purge` 可一并删除。
