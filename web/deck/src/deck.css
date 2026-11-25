@@ -3704,6 +3704,36 @@
 .pd-pcard__prog { display: block; -webkit-flex: 0 0 auto; flex: 0 0 auto; height: 0.5em; min-height: 4px; border-radius: 999px; background: var(--pd-border-strong); overflow: hidden; }
 .pd-pcard__prog > i { display: block; height: 100%; border-radius: 999px; }
 .pd-pcard__row > .pd-pcard__prog { -webkit-flex: 1 1 0%; flex: 1 1 0%; min-width: 2em; }
+/* rings (and, for the boxes around them, tile buttons and stack rows): each takes an equal share of the free space (so its size never depends on its dial, which card.tsx sizes to fit) */
+.pd-pcard__box.pd-pcard__fills, .pd-pcard__row > .pd-pcard__box.pd-pcard__fills { -webkit-flex: 1 1 0%; flex: 1 1 0%; }
+.pd-pcard > .pd-pcard__box.pd-pcard__fills { -webkit-flex: 1 1 auto; flex: 1 1 auto; }
+.pd-pcard__row > .pd-pcard__fills { -webkit-align-self: stretch; align-self: stretch; }
+.pd-pcard__col > .pd-pcard__ring { -webkit-align-self: stretch; align-self: stretch; }
+/* stack: "auto" rows take the free space (their box decides the direction); card.tsx swaps row and col */
+.pd-pcard__box.pd-pcard__stack, .pd-pcard__row > .pd-pcard__box.pd-pcard__stack { -webkit-flex: 1 1 0%; flex: 1 1 0%; }
+.pd-pcard > .pd-pcard__box.pd-pcard__stack { -webkit-flex: 1 1 auto; flex: 1 1 auto; }
+.pd-pcard__row.pd-pcard__sided > .pd-pcard__box { -webkit-flex: 1 1 0%; flex: 1 1 0%; }
+.pd-pcard__box.pd-pcard__stacked { -webkit-align-items: center; align-items: center; text-align: center; }
+.pd-pcard__stacked.pd-pcard__stacked > .pd-pcard__box:not(.pd-pcard__fills) { -webkit-flex: 0 0 auto; flex: 0 0 auto; }
+.pd-pcard__stacked .pd-pcard__row:not(.pd-pcard__al-end):not(.pd-pcard__al-between) { -webkit-justify-content: center; justify-content: center; }
+.pd-pcard__stacked > .pd-pcard__pill, .pd-pcard__stacked .pd-pcard__col > .pd-pcard__pill { -webkit-align-self: center; align-self: center; }
+.pd-pcard__ring { position: relative; display: block; -webkit-flex: 1 1 0%; flex: 1 1 0%; min-width: 0; min-height: 2.6em; }
+.pd-pcard > .pd-pcard__ring { margin: 0; -webkit-flex: 1 1 auto; flex: 1 1 auto; }
+.pd-pcard__row > .pd-pcard__ring { -webkit-align-self: stretch; align-self: stretch; }
+/* hidden: nothing in a ring may count as overflow of the boxes around it */
+.pd-pcard__ringin { overflow: hidden; position: absolute; left: 0; top: 0; right: 0; bottom: 0; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; }
+.pd-pcard__dial { position: relative; display: block; -webkit-flex: 0 0 auto; flex: 0 0 auto; }
+.pd-pcard__dial > svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.pd-pcard__rtrack { stroke: var(--pd-muted); stroke-opacity: 0.28; }
+.pd-pcard__rarc { -webkit-transition: stroke-dashoffset 400ms var(--pd-ease-out); transition: stroke-dashoffset 400ms var(--pd-ease-out); }
+.pd-pcard__rmid { position: absolute; left: 0; top: 0; right: 0; bottom: 0; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; line-height: 1; }
+.pd-pcard__rt { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pd-pcard__ri { display: block; line-height: 1; text-align: center; }
+.pd-pcard__ri > * { display: block; width: 100% !important; height: 100% !important; }
+.pd-pcard__ri > * > svg { width: 100%; height: 100%; }
+.pd-pcard__ri > .pd-ic-txt { font-size: inherit !important; line-height: 1.2 !important; }
+.pd-pcard__rl { display: block; -webkit-flex: 0 0 auto; flex: 0 0 auto; max-width: 100%; margin-top: 2px; font-size: 0.82em; font-weight: 600; line-height: 1.2; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: reduce) { .pd-pcard__rarc { -webkit-transition: none; transition: none; } }
 .pd-pcard__spark { position: relative; display: block; -webkit-flex: 1 1 0%; flex: 1 1 0%; min-height: 1.2em; min-width: 3em; }
 .pd-pcard__row > .pd-pcard__spark { height: 2.2em; }
 .pd-pcard__spark svg { position: absolute; left: 0; top: 0; }
@@ -3720,9 +3750,28 @@
 .pd-pcard .pd-pcard__btn--icon { padding: 0; width: 2.5em; min-width: 28px; -webkit-flex: 0 0 auto; flex: 0 0 auto; }
 .pd-pcard__row.pd-pcard__grow > .pd-pcard__btn:not(.pd-pcard__btn--icon), .pd-pcard .pd-pcard__col > .pd-pcard__row > .pd-pcard__btn:not(.pd-pcard__btn--icon) { -webkit-flex: 1 1 auto; flex: 1 1 auto; }
 .pd-pcard .pd-pcard__btn--active { color: var(--pd-bg) !important; }
-.pd-pcard .pd-pcard__btn:active, .pd-pcard__btn--busy { transform: scale(0.95); opacity: 0.7; }
+.pd-pcard .pd-pcard__btn:active, .pd-pcard__btn[data-busy] { transform: scale(0.95); opacity: 0.7; }
 .pd-pcard__bl { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pd-pcard__bi + .pd-pcard__bl { margin-left: 0.4em; }
+/* layout: "tile": the button fills its cell. Five classes, to win over the rules that size ordinary buttons in rows. */
+.pd-pcard .pd-pcard__box > .pd-pcard__btn.pd-pcard__btn--tile.pd-pcard__btn--tile, .pd-pcard > .pd-pcard__btn.pd-pcard__btn--tile { -webkit-flex: 1 1 0%; flex: 1 1 0%; -webkit-align-self: stretch; align-self: stretch; -webkit-flex-direction: column; flex-direction: column; height: auto; min-width: 0; min-height: 2.3em; margin-top: 0; margin-bottom: 0; padding: 2px 4px; text-align: center; }
+.pd-pcard > .pd-pcard__btn.pd-pcard__btn--tile { -webkit-flex: 1 1 auto; flex: 1 1 auto; }
+.pd-pcard .pd-pcard__col[data-gap="4px"] > * + .pd-pcard__btn.pd-pcard__btn--tile.pd-pcard__btn--tile { margin-top: 4px; }
+.pd-pcard .pd-pcard__col[data-gap="8px"] > * + .pd-pcard__btn.pd-pcard__btn--tile.pd-pcard__btn--tile { margin-top: 8px; }
+.pd-pcard .pd-pcard__col[data-gap="12px"] > * + .pd-pcard__btn.pd-pcard__btn--tile.pd-pcard__btn--tile { margin-top: 12px; }
+.pd-pcard__btn--tile > .pd-pcard__bl { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; max-width: 100%; max-height: 2.4em; white-space: normal; line-height: 1.2; }
+.pd-pcard__btn--tile > .pd-pcard__bl.pd-pcard__bl--one { -webkit-line-clamp: 1; max-height: 1.2em; }
+.pd-pcard__btn--tile > .pd-pcard__bl.pd-pcard__bl--break { word-break: break-word; }
+.pd-pcard__btn--tile > .pd-pcard__bi + .pd-pcard__bl { margin-left: 0; margin-top: 3px; }
+.pd-pcard .pd-pcard__btn--tile > .pd-pcard__bi > * { width: 100% !important; height: 100% !important; font-size: inherit !important; }
+.pd-pcard__btn--tile > .pd-pcard__bi > .pd-ic-txt { font-size: 0.85em !important; line-height: 1.2 !important; }
+.pd-pcard__btn--tile.pd-pcard__btn--bare > .pd-pcard__bl { display: none; }
+/* too short for icon over text: side by side, one line, like an ordinary button */
+.pd-pcard .pd-pcard__box > .pd-pcard__btn.pd-pcard__btn--side.pd-pcard__btn--side.pd-pcard__btn--side, .pd-pcard > .pd-pcard__btn.pd-pcard__btn--tile.pd-pcard__btn--side { -webkit-flex-direction: row; flex-direction: row; padding: 0 0.5em; }
+.pd-pcard.pd-pcard--tight .pd-pcard__box > .pd-pcard__btn.pd-pcard__btn--side.pd-pcard__btn--side.pd-pcard__btn--side { padding: 0 0.25em; }
+.pd-pcard__btn--tile.pd-pcard__btn--side > .pd-pcard__bl { display: block; white-space: nowrap; max-height: none; }
+.pd-pcard__btn--tile.pd-pcard__btn--side > .pd-pcard__bi + .pd-pcard__bl { margin-left: 0.3em; margin-top: 0; }
+.pd-pcard .pd-pcard__btn--tile.pd-pcard__btn--side > .pd-pcard__bi > * { width: 1.25em !important; height: 1.25em !important; font-size: 1.1em !important; }
 .pd-pcard.pd-pcard--tight .pd-pcard__btn { padding-left: 0.3em; padding-right: 0.3em; }
 .pd-pcard.pd-pcard--tight .pd-pcard__btn--icon { padding: 0; }
 .pd-pcard--tight .pd-pcard__bi + .pd-pcard__bl { margin-left: 0.2em; }

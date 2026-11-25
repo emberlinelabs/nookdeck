@@ -118,20 +118,53 @@ A widget can suggest a style with `"style"` in its manifest entry, for example `
 
 | `t` | Fields (`?` = optional) |
 |---|---|
-| `row`, `col` | `children`, `gap?` 0-3 (default 1), `align?` `start` / `center` / `end` / `between` (along the row or column), `grow?` (takes the free space) |
+| `row`, `col` | `children`, `gap?` 0-3 (default 1), `align?` `start` / `center` / `end` / `between` (along the row or column), `grow?` (takes the free space). A `row` also takes `stack?` `"auto"` (see below; needs Nookdeck 0.5.1) |
 | `text` | `text`, `size?` `s` / `m` / `l`, `tone?`, `bold?` |
 | `number` | `value` (number or text, such as `"12:30"`), `unit?`, `size?` `m` / `l` / `xl` (default `l`), `tone?` |
 | `pill` | `text`, `tone?` |
 | `progress` | `value` 0 to 1, `tone?` |
+| `ring` | `value` 0 to 1, `tone?` (colour of the arc), `icon?` or `text?` in the centre (`text` up to 6 characters, such as `"95"` or `"18:16"`; it wins over `icon`), `label?` under the ring (up to 40 characters), `size?` `s` / `m` / `l` (default `m`), `arc?` `full` (default) / `gauge` (270 degrees, open at the bottom). Needs Nookdeck 0.5.1 |
 | `sparkline` | `points` (up to 60 numbers), `tone?` |
 | `icon` | `name` (the same names as button icons), `tone?` |
 | `image` | `src` (`data:image/png;base64,...` or `data:image/jpeg;base64,...` only), `fit?` `cover` / `contain` |
-| `button` | `action` (the id of one of your `actions`), `label?` and/or `icon?`, `args?`, `tone?`, `active?` (drawn filled) |
+| `button` | `action` (the id of one of your `actions`), `label?` and/or `icon?`, `args?`, `tone?`, `active?` (drawn filled), `layout?` `"tile"` (see below; needs Nookdeck 0.5.1) |
 | `spacer` | none; takes the free space |
 
 `tone` is `default`, `muted`, `accent` (the tile's colour), `ok`, `warn` or `bad`.
 
 **Limits.** At most 6 levels and 60 parts; a text (any string you show, and each string in `args`) up to 200 characters; `args` up to 20 keys; the card as JSON up to 32 KB not counting image `src` strings; all image `src` strings of one card together up to 204800 characters. Unknown parts and unknown fields are refused. A card that breaks a rule is not drawn: the tile shows the reason (it starts with `card:`). Check it yourself with `validateCard(data)`.
+
+**Rings.** Rings share the free space equally and stay round: put two to four in a `row`, or two rows of two in a `col`, for a battery-widget look. `size` is how much of its share a ring fills (`s` 60%, `m` 80%, `l` all of it), and rings of the same size are drawn equally big. The arc moves smoothly when `value` changes. For `tone`, `default` is the theme's accent and `accent` the tile's colour. On a tile too small for them, the labels under all the rings are left out. A Nookdeck before 0.5.1 refuses a card with a ring, so set `"nookdeck": ">=0.5.1"`.
+
+```ts
+const battery = (name: string, level: number, icon: string) =>
+  card.ring(level / 100, { icon, label: `${level}%`, tone: level <= 20 ? "bad" : "ok" });
+
+card.root(card.row([
+  card.row([battery("Mac", 95, "laptop"), battery("Keys", 62, "keyboard")], { gap: 1, grow: true }),
+  card.row([battery("Mouse", 18, "mouse"), battery("Buds", 80, "headphones")], { gap: 1, grow: true }),
+], { stack: "auto", gap: 1 })); // two rows of two on a square tile, four in a line on a wide one
+```
+
+**One card for wide and square tiles.** A provider is not told the tile's size, so a row can choose for itself: with `stack: "auto"` it is drawn as a column when its box is about square or taller (narrower than 1.4 times its height), and as a row otherwise. Such a row takes the free space. With one ring among other parts, the ring is as large as the row is high when they are side by side (unless you give it a `size`), and takes the space the others leave when stacked. Rows without `stack` never change direction.
+
+```ts
+card.root(card.row([
+  card.ring(0.73, { text: "18:16", arc: "full" }),
+  card.col([card.text("Focus", { bold: true }), card.button("Pause", "toggle", { icon: "pause" })], { gap: 1 }),
+], { stack: "auto", gap: 2 }));
+```
+
+**Tile buttons.** `layout: "tile"` puts the icon above a label of up to two lines, centred, and lets the button fill its share of the free space: use it for a panel of controls. Buttons in a row get equal widths, and rows of them share the height. The icon grows with the button; with no label it is a big icon. On a short tile (such as 2x1) the card's tile buttons put icon and label side by side, and on a very narrow one they show icons alone. Buttons without `layout` are not changed.
+
+```ts
+const key = (label: string, action: string, icon: string, active = false) => card.button(label, action, { icon, active, layout: "tile" });
+
+card.root(card.col([
+  card.row([key("Dark mode", "toggle-dark", "moon", true), key("Keep awake", "keep-awake", "coffee")], { gap: 1, grow: true }),
+  card.row([key("Lock", "lock", "lock"), key("Display off", "display-off", "monitor")], { gap: 1, grow: true }),
+], { gap: 1, grow: true }));
+```
 
 **Fitting.** The same card is drawn at every tile size. The text gets smaller to fit, including until button labels show in full (one label too long for any size keeps the whole card at the smallest text, so keep labels short; when a button with an icon has no room for its label, the buttons with icons show their icons alone); if it still does not fit, the last parts of a column are left out. So put the important parts first, and use `ctx.widgets.provide`'s settings if you want a different card per tile.
 
@@ -175,7 +208,7 @@ export function activate(ctx: PluginContext) {
 }
 ```
 
-The builders are `card.root`, `row`, `col`, `text`, `number`, `pill`, `progress`, `sparkline`, `icon`, `image`, `button(label, action, options?)` and `spacer`. `row` and `col` skip `false`, `null` and `undefined` children, so `cond && card.text("...")` works. `sparkline` keeps the last 60 points. The types are `CardNode` and `CardData`.
+The builders are `card.root`, `row`, `col`, `text`, `number`, `pill`, `progress`, `ring(value, options?)`, `sparkline`, `icon`, `image`, `button(label, action, options?)` and `spacer`. `row` and `col` skip `false`, `null` and `undefined` children, so `cond && card.text("...")` works. `sparkline` keeps the last 60 points. The types are `CardNode` and `CardData`.
 
 A widget with an `http` or `command` source can use `card` too, if its mapped data is a `{ root }`.
 

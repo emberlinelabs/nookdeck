@@ -11,19 +11,24 @@ export type CardAlign = "start" | "center" | "end" | "between";
 export type CardArgs = Record<string, string | number | boolean>;
 
 export type CardNode =
-  | { t: "row" | "col"; gap?: CardGap; align?: CardAlign; grow?: boolean; children: CardNode[] }
+  /** stack "auto" (C3): drawn as a column when the row's own box is about square or taller (width < 1.4 x height). It takes the free space. */
+  | { t: "row"; gap?: CardGap; align?: CardAlign; grow?: boolean; stack?: "auto"; children: CardNode[] }
+  | { t: "col"; gap?: CardGap; align?: CardAlign; grow?: boolean; children: CardNode[] }
   | { t: "text"; text: string; size?: "s" | "m" | "l"; tone?: CardTone; bold?: boolean }
   | { t: "number"; value: string | number; unit?: string; size?: "m" | "l" | "xl"; tone?: CardTone }
   | { t: "pill"; text: string; tone?: CardTone }
   /** 0..1 */
   | { t: "progress"; value: number; tone?: CardTone }
+  /** A ring chart (C3). value 0..1; icon or text in the centre (text wins), label under it. arc "gauge": 270 degrees, open at the bottom. */
+  | { t: "ring"; value: number; tone?: CardTone; icon?: string; text?: string; label?: string; size?: "s" | "m" | "l"; arc?: "full" | "gauge" }
   /** at most 60 points */
   | { t: "sparkline"; points: number[]; tone?: CardTone }
   /** an icon name the deck ships */
   | { t: "icon"; name: string; tone?: CardTone }
   /** data:image/png or data:image/jpeg, base64 */
   | { t: "image"; src: string; fit?: "cover" | "contain" }
-  | { t: "button"; label: string; icon?: string; action: string; args?: CardArgs; tone?: CardTone; active?: boolean }
+  /** layout "tile" (C3): the icon above a label of up to two lines, filling its share of the free space */
+  | { t: "button"; label: string; icon?: string; action: string; args?: CardArgs; tone?: CardTone; active?: boolean; layout?: "tile" }
   | { t: "spacer" };
 
 /** The `data` of a card widget. */
@@ -41,21 +46,24 @@ export const CARD_LIMITS = {
   imageBytes: 200 * 1024,
   points: 60,
   args: 20,
+  ringText: 6,
+  ringLabel: 40,
 } as const;
 
 const TONES = ["default", "muted", "accent", "ok", "warn", "bad"];
 const ALIGNS = ["start", "center", "end", "between"];
 const FIELDS: Record<string, string[]> = {
-  row: ["gap", "align", "grow", "children"],
+  row: ["gap", "align", "grow", "stack", "children"],
   col: ["gap", "align", "grow", "children"],
   text: ["text", "size", "tone", "bold"],
   number: ["value", "unit", "size", "tone"],
   pill: ["text", "tone"],
   progress: ["value", "tone"],
   sparkline: ["points", "tone"],
+  ring: ["value", "tone", "icon", "text", "label", "size", "arc"],
   icon: ["name", "tone"],
   image: ["src", "fit"],
-  button: ["label", "icon", "action", "args", "tone", "active"],
+  button: ["label", "icon", "action", "args", "tone", "active", "layout"],
   spacer: [],
 };
 const ICON_RE = /^[A-Za-z0-9][A-Za-z0-9:._-]{0,63}$/;
@@ -105,6 +113,7 @@ function node(v: unknown, where: string, depth: number, ctx: Ctx): CardNode {
     if (has("gap")) out.gap = oneOf(v.gap, [0, 1, 2, 3], `${where}.gap`);
     if (has("align")) out.align = oneOf(v.align, ALIGNS, `${where}.align`);
     if (has("grow")) out.grow = bool(v.grow, `${where}.grow`);
+    if (has("stack")) out.stack = oneOf(v.stack, ["auto"], `${where}.stack`);
     const list = v.children;
     if (!Array.isArray(list)) return bad(`${where}.children must be a list`);
     if (list.length > CARD_LIMITS.nodes) bad(`the card has more than ${CARD_LIMITS.nodes} parts`);
@@ -125,6 +134,18 @@ function node(v: unknown, where: string, depth: number, ctx: Ctx): CardNode {
   } else if (t === "progress") {
     if (!finite(v.value)) bad(`${where}.value must be a number from 0 to 1`);
     out.value = Math.min(1, Math.max(0, v.value as number));
+    tone();
+  } else if (t === "ring") {
+    if (!finite(v.value)) bad(`${where}.value must be a number from 0 to 1`);
+    out.value = Math.min(1, Math.max(0, v.value as number));
+    if (has("icon")) {
+      if (typeof v.icon !== "string" || !ICON_RE.test(v.icon)) bad(`${where}.icon must be an icon name`);
+      out.icon = v.icon;
+    }
+    if (has("text")) out.text = str(v.text, `${where}.text`, CARD_LIMITS.ringText);
+    if (has("label")) out.label = str(v.label, `${where}.label`, CARD_LIMITS.ringLabel);
+    if (has("size")) out.size = oneOf(v.size, ["s", "m", "l"], `${where}.size`);
+    if (has("arc")) out.arc = oneOf(v.arc, ["full", "gauge"], `${where}.arc`);
     tone();
   } else if (t === "sparkline") {
     const p = v.points;
@@ -154,6 +175,7 @@ function node(v: unknown, where: string, depth: number, ctx: Ctx): CardNode {
     out.action = v.action;
     if (has("args")) out.args = cardArgs(v.args, `${where}.args`);
     if (has("active")) out.active = bool(v.active, `${where}.active`);
+    if (has("layout")) out.layout = oneOf(v.layout, ["tile"], `${where}.layout`);
     tone();
   }
   return out as unknown as CardNode;
@@ -210,12 +232,14 @@ type BoxOpts = { gap?: CardGap; align?: CardAlign; grow?: boolean };
 /** `return { render: "card", data: card.root(card.col([card.text("Hi")])) }` */
 export const card = {
   root: (root: CardNode): CardData => ({ root }),
-  row: (children: CardChildren, o: BoxOpts = {}): CardNode => make("row", { ...o, children: kids(children) }),
+  row: (children: CardChildren, o: BoxOpts & { stack?: "auto" } = {}): CardNode => make("row", { ...o, children: kids(children) }),
   col: (children: CardChildren, o: BoxOpts = {}): CardNode => make("col", { ...o, children: kids(children) }),
   text: (text: string, o: Opts<"text", "text"> = {}): CardNode => make("text", { ...o, text }),
   number: (value: string | number, o: Opts<"number", "value"> = {}): CardNode => make("number", { ...o, value }),
   pill: (text: string, o: Opts<"pill", "text"> = {}): CardNode => make("pill", { ...o, text }),
   progress: (value: number, o: Opts<"progress", "value"> = {}): CardNode => make("progress", { ...o, value }),
+  /** a ring chart: `card.ring(0.95, { icon: "battery", label: "95%", tone: "ok" })` */
+  ring: (value: number, o: Opts<"ring", "value"> = {}): CardNode => make("ring", { ...o, value }),
   /** keeps the last 60 points */
   sparkline: (points: number[], o: Opts<"sparkline", "points"> = {}): CardNode => make("sparkline", { ...o, points: points.slice(-CARD_LIMITS.points) }),
   icon: (name: string, o: Opts<"icon", "name"> = {}): CardNode => make("icon", { ...o, name }),

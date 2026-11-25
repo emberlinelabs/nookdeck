@@ -6,6 +6,7 @@ import { CARD_LIMITS, card, validateCard, type CardNode } from "../src/plugins/c
 import { cleanRender } from "../src/plugins/sources";
 import { parseManifest } from "../src/plugins/manifest";
 import { CARD_REFRESH_MS, PluginRuntime } from "../src/plugins/runtime";
+import { cardStacks, ringTextPx } from "../web/deck/src/plugin-logic";
 import { PluginStore } from "../src/plugins/store";
 import type { MacroStep } from "../src/config";
 import { cardBase, parsePluginItem, validatePlugin } from "../web/deck/src/plugin-logic";
@@ -219,6 +220,9 @@ describe("card classes", () => {
     const tsx = await Bun.file(join(src, "card.tsx")).text();
     const used = tsx.match(/pd-[A-Za-z0-9_-]+/g)!.filter((c) => !tsx.includes("var(--" + c));
     expect(used.filter((c) => !c.startsWith("pd-pcard"))).toEqual([]);
+    // fit() adds classes to a button by hand; a class that changes while it is busy would remove them on tap
+    const buttonClass = tsx.match(/class=\{'pd-pcard__btn'.*\}/)![0];
+    expect(buttonClass).not.toContain("busy");
     const css = await Bun.file(join(src, "deck.css")).text();
     const block = css.indexOf("/* ---------- plugin card renderer");
     expect(block).toBeGreaterThan(0);
@@ -232,10 +236,41 @@ describe("card classes", () => {
     const next = css.indexOf("/* ----------", block + 10); // the section after the card's, if any
     const own = css.slice(block, next < 0 ? undefined : next);
     expect(css.slice(block + own.length)).not.toContain("pd-pcard");
-    for (const rule of own.replace(/\/\*[\s\S]*?\*\//g, "").split("}")) {
+    // a @media line only wraps rules: those inside are checked like the others
+    for (const rule of own.replace(/\/\*[\s\S]*?\*\//g, "").replace(/@media[^{]*\{/g, "").split("}")) {
       const selectors = rule.split("{")[0]!.trim();
       if (selectors) for (const one of selectors.split(",")) expect(one.trim()).toStartWith(".pd-pcard");
     }
     for (const f of new Bun.Glob("*.{ts,tsx}").scanSync(src)) if (f !== "card.tsx") expect(await Bun.file(join(src, f)).text()).not.toContain("pd-pcard");
+  });
+});
+
+describe("rings, stack rows and tile buttons (C3)", () => {
+  test("a ring: value clamped, centre text up to 6 characters, label up to 40, icon names only", () => {
+    const r = validateCard(root(card.ring(1.7, { icon: "battery-4", text: "18:16", label: "x".repeat(40), size: "l", arc: "gauge", tone: "ok" })));
+    expect((r as any).data.root).toEqual({ t: "ring", value: 1, icon: "battery-4", text: "18:16", label: "x".repeat(40), size: "l", arc: "gauge", tone: "ok" });
+    expect((validateCard(root({ t: "ring", value: -2 })) as any).data.root.value).toBe(0);
+    for (const bad of [{ value: "1" }, { value: NaN }, { value: 1, text: "1234567" }, { value: 1, label: "x".repeat(41) }, { value: 1, icon: "<svg>" }, { value: 1, size: "xl" }, { value: 1, arc: "half" }, { value: 1, color: "red" }])
+      expect(err(root({ t: "ring", ...bad }))).toStartWith("card:");
+  });
+  test("stack is for rows, layout for buttons; the builders write both", () => {
+    const made = card.root(card.row([card.button("A", "run", { icon: "moon", layout: "tile" })], { stack: "auto", gap: 2 }));
+    expect((validateCard(made) as any).data).toEqual(made);
+    expect(made.root).toMatchObject({ t: "row", stack: "auto", children: [{ t: "button", layout: "tile" }] });
+    expect(err(root({ t: "row", stack: "always", children: [] }))).toContain("stack");
+    expect(err(root({ t: "col", stack: "auto", children: [] }))).toContain('"stack" is not a field of col');
+    expect(err(root({ t: "button", label: "A", action: "run", layout: "grid" }))).toContain("layout");
+  });
+  test("a stack row is a column when its box is about square or taller", () => {
+    expect([cardStacks(134, 56), cardStacks(56, 56), cardStacks(140, 140), cardStacks(139, 100), cardStacks(140, 100), cardStacks(100, 200)]).toEqual([false, true, true, true, false, true]);
+  });
+  test("centre text stays inside the ring, down to a 52 px dial with five characters", () => {
+    const width = (t: string, px: number) => px * (t.replace(/[:. ]/g, "").length * 0.6 + (t.length - t.replace(/[:. ]/g, "").length) * 0.3);
+    for (const side of [40, 52, 80, 200]) for (const t of ["95", "100%", "18:16", "888888", "5"]) {
+      const px = ringTextPx(side, t);
+      expect(width(t, px)).toBeLessThanOrEqual(side * 0.64);
+      expect(px).toBeLessThanOrEqual(side * 0.28);
+    }
+    expect(ringTextPx(52, "18:16")).toBeGreaterThanOrEqual(11.5);
   });
 });

@@ -137,6 +137,16 @@ export function cardBase(tw: number, th: number): number {
 }
 export const CARD_SHRINK = [1, 0.92, 0.85, 0.78, 0.7]
 export const CARD_MIN_PX = 9
+/** A `stack: "auto"` row is drawn as a column when its box is about square or taller. */
+export const cardStacks = (width: number, height: number): boolean => width < height * 1.4
+/**
+ * The size of a ring's centre text in a dial of `side` px: it fits inside the ring (0.62 of the dial across, with air around it; a tabular digit is
+ * about 0.6 of the font size, ':' '.' and ' ' about half that) and is never larger than 0.28 of the dial.
+ */
+export function ringTextPx(side: number, text: string): number {
+  const ems = Math.max(0.6, (text.length - (text.replace(/[:. ]/g, '').length)) * 0.3 + text.replace(/[:. ]/g, '').length * 0.6)
+  return Math.floor(Math.min(side * 0.28, (side * 0.62) / ems) * 2) / 2
+}
 
 /** An error tile: `error` is the agent's text (may be empty when the data was just invalid). */
 export interface PluginError { error: string }
