@@ -63,7 +63,7 @@ export function CardMonth(props: { node: Extract<CardNode, { t: 'month' }>; path
                     <span key={i} class="pd-pcard__c-cell">
                       <span
                         class={'pd-pcard__c-num' + (today ? ' pd-pcard__c-num--today' : '') + (picked ? ' pd-pcard__c-num--picked' : '')}
-                        style={{ width: px(l.d), height: px(l.d), lineHeight: px(today && !picked ? l.d - 3 : l.d), borderColor: today && !picked ? props.paint.accent : undefined, background: picked ? props.paint.accent : undefined }}
+                        style={{ width: px(l.d), height: px(l.d), borderColor: today && !picked ? props.paint.accent : undefined, background: picked ? props.paint.accent : undefined }}
                       >
                         {+day.slice(8)}
                       </span>

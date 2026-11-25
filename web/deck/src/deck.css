@@ -3789,9 +3789,9 @@
 .pd-pcard__c-line { position: relative; display: -webkit-flex; display: flex; -webkit-flex: 0 0 auto; flex: 0 0 auto; }
 .pd-pcard__c-wd { color: var(--pd-muted); font-size: 0.88em; font-weight: 600; }
 .pd-pcard__c-cell { display: -webkit-flex; display: flex; -webkit-flex: 1 1 0%; flex: 1 1 0%; -webkit-flex-direction: column; flex-direction: column; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; min-width: 0; }
-.pd-pcard__c-num { display: block; box-sizing: border-box; border: 1.5px solid transparent; border-radius: 999px; }
+.pd-pcard__c-num { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; -webkit-flex: 0 0 auto; flex: 0 0 auto; line-height: 1; box-sizing: border-box; border: 1.5px solid transparent; border-radius: 999px; }
 .pd-pcard__c-num--today { font-weight: 700; }
-.pd-pcard__c-num--picked { color: var(--pd-bg); font-weight: 700; line-height: 1; }
+.pd-pcard__c-num--picked { color: var(--pd-bg); font-weight: 700; }
 .pd-pcard__c-dots { position: relative; display: -webkit-flex; display: flex; -webkit-justify-content: center; justify-content: center; height: 4px; }
 .pd-pcard__c-dots > i { display: block; width: 4px; height: 4px; margin: 0 1px; border-radius: 999px; }
 .pd-pcard__c-dots--on > i { box-shadow: 0 0 0 1px var(--pd-bg); }
