@@ -3562,7 +3562,7 @@
 .pd-pl__more { font-size: 11px; color: var(--pd-muted); }
 .pd-pl__cv { display: block; margin-top: 4px; margin-bottom: 4px; font-size: 22px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
 .pd-pl__cv i { font-style: normal; font-size: 12px; font-weight: 500; margin-left: 3px; color: var(--pd-muted); }
-.pd-pl--img { background-position: center; background-repeat: no-repeat; background-color: rgba(127, 127, 140, 0.12); }
+.pd-pl--img { -webkit-flex: 1; flex: 1; min-height: 0; background-position: center; background-repeat: no-repeat; background-color: rgba(127, 127, 140, 0.12); }
 .pd-pl__dot { display: block; width: 14px; height: 14px; border-radius: 50%; margin-bottom: 12px; }
 .pd-pl__sl { font-size: 15px; font-weight: 600; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pd-pl__m { margin-top: 2px; font-size: 10px; line-height: 1.25; color: var(--pd-muted); opacity: 0.8; max-width: 100%; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: break-word; }
