@@ -1,3 +1,22 @@
+## Nookdeck 0.5.1: rings, calendars and better-looking plugins
+
+Upgrading: run the install command below again, or `nookdeck update`, or use **Check for updates** in the app.
+
+### New
+
+- **More card parts for plugins:** ring charts (a full circle or a gauge), a month calendar, a week calendar with an hour grid, and large tile buttons with the icon above the label. Rows can stack on square tiles and sit side by side on wide ones. Guide: [docs/plugins.md](https://github.com/howznguyen/nookdeck/blob/main/docs/plugins.md#cards).
+- **Plugins know their tile size**, so one plugin can look right on a small tile and on a big one.
+- **The Store plugins got a redesign:**
+  - **Batteries:** rings like the iOS Batteries widget, for the Mac, AirPods, Magic devices and other Bluetooth headphones that report a level (for example Sony WH-1000XM4).
+  - **Mac controls** and **Apple Shortcuts:** big tile buttons that fill the card; each shortcut gets an icon that matches its name.
+  - **Pomodoro:** a ring timer with a large Start/Pause button.
+  - **Calendar:** a month beside your agenda on 4x3 and 4x4 tiles, and a week view on wide tiles.
+
+### Fixed
+
+- macOS: the background service now names itself when macOS asks for Bluetooth or Automation access for a plugin. The first time a plugin needs it, allow it in the prompt (or later in **System Settings > Privacy & Security**).
+- A plugin card that names an icon the phone does not have is reported by `nookdeck plugin dev` and in the plugin log.
+
 ## Nookdeck 0.5.0: plugin cards, Mac plugins and screen care
 
 Upgrading: run the install command below again, or `nookdeck update`, or use **Check for updates** in the app.
