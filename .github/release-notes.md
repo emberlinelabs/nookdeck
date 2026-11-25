@@ -1,3 +1,25 @@
+## Nookdeck 0.5.0: plugin cards, Mac plugins and screen care
+
+Upgrading: run the install command below again, or `nookdeck update`, or use **Check for updates** in the app.
+
+### New
+
+- **Plugin cards.** A plugin tile can now be a small card made of built-in parts: text, numbers, pills, progress bars, sparklines, icons, images and buttons. The phone draws it with your theme. No plugin code, HTML or CSS ever runs on the phone, and card buttons can only run the plugin's own declared actions. Guide: [docs/plugins.md](https://github.com/howznguyen/nookdeck/blob/main/docs/plugins.md#cards).
+- **New plugins in the Store**, built on cards:
+  - **Apple Shortcuts** (macOS): run your shortcuts from the phone. The README has recipes for turning a Focus on or off and setting the display brightness.
+  - **Mac controls** (macOS): dark mode, keep awake, display off and lock.
+  - **Batteries** (macOS): the Mac's battery, Magic Keyboard, Mouse and Trackpad, and AirPods.
+  - **Pomodoro**: a focus timer that keeps time on the computer, so it carries on while the phone sleeps.
+  - **Calendar**: upcoming events from Google, iCloud or Outlook calendar links. The links stay on the computer.
+- **Plugins for one system.** A plugin can say it works on macOS only (or Windows, or Linux). It is refused with a clear message elsewhere, and the Store shows a badge.
+- **Home Assistant cameras.** Put a `camera.*` entity on a screen to see a still picture that refreshes while it is shown; tap it for a larger view. The Home Assistant token stays on the computer.
+- **Screen care**, for a phone that stays on all day (**Screen** in the management page): **Burn-in shift** moves the panel by a couple of pixels now and then, and **Night dim** dims it during the hours you choose. While dimmed, the first tap only wakes the panel and never presses a tile.
+- **Star and support.** Star on GitHub and Support on Ko-fi in the menu bar and tray apps and on the About page. A one-time reminder shows after a few days of use, and can be turned off.
+
+### Fixed
+
+- The panel's screen timer no longer runs while the page is hidden.
+
 ## Nookdeck 0.4.0: desktop apps and themes
 
 Upgrading: run the install command below again, or `nookdeck update`. Or install the new app (below).
