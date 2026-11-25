@@ -306,6 +306,16 @@ bun run build
 - [Ron Ng (ronnhd)](https://github.com/ronnhd)：黑胶封面和正在播放封面的修复。
 - [Howie989](https://github.com/Howie989)：简体中文翻译。
 
+## 支持
+
+Nookdeck 免费，并且是在业余时间开发的。如果它对你有用：
+
+- 在 GitHub 上**给仓库点星**：这能帮助更多人发现 Nookdeck。
+- 在 [Ko-fi](https://ko-fi.com/howznguyen) 上**请我喝杯咖啡**。
+- **推荐给朋友**，或[分享插件或主题](https://github.com/howznguyen/nookdeck-plugins)。
+
+<p><a href="https://ko-fi.com/howznguyen"><img alt="Support Nookdeck on Ko-fi" src="https://img.shields.io/badge/Ko--fi-Support%20Nookdeck-FF5E5B?logo=ko-fi&logoColor=white"></a> <a href="https://github.com/howznguyen/nookdeck/stargazers"><img alt="Star Nookdeck on GitHub" src="https://img.shields.io/github/stars/howznguyen/nookdeck?style=social"></a></p>
+
 ## 致谢
 
 - 图标：[Tabler Icons](https://tabler.io/icons)（MIT）和 [LobeHub Icons](https://github.com/lobehub/lobe-icons)（MIT）。

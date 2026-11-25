@@ -323,6 +323,16 @@ Thanks to:
 - [Ron Ng (ronnhd)](https://github.com/ronnhd): vinyl artwork and Now Playing artwork fixes.
 - [Howie989](https://github.com/Howie989): Simplified Chinese translation.
 
+## Support
+
+Nookdeck is free and built in my spare time. If it is useful to you:
+
+- **Star the repo** on GitHub: it helps other people find Nookdeck.
+- **Buy me a coffee** on [Ko-fi](https://ko-fi.com/howznguyen).
+- **Tell a friend**, or [share a plugin or theme](https://github.com/howznguyen/nookdeck-plugins).
+
+<p><a href="https://ko-fi.com/howznguyen"><img alt="Support Nookdeck on Ko-fi" src="https://img.shields.io/badge/Ko--fi-Support%20Nookdeck-FF5E5B?logo=ko-fi&logoColor=white"></a> <a href="https://github.com/howznguyen/nookdeck/stargazers"><img alt="Star Nookdeck on GitHub" src="https://img.shields.io/github/stars/howznguyen/nookdeck?style=social"></a></p>
+
 ## Credits
 
 - Icons: [Tabler Icons](https://tabler.io/icons) (MIT) and [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT).

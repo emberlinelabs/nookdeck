@@ -310,6 +310,16 @@ Cảm ơn:
 - [Ron Ng (ronnhd)](https://github.com/ronnhd): ảnh đĩa than và các bản sửa ảnh bìa cho Đang phát.
 - [Howie989](https://github.com/Howie989): bản dịch tiếng Trung giản thể.
 
+## Ủng hộ
+
+Nookdeck miễn phí và được làm trong thời gian rảnh. Nếu thấy hữu ích:
+
+- **Gắn sao cho repo** trên GitHub: giúp người khác tìm thấy Nookdeck.
+- **Mời mình một ly cà phê** trên [Ko-fi](https://ko-fi.com/howznguyen).
+- **Giới thiệu cho bạn bè**, hoặc [chia sẻ plugin hay giao diện](https://github.com/howznguyen/nookdeck-plugins).
+
+<p><a href="https://ko-fi.com/howznguyen"><img alt="Support Nookdeck on Ko-fi" src="https://img.shields.io/badge/Ko--fi-Support%20Nookdeck-FF5E5B?logo=ko-fi&logoColor=white"></a> <a href="https://github.com/howznguyen/nookdeck/stargazers"><img alt="Star Nookdeck on GitHub" src="https://img.shields.io/github/stars/howznguyen/nookdeck?style=social"></a></p>
+
 ## Ghi công
 
 - Icon: [Tabler Icons](https://tabler.io/icons) (MIT) và [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT).
