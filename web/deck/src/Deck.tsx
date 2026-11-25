@@ -17,7 +17,7 @@ import { coreTileOf, previewSlot } from './plugin-logic'
 import { CameraView, setCameraBase } from './camera'
 import type { PluginSlot } from './plugin-logic'
 import { browserShiftHost, headerMode, keepAwakeOn, liteOn, onLocalScreen, runShift, shiftOn } from './screen-logic'
-import type { PermissionRequest, QuestionRequest, WeatherData, PushedValue, Notice, GotoReq, HassEntity, HassState, IconAssets, AiData, Item, Layout, Media, MediaCommand, Orientation, Page, Stats, TileStyle } from './types'
+import type { PermissionRequest, QuestionRequest, WeatherData, PushedValue, Notice, GotoReq, HassEntity, HassState, IconAssets, AiData, Item, Layout, Media, MediaCommand, Orientation, Page, Stats, Theme, TileStyle } from './types'
 
 export { Icon }
 import './deck.css'
@@ -250,7 +250,7 @@ const SAMPLE_HIST: Hist = { cpu: sampleSeries(1, 37, 15), mem: sampleSeries(2, 5
 const fit = (chars: number, avail: number, max: number, min: number) =>
   Math.max(min, Math.min(max, Math.floor(avail / (Math.max(1, chars) * 0.7))))
 
-interface Placed extends Item {
+export interface Placed extends Item {
   px: number // resolved cell x
   py: number // resolved cell y
   pw: number
@@ -322,6 +322,20 @@ function cellSize(page: Page, box: Box): number {
   const cw = (box.w - box.gap * (cols - 1)) / cols
   const ch = (box.h - box.gap * (rows - 1)) / rows
   return Math.max(16, Math.floor(Math.min(cw, ch)))
+}
+
+/** The tile looks a theme sets: `theme` as the layout has it, `effT` the look in force (undefined in safe mode). */
+export function tileThemeOf(theme: Theme, effT: Theme | undefined): TileTheme {
+  return {
+    op: effT && typeof effT.tileOpacity === 'number' && effT.tileOpacity < 1 ? Math.min(1, Math.max(0.05, effT.tileOpacity)) : undefined,
+    backdrop: backdropOf(effT, effT && effT.mode === 'light' ? 'light' : 'dark'),
+    tileSet: !!(effT && effT.tile),
+    style: theme.tileStyle === 'solid' || theme.tileStyle === 'outline' || theme.tileStyle === 'ios' ? theme.tileStyle : 'tint',
+    accent: theme.accent || '#22d3ee',
+    radius: typeof theme.radius === 'number' ? theme.radius : 16,
+    iconScale: Math.min(2, Math.max(0.5, theme.iconScale || 1)),
+    showLabels: theme.showLabels !== false,
+  }
 }
 
 interface TileTheme {
@@ -481,7 +495,8 @@ function tileState(item: Item, props: { sound?: unknown; busy?: boolean; media: 
   return undefined
 }
 
-function Tile(props: {
+/** One tile as the grid draws it. Also the whole of the demo's tile page (tile.tsx). */
+export function Tile(props: {
   page: Page
   item: Placed
   stats: Stats | null
@@ -1921,16 +1936,7 @@ export function Deck(props: DeckProps) {
   setLang(theme.language)
   setTempUnit(preview && pvFahrenheit ? 'f' : theme.temperatureUnit)
   const effT = themeOff ? undefined : effectiveTheme(st.layout ? st.layout.theme : undefined, { theme: pageTheme })
-  const tt: TileTheme = {
-    op: effT && typeof effT.tileOpacity === 'number' && effT.tileOpacity < 1 ? Math.min(1, Math.max(0.05, effT.tileOpacity)) : undefined,
-    backdrop: backdropOf(effT, effT && effT.mode === 'light' ? 'light' : 'dark'),
-    tileSet: !!(effT && effT.tile),
-    style: theme.tileStyle === 'solid' || theme.tileStyle === 'outline' || theme.tileStyle === 'ios' ? theme.tileStyle : 'tint',
-    accent: theme.accent || '#22d3ee',
-    radius: typeof theme.radius === 'number' ? theme.radius : 16,
-    iconScale: Math.min(2, Math.max(0.5, theme.iconScale || 1)),
-    showLabels: theme.showLabels !== false,
-  }
+  const tt = tileThemeOf(theme, effT)
 
   return (
     <div class={'pd-root' + (preview ? ' pd-root--preview' : '') + (rotated ? ' pd-root--rot' : '') + (Math.min(vp.w, vp.h) <= 340 ? ' pd-root--sm' : '') + (lite ? ' pd-lite' : '') + (hmode !== 'full' ? ' pd-hdr--' + hmode : '')} ref={rootRef} data-pd-theme="dark" style={rootStyle}>

@@ -259,6 +259,33 @@ ctx.widgets.push("timer", (tile) => ({ render: "card", data: tile.w >= 4 ? wideC
 
 `tile` is `{ w, h }` (type `TileSize`): the cells the tile takes in the layout, not pixels, and the same however the phone is turned. The function given to `push` may be `async`; if it throws for one tile, that tile keeps what it shows and the plugin log says why. Pushes of a widget arrive in the order you made them. While a function push is still under way, only the newest later push waits for it; the ones in between are dropped. The function has 20 seconds for each tile: after that the tile is skipped for this push, the plugin log says so, and a result that comes later is ignored. A plain update given to `push` goes to every tile, as before, and a provider that takes only `settings` works unchanged. `http` and `command` widgets are not told the size. Needs Nookdeck 0.5.1: before it, `tile` is `undefined` and `push` takes only an update, so set `"nookdeck": ">=0.5.1"`.
 
+## Show a tile on a web page
+
+The demo build (`nookdeck-demo.tgz` on each release, from Nookdeck 0.5.2) has `tile.html`: one plugin tile, drawn by the real deck, so a website can show your widget without drawing it again. Serve the files of the archive from one folder, put `tile.html` in an iframe, and give the iframe the tile's pixel size. The tile fills it, and the page around the tile is transparent.
+
+1. Wait for the frame to post `{ type: "nookdeck-tile-ready" }` (check that `event.source` is your iframe).
+2. Post the tile to the frame. Send again whenever something changes; the last message wins.
+
+```js
+frame.contentWindow.postMessage({
+  type: "nookdeck-tile",
+  render: "card",            // card, stat, gauge, text, list, chart, image or status
+  data: { root: { t: "ring", value: 0.4, text: "24:00" } },
+  w: 2, h: 2,                // the tile's size in grid cells, whole numbers from 1 to 24
+  // all optional:
+  style: "big",              // a display style of the renderer
+  theme: "dev.nookdeck.nookdeck", // a built-in theme pack's id, or a theme object (as in a layout)
+  mode: "light",             // "light" or "dark"
+  lang: "vi",                // "en" (default), "vi" or "zh"
+}, "*");
+```
+
+- **Size.** You choose the pixels; a cell on a phone is about 90 to 120 px, with a 10 px gap, so a `w` x `h` tile with a 100 px cell is `100 * w + 10 * (w - 1)` px wide. The frame never asks to be resized.
+- **Theme.** A pack id (`dev.nookdeck.nookdeck` or `dev.nookdeck.nookdeck-classic`) gives that pack's look for `mode` (dark without one). For any other look send the theme object itself. An unknown id gives the default look. Background images and theme package fonts and CSS are not loaded.
+- **Checks.** A message with a missing, wrong or extra field is ignored. `data` goes through the same checks as on your computer, and data that fails them shows the tile's error.
+- **Nothing runs.** Card buttons do nothing, and the page makes no network requests, so an `image` widget needs a `data:image` URL here (an `https` one shows an error).
+- If you sandbox the iframe, give it `allow-scripts allow-same-origin`.
+
 ## Settings
 
 Each widget and action can declare settings. The manage page shows them as a form.

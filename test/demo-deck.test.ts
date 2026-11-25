@@ -82,8 +82,8 @@ describe("demo deck: no network beyond its own files", () => {
       const p = Bun.spawn(["bunx", "--bun", "vite", "build", "-c", "vite.demo.config.ts"], { cwd: join(import.meta.dir, "../web/deck"), stdout: "ignore", stderr: "ignore" });
       expect(await p.exited).toBe(0);
     }, 60000);
-    test("index.html: relative urls only, a CSP that allows only its own files, no agent page parts", () => {
-      const html = readFileSync(join(dir, "index.html"), "utf8");
+    test.each(["index.html", "tile.html"])("%s: relative urls only, a CSP that allows only its own files, no agent page parts", (page) => {
+      const html = readFileSync(join(dir, page), "utf8");
       const csp = /Content-Security-Policy" content="([^"]+)"/.exec(html)![1]!;
       expect(csp).toContain("default-src 'none'");
       expect(csp).toContain("connect-src 'self'");
@@ -92,8 +92,8 @@ describe("demo deck: no network beyond its own files", () => {
       expect(html).not.toContain("manifest");
       expect(existsSync(join(dir, "build.json"))).toBe(false);
     });
-    test("every file is under assets/ or index.html; the bundle is Safari 12 safe", () => {
-      expect(readdirSync(dir).sort()).toEqual(["assets", "index.html"]);
+    test("every file is under assets/ or one of the two pages; the bundle is Safari 12 safe", () => {
+      expect(readdirSync(dir).sort()).toEqual(["assets", "index.html", "tile.html"]);
       for (const f of readdirSync(join(dir, "assets")).filter((n) => n.endsWith(".js"))) expect(readFileSync(join(dir, "assets", f), "utf8")).not.toMatch(/\?\.[A-Za-z_$\[(]|\?\? |color-mix|oklch|clamp\(/);
     });
   });

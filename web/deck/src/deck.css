@@ -3844,3 +3844,8 @@
 .pd-camview__bar { position: absolute; left: 0; right: 0; top: 0; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: space-between; justify-content: space-between; padding: 10px 12px; padding-top: calc(10px + env(safe-area-inset-top, 0px)); background: -webkit-linear-gradient(top, rgba(0,0,0,0.65), rgba(0,0,0,0)); background: linear-gradient(to bottom, rgba(0,0,0,0.65), rgba(0,0,0,0)); }
 .pd-camview__name { color: #fff; font-size: 15px; font-weight: 600; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pd-root .pd-camview__x { -webkit-flex: 0 0 auto; flex: 0 0 auto; width: 44px; height: 44px; margin-left: 10px; padding: 0; border: 0; border-radius: 999px; background: rgba(255,255,255,0.18); color: #fff; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; cursor: pointer; -webkit-appearance: none; appearance: none; }
+
+/* ---------- One tile on its own (tile.html, the demo build) ---------- */
+.pd-root.pd-onetile { background: transparent !important; }
+.pd-onetile__back { position: absolute; top: 0; right: 0; bottom: 0; left: 0; border-radius: var(--pd-radius); background-color: var(--pd-bg); background-size: cover; }
+.pd-root .pd-onetile__back > .pd-tile { width: 100%; height: 100%; box-sizing: border-box; }

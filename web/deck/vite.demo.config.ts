@@ -14,7 +14,7 @@ const indexName = (): Plugin => ({
 })
 
 
-/** The demo deck: the same deck, no agent, relative URLs so a static host can serve it from any folder. Output: dist-demo/ (never embedded in the agent). */
+/** The demo deck: the same deck, no agent, relative URLs so a static host can serve it from any folder. Output: dist-demo/ (never embedded in the agent). index.html is the whole deck, tile.html one plugin tile. */
 export default defineConfig({
   base: './',
   publicDir: false, // no manifest or app icons: the demo is only embedded
@@ -23,6 +23,6 @@ export default defineConfig({
     cssTarget: 'safari12',
     outDir: 'dist-demo',
     emptyOutDir: true,
-    rollupOptions: { input: 'demo.html' },
+    rollupOptions: { input: ['demo.html', 'tile.html'] },
   },
 })

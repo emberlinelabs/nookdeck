@@ -320,6 +320,8 @@ Rules for a listed pack:
 
 ## Preview a theme without Nookdeck
 
+To show a single plugin tile (not a whole deck), use the demo build's `tile.html`: see [Show a tile on a web page](plugins.md#show-a-tile-on-a-web-page).
+
 The real deck also builds as a **demo deck**: the same code in preview mode, with no agent, no pairing and no network, so a website can show a theme exactly as a phone would draw it.
 
 ```bash
