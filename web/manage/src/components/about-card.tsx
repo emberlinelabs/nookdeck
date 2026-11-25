@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { IconCheck as Check, IconCopy as Copy, IconExternalLink as Link } from "@tabler/icons-react";
+import { IconCheck as Check, IconCoffee as Coffee, IconCopy as Copy, IconExternalLink as Link, IconStar as Star } from "@tabler/icons-react";
 import { api } from "@/api";
 import { Button } from "@/components/ui/knowns/button";
 import { Card, CardContent } from "@/components/ui/knowns/card";
 import { aboutLine, osName } from "@/lib/about";
 import { getLanguage, t, useLanguage } from "@/lib/i18n";
+import { GITHUB_URL, KOFI_URL } from "@/lib/support";
 import type { About, UpdateInfo } from "@/types";
 
 function fmtDate(iso?: string): string | undefined {
@@ -61,6 +62,13 @@ export function AboutCard({ about }: { about: About | null }) {
           <span className="text-muted-foreground">{t("Updates")}</span>
           <span>{failed || upd?.error ? t("Could not check for updates.") : !upd ? t("Checking...") : upd.available && upd.latest ? t("Nookdeck {v} is available", { v: upd.latest.replace(/^v/, "") }) : t("You are up to date.")}</span>
           <Button size="xs" variant="secondary" loading={checking} onClick={() => void check()}>{t("Check for updates")}</Button>
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+          {([[t("Star on GitHub"), GITHUB_URL, Star], [t("Support on Ko-fi"), KOFI_URL, Coffee]] as const).map(([label, href, Icon]) => (
+            <a key={href} href={href} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-[13px] font-medium underline underline-offset-2 hover:text-foreground">
+              <Icon className="size-3.5" />{label}
+            </a>
+          ))}
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1.5">
           {links.map(([label, href]) => (

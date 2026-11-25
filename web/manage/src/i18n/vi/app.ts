@@ -252,4 +252,10 @@ export const VI_APP: Record<string, string> = {
   "Top bar: minimal": "Gọn",
   "Top bar: hidden": "Ẩn",
   "Minimal hides the computer name and CPU/RAM. Hidden gives the whole height to the tiles; a small button keeps the menu and shows problems.": "Gọn: ẩn tên máy và CPU/RAM. Ẩn: dành toàn bộ chiều cao cho ô; một nút nhỏ vẫn giữ menu và báo lỗi kết nối.",
+  "Support Nookdeck": "Ủng hộ Nookdeck",
+  "Enjoying Nookdeck? Star it on GitHub": "Bạn thích Nookdeck? Hãy tặng sao trên GitHub",
+  "Star on GitHub": "Tặng sao trên GitHub",
+  "Support on Ko-fi": "Ủng hộ qua Ko-fi",
+  "Later": "Để sau",
+  "Don't show again": "Không hiện lại",
 };

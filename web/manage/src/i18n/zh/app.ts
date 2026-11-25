@@ -208,4 +208,10 @@ export const ZH_APP: Record<string, string> = {
   "No schedule: the screen only dims in standby.": "未设置时段：屏幕只在待机时调暗。",
   "Preview dim": "预览调暗",
   "Hide dim preview": "隐藏预览",
+  "Support Nookdeck": "支持 Nookdeck",
+  "Enjoying Nookdeck? Star it on GitHub": "喜欢 Nookdeck？请在 GitHub 上为它加星标",
+  "Star on GitHub": "在 GitHub 上加星标",
+  "Support on Ko-fi": "在 Ko-fi 上支持我们",
+  "Later": "稍后",
+  "Don't show again": "不再显示",
 };

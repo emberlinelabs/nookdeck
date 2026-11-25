@@ -16,6 +16,7 @@ import { SoundsPanel } from "@/components/sounds-panel";
 import { ThemePanel } from "@/components/theme-panel";
 import { PermissionsPanel } from "@/components/permissions-panel";
 import { AboutCard } from "@/components/about-card";
+import { SupportCard } from "@/components/support-card";
 import { ScreenPanel } from "@/components/screen-panel";
 import { CustomizeHint } from "@/components/visual-options";
 import { UpdateBanner } from "@/components/update-banner";
@@ -364,6 +365,7 @@ export default function App() {
         </header>
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4">
       <UpdateBanner repo={about?.repo ?? REPO} enabled={layout?.theme?.updateCheck !== false} />
+      {layout && <SupportCard />}
 
       {status && (
         <Alert tone={status.kind === "error" ? "danger" : status.kind === "ok" ? "success" : "info"} onDismiss={() => setStatus(null)}>
