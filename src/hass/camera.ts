@@ -7,6 +7,8 @@ export const CAMERA_MAX_BYTES = 8 * 1024 * 1024;
 export const CAMERA_TIMEOUT_MS = 10_000;
 /** Several phones (or a tile and the large view) asking at once get one picture from HA. */
 export const CAMERA_REUSE_MS = 1000;
+/** Cameras remembered at once. This computer may ask for any camera id, so the number needs a ceiling of its own. */
+export const CAMERA_MAX_HELD = 16;
 
 export interface CameraImage { bytes: Uint8Array; type: string }
 
@@ -40,15 +42,26 @@ export async function fetchCamera(f: typeof fetch, base: string, token: string, 
   return { bytes: new Uint8Array(Buffer.concat(chunks)), type };
 }
 
-/** One request per camera at a time, and its picture is reused for a second. */
-export function cameraCache(load: (id: string) => Promise<CameraImage>, now: () => number = Date.now) {
+/**
+ * One request per camera at a time, and its picture is reused for a second. Nothing is kept longer: a picture can be 8 MB, so
+ * it is dropped by a timer (not at the next request, which may never come), and at most CAMERA_MAX_HELD ids are held.
+ */
+export function cameraCache(load: (id: string) => Promise<CameraImage>, now: () => number = Date.now, later: (fn: () => void, ms: number) => void = dropLater) {
   const held = new Map<string, { at: number; image: Promise<CameraImage> }>();
-  return (id: string): Promise<CameraImage> => {
+  const get = (id: string): Promise<CameraImage> => {
     const hit = held.get(id);
     if (hit && (hit.at === 0 || now() - hit.at < CAMERA_REUSE_MS)) return hit.image;
+    held.delete(id); // re-added at the end: the first key is the oldest
+    while (held.size >= CAMERA_MAX_HELD) held.delete(held.keys().next().value!);
     const entry = { at: 0, image: load(id) };
     held.set(id, entry);
-    entry.image.then(() => { entry.at = now(); }, () => { if (held.get(id) === entry) held.delete(id); });
+    const drop = () => { if (held.get(id) === entry) held.delete(id); };
+    entry.image.then(() => { entry.at = now(); later(drop, CAMERA_REUSE_MS); }, drop);
     return entry.image;
   };
+  return Object.assign(get, { held: (): number => held.size });
+}
+
+function dropLater(fn: () => void, ms: number): void {
+  (setTimeout(fn, ms) as { unref?: () => void }).unref?.();
 }

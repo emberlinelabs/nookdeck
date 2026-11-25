@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { networkInterfaces, tmpdir } from "node:os";
 import { join } from "node:path";
-import { CAMERA_MAX_BYTES, cameraCache, fetchCamera } from "../src/hass/camera";
+import { CAMERA_MAX_BYTES, CAMERA_MAX_HELD, CAMERA_REUSE_MS, cameraCache, fetchCamera } from "../src/hass/camera";
 import { validateLayout, defaultLayout } from "../src/config";
 import { toPhoneEntity, wantedEntities } from "../src/hass/entities";
 import { CAMERA_STUCK_MS, CAMERA_VIEW_S, cameraDue, cameraEvery, cameraUrl } from "../web/deck/src/camera-logic";
@@ -51,6 +51,30 @@ describe("fetchCamera", () => {
     bad = false;
     await get("camera.a");
     expect(calls).toBe(4);
+  });
+  test("no picture stays in memory: each is dropped after its second, and only so many ids are held", async () => {
+    const timers: { fn: () => void; ms: number }[] = [];
+    let calls = 0;
+    const get = cameraCache(async () => { calls++; return { bytes: JPEG, type: "image/jpeg" }; }, () => 1000, (fn, ms) => timers.push({ fn, ms }));
+    await get("camera.a");
+    expect([get.held(), timers.map((t) => t.ms)]).toEqual([1, [CAMERA_REUSE_MS]]);
+    timers[0]!.fn();
+    expect(get.held()).toBe(0);
+    await Promise.all(Array.from({ length: 100 }, (_, i) => get(`camera.x${i}`)));
+    expect(get.held()).toBe(CAMERA_MAX_HELD);
+    calls = 0;
+    await get("camera.x99"); // the newest are the ones kept
+    expect(calls).toBe(0);
+    await get("camera.x0");
+    expect(calls).toBe(1);
+    for (const t of timers) t.fn();
+    expect(get.held()).toBe(0);
+  });
+  test("the default timer drops the picture by itself", async () => {
+    const get = cameraCache(async () => ({ bytes: JPEG, type: "image/jpeg" }));
+    await get("camera.a");
+    await Bun.sleep(CAMERA_REUSE_MS + 150);
+    expect(get.held()).toBe(0);
   });
 });
 
