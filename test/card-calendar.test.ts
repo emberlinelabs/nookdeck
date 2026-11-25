@@ -80,9 +80,9 @@ describe("month: layout", () => {
     expect(l.d).toBeLessThanOrEqual(30);
     expect(l.gridW).toBeLessThan(400);
   });
-  test("beside other parts it takes about its height, at most half the row", () => {
+  test("beside other parts it takes about its height, at most 45% of the row", () => {
     expect(monthWidth(500, 210, 5)).toBe(210);
-    expect(monthWidth(300, 260, 5)).toBe(150);
+    expect(monthWidth(300, 260, 5)).toBe(135);
   });
 });
 

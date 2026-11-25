@@ -82,9 +82,9 @@ export function monthLayout(w: number, h: number, weeks: number, base: number): 
   }
 }
 
-/** Beside other parts in a row, a month is about as wide as it is high (square days), and at most half the row. */
+/** Beside other parts in a row, a month is about as wide as it is high (square days), and at most 45% of the row. */
 export function monthWidth(rowW: number, rowH: number, weeks: number): number {
-  return Math.max(0, Math.floor(Math.min((rowH * 7) / (weeks + 2), rowW * 0.5)))
+  return Math.max(0, Math.floor(Math.min((rowH * 7) / (weeks + 2), rowW * 0.45)))
 }
 
 // ------------------------------------------------------------------------------------------------ week
