@@ -1,6 +1,8 @@
 import { Component, createRef } from 'preact'
 import { TileIcon } from './icon'
 import type { IconAssets } from './types'
+import { CardMonth, CardWeek, type CalBox } from './card-calendar'
+import { monthWidth } from './card-calendar-logic'
 import { CARD_MIN_PX, CARD_SHRINK, cardBase, cardStacks, ringTextPx } from './plugin-logic'
 import type { CardArgs, CardData, CardNode, CardTone } from '../../../src/plugins/card'
 
@@ -26,8 +28,10 @@ export interface CardTileProps {
 const GAPS = ['0', '4px', '8px', '12px']
 const FIT_TIGHT = [false, true]
 
-export class CardTile extends Component<CardTileProps, { busy: { [path: string]: boolean } }> {
-  state = { busy: {} as { [path: string]: boolean } }
+type CardState = { busy: { [path: string]: boolean }; boxes: { [path: string]: CalBox } }
+
+export class CardTile extends Component<CardTileProps, CardState> {
+  state: CardState = { busy: {}, boxes: {} }
   private el = createRef<HTMLDivElement>()
   private alive = true
   private fontsAsked = false
@@ -60,18 +64,37 @@ export class CardTile extends Component<CardTileProps, { busy: { [path: string]:
       for (let s = 0; s < CARD_SHRINK.length && !done; s++) {
         el.style.fontSize = Math.max(CARD_MIN_PX, Math.round(base * CARD_SHRINK[s] * 10) / 10) + 'px'
         arrangeTiles(el)
+        sizeMonths(el)
         done = !overflows(el) && !labelClipped(el)
       }
     }
     trim(el)
     dropSlivers(el)
+    sizeMonths(el)
     sizeRings(el)
     sizeTiles(el)
+    this.measureCalendars(el, base)
     const fonts = (document as unknown as { fonts?: { ready?: Promise<unknown> } }).fonts
     if (!this.fontsAsked && fonts && fonts.ready) {
       this.fontsAsked = true
       fonts.ready.then(() => { if (this.alive) this.fit() }, () => {})
     }
+  }
+
+  /** Calendars draw to the size of their box, which does not depend on what is in them: they are measured once the rest is laid out. */
+  private measureCalendars(el: HTMLElement, base: number) {
+    const found = el.querySelectorAll('[data-cal]')
+    const boxes: { [path: string]: CalBox } = {}
+    let changed = false
+    for (let i = 0; i < found.length; i++) {
+      const c = found[i] as HTMLElement
+      const path = c.getAttribute('data-cal') as string
+      const next = { w: c.clientWidth, h: c.clientHeight, base: base }
+      const had = this.state.boxes[path]
+      boxes[path] = had && had.w === next.w && had.h === next.h && had.base === next.base ? had : next
+      if (boxes[path] !== had) changed = true
+    }
+    if (changed) this.setState({ boxes: boxes })
   }
 
   private tap(path: string, action: string, args: CardArgs | undefined) {
@@ -97,7 +120,7 @@ export class CardTile extends Component<CardTileProps, { busy: { [path: string]:
       return (
         <div
           key={path}
-          class={'pd-pcard__box pd-pcard__' + n.t + ' pd-pcard__al-' + (n.align || 'start') + (n.grow ? ' pd-pcard__grow' : '') + (n.children.some(fills) || (n.t === 'row' && n.stack) ? ' pd-pcard__fills' : '') + (n.t === 'row' && n.stack ? ' pd-pcard__stack' : '')}
+          class={'pd-pcard__box pd-pcard__' + n.t + ' pd-pcard__al-' + (n.align || 'start') + (n.grow ? ' pd-pcard__grow' : '') + (n.children.some(fills) || (n.t === 'row' && n.stack) ? ' pd-pcard__fills' : '') + (n.t === 'row' && n.stack ? ' pd-pcard__stack' : '') + (n.t === 'row' && n.children.some((c) => c.t === 'month') ? ' pd-pcard__withmonth' : '')}
           data-stack={n.t === 'row' ? n.stack : undefined}
           data-gap={GAPS[n.gap === undefined ? 1 : n.gap]}
         >
@@ -131,6 +154,13 @@ export class CardTile extends Component<CardTileProps, { busy: { [path: string]:
       )
     }
     if (n.t === 'ring') return <Ring key={path} node={n} color={this.tone(n.tone, 'var(--pd-accent)') as string} textColor={text} assets={this.props.assets} />
+    if (n.t === 'month' || n.t === 'week') {
+      const accent = this.props.color || 'var(--pd-accent)'
+      const paint = { tone: (x: CardTone | undefined, fallback: string) => this.tone(x, fallback) as string, accent: accent, textColor: text }
+      return n.t === 'month'
+        ? <CardMonth key={path} node={n} path={path} box={this.state.boxes[path]} paint={paint} />
+        : <CardWeek key={path} node={n} path={path} box={this.state.boxes[path]} paint={paint} />
+    }
     if (n.t === 'sparkline') return <Spark key={path} points={n.points} color={this.tone(n.tone, this.props.color || 'var(--pd-accent)') as string} />
     if (n.t === 'icon') {
       return <span key={path} class="pd-pcard__icon" style={{ color: this.tone(n.tone, text) }}><TileIcon value={n.name} size={24} assets={this.props.assets} /></span>
@@ -186,12 +216,25 @@ function show(card: HTMLElement) {
   for (let i = 0; i < dials.length; i++) (dials[i] as HTMLElement).style.width = (dials[i] as HTMLElement).style.height = '0px'
 }
 
+const hasCalendar = (el: Element): boolean => el.classList.contains('pd-pcard__cal') || !!el.querySelector('.pd-pcard__cal')
+
+/** A month beside other parts of a row is as wide as its square days need; the others take the rest. */
+function sizeMonths(card: HTMLElement) {
+  const found = card.querySelectorAll('.pd-pcard__row > .pd-pcard__cal--month')
+  for (let i = 0; i < found.length; i++) {
+    const m = found[i] as HTMLElement
+    const row = m.parentElement as HTMLElement
+    setFlex(m, row.children.length > 1 ? '0 0 ' + monthWidth(row.clientWidth, row.clientHeight, +(m.getAttribute('data-weeks') as string)) + 'px' : '')
+  }
+}
+
 /** Deepest columns first: hides a column's last parts while it is taller than its room (at least one part stays). */
 function trim(card: HTMLElement) {
   const cols = card.querySelectorAll('.pd-pcard__col')
   for (let i = cols.length - 1; i >= 0; i--) {
     const col = cols[i] as HTMLElement
-    for (let j = col.children.length - 1; j > 0 && col.scrollHeight > col.clientHeight + 1; j--) col.children[j].classList.add('pd-pcard__cut')
+    // a calendar takes what room is left, so it is never the part that goes
+    for (let j = col.children.length - 1; j > 0 && col.scrollHeight > col.clientHeight + 1; j--) if (!hasCalendar(col.children[j])) col.children[j].classList.add('pd-pcard__cut')
   }
 }
 
@@ -231,7 +274,7 @@ function dropSlivers(card: HTMLElement) {
 
 /** Parts that take a share of the free space (rings, tile buttons, stack rows); so do the boxes around them. */
 const fills = (n: CardNode): boolean =>
-  n.t === 'ring' || (n.t === 'button' && n.layout === 'tile') || (n.t === 'row' && !!n.stack) || ((n.t === 'row' || n.t === 'col') && n.children.some(fills))
+  n.t === 'ring' || n.t === 'month' || n.t === 'week' || (n.t === 'button' && n.layout === 'tile') || (n.t === 'row' && !!n.stack) || ((n.t === 'row' || n.t === 'col') && n.children.some(fills))
 
 /**
  * `stack: "auto"` rows, outer ones first: a column when the box is about square or taller. Side by side with one ring among

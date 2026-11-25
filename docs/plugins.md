@@ -128,6 +128,8 @@ A widget can suggest a style with `"style"` in its manifest entry, for example `
 | `icon` | `name` (see **Icons** below), `tone?` |
 | `image` | `src` (`data:image/png;base64,...` or `data:image/jpeg;base64,...` only), `fit?` `cover` / `contain` |
 | `button` | `action` (the id of one of your `actions`), `label?` and/or `icon?`, `args?`, `tone?`, `active?` (drawn filled), `layout?` `"tile"` (see below; needs Nookdeck 0.5.1) |
+| `month` | `month` `"2026-11"`, `today?` and `selected?` `"2026-11-25"`, `weekStart?` 0 (Sunday) or 1 (Monday, default), `marks?` up to 62 of `{ date, tone? }` (see **Calendars** below; needs Nookdeck 0.5.1) |
+| `week` | `start` `"2026-11-23"`, `events` up to 40, `days?` 1-7 (default 7), `today?`, `now?` `"16:20"`, `hour24?` (default true), `from?` 0-23, `to?` 1-24, `more?` (see **Calendars** below; needs Nookdeck 0.5.1) |
 | `spacer` | none; takes the free space |
 
 `tone` is `default`, `muted`, `accent` (the tile's colour), `ok`, `warn` or `bad`.
@@ -164,6 +166,26 @@ card.root(card.col([
   card.row([key("Dark mode", "toggle-dark", "moon", true), key("Keep awake", "keep-awake", "coffee")], { gap: 1, grow: true }),
   card.row([key("Lock", "lock", "lock"), key("Display off", "display-off", "monitor")], { gap: 1, grow: true }),
 ], { gap: 1, grow: true }));
+```
+
+**Calendars.** `month` and `week` are read-only calendars that the phone draws itself. Each counts as **one** of the 60 parts, takes the free space, fits itself to it and is never left out. A Nookdeck before 0.5.1 refuses a card with one, so set `"nookdeck": ">=0.5.1"`. Dates and times are the computer's: `today` and `now` come from your card, never from the phone's clock. Month and weekday names are in the phone's language.
+
+- `month` shows the month's name, weekday letters and its weeks. `today` has a ring and `selected` is filled. A day with entries in `marks` has dots, one for each, at most three, coloured by `tone`; marks outside the month are not shown. On a small tile the dots move onto the days' circles, then the name is left out. In a `row`, a month is about as wide as it is high (at most half the row), and the columns beside it start at the top.
+- `week` shows `days` days from `start`. Each of its `events` is `{ day, title, start?, end?, allDay?, tone? }`: `day` counts from `start` (0 is the first), `title` is up to 80 characters, times are `"HH:MM"` and `end` may be `"24:00"`. An all-day event (`allDay: true`) has no times; any other needs `start`, and without `end` it lasts an hour. `end` must be after `start`: split an event that goes over midnight, one for each day. Give events that are over `tone: "muted"`.
+- With room for at least 18 px an hour, a week is a time grid with a strip for all-day events (two lines) and a line at `now`. It shows the hours the events span, at least six, unless you set `from` and `to`; an event partly outside them is cut off at the edge. Events that overlap sit side by side, two at most (one in a narrow column).
+- With less room it is a list for each day: all-day events first, then the time and the title.
+- What does not fit is counted as **+n** under its day, and muted events give way first. `more` adds your own count for each day, `[0, 3]` for three events of the second day that you did not send (a card holds 40).
+
+```ts
+card.root(card.row([
+  card.month("2026-11", { today: "2026-11-25", selected: "2026-11-25", marks: [{ date: "2026-11-27", tone: "ok" }] }),
+  card.col([card.text("Wed 25 Nov", { bold: true }), card.text("Nothing today", { tone: "muted" })], { grow: true }),
+], { gap: 2, grow: true }));
+
+card.root(card.week("2026-11-23", [
+  { day: 0, start: "09:30", end: "10:00", title: "Plan", tone: "muted" },
+  { day: 3, allDay: true, title: "Release", tone: "accent" },
+], { today: "2026-11-25", now: "16:20" }));
 ```
 
 **Icons.** `icon` in a card (the `icon` part, a button's and a ring's) takes a built-in name: [Tabler](https://tabler.io/icons) names, and a few brand marks. Older short names such as `laptop`, `monitor` and `battery` work too. The full Tabler catalog is not available in cards. Any other name is drawn as a dim square; `nookdeck plugin dev` warns about names in your previews, and the plugin log (`nookdeck plugin logs <id>`) about names in live cards.
@@ -216,7 +238,7 @@ export function activate(ctx: PluginContext) {
 }
 ```
 
-The builders are `card.root`, `row`, `col`, `text`, `number`, `pill`, `progress`, `ring(value, options?)`, `sparkline`, `icon`, `image`, `button(label, action, options?)` and `spacer`. `row` and `col` skip `false`, `null` and `undefined` children, so `cond && card.text("...")` works. `sparkline` keeps the last 60 points. The types are `CardNode` and `CardData`.
+The builders are `card.root`, `row`, `col`, `text`, `number`, `pill`, `progress`, `ring(value, options?)`, `month(month, options?)`, `week(start, events, options?)`, `sparkline`, `icon`, `image`, `button(label, action, options?)` and `spacer`. `row` and `col` skip `false`, `null` and `undefined` children, so `cond && card.text("...")` works. `sparkline` keeps the last 60 points. The types are `CardNode` and `CardData`.
 
 A widget with an `http` or `command` source can use `card` too, if its mapped data is a `{ root }`.
 

@@ -3776,6 +3776,52 @@
 .pd-pcard.pd-pcard--tight .pd-pcard__btn--icon { padding: 0; }
 .pd-pcard--tight .pd-pcard__bi + .pd-pcard__bl { margin-left: 0.2em; }
 
+/* card parts "month" and "week" (C4). Each takes the free space; its content is out of the flow, so it never makes the card shrink its text */
+.pd-pcard__cal { position: relative; display: block; -webkit-flex: 1 1 0%; flex: 1 1 0%; min-width: 0; min-height: 3em; -webkit-align-self: stretch; align-self: stretch; }
+.pd-pcard > .pd-pcard__cal { margin: 0; -webkit-flex: 1 1 auto; flex: 1 1 auto; }
+/* beside a month the other parts are as tall as the row and start at its top */
+.pd-pcard__row.pd-pcard__withmonth > .pd-pcard__col { -webkit-align-self: stretch; align-self: stretch; -webkit-justify-content: flex-start; justify-content: flex-start; -webkit-flex: 1 1 0%; flex: 1 1 0%; }
+.pd-pcard__cin { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; text-align: center; font-variant-numeric: tabular-nums; }
+.pd-pcard__cin--month { -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; line-height: 1; }
+.pd-pcard__c-grid { display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; -webkit-flex: 0 0 auto; flex: 0 0 auto; max-width: 100%; }
+.pd-pcard__c-title { display: block; -webkit-flex: 0 0 auto; flex: 0 0 auto; font-weight: 700; white-space: nowrap; overflow: hidden; }
+.pd-pcard__c-line { position: relative; display: -webkit-flex; display: flex; -webkit-flex: 0 0 auto; flex: 0 0 auto; }
+.pd-pcard__c-wd { color: var(--pd-muted); font-size: 0.88em; font-weight: 600; }
+.pd-pcard__c-cell { display: -webkit-flex; display: flex; -webkit-flex: 1 1 0%; flex: 1 1 0%; -webkit-flex-direction: column; flex-direction: column; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; min-width: 0; }
+.pd-pcard__c-num { display: block; box-sizing: border-box; border: 1.5px solid transparent; border-radius: 999px; }
+.pd-pcard__c-num--today { font-weight: 700; }
+.pd-pcard__c-num--picked { color: var(--pd-bg); font-weight: 700; line-height: 1; }
+.pd-pcard__c-dots { position: relative; display: -webkit-flex; display: flex; -webkit-justify-content: center; justify-content: center; height: 4px; }
+.pd-pcard__c-dots > i { display: block; width: 4px; height: 4px; margin: 0 1px; border-radius: 999px; }
+.pd-pcard__c-dots--on > i { box-shadow: 0 0 0 1px var(--pd-bg); }
+.pd-pcard__cin--week { text-align: left; }
+.pd-pcard__c-col { position: relative; display: block; -webkit-flex: 1 1 0%; flex: 1 1 0%; min-width: 0; }
+.pd-pcard__c-gutter { position: relative; display: block; -webkit-flex: 0 0 auto; flex: 0 0 auto; }
+.pd-pcard__c-head > .pd-pcard__c-col { display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; -webkit-align-items: center; align-items: center; overflow: hidden; }
+.pd-pcard__c-dow { color: var(--pd-muted); font-size: 0.9em; font-weight: 600; white-space: nowrap; }
+.pd-pcard__c-date { display: block; border-radius: 999px; text-align: center; font-size: 1.1em; font-weight: 700; }
+.pd-pcard__c-date--today { color: var(--pd-bg); }
+.pd-pcard__c-day { overflow: hidden; padding: 0 1.5px; border-left: 1px solid var(--pd-border); }
+.pd-pcard__c-day:first-child, .pd-pcard__c-gutter + .pd-pcard__c-day { border-left-color: transparent; }
+.pd-pcard__c-ev { position: relative; display: block; box-sizing: border-box; overflow: hidden; padding: 0 3px 0 6px; border-radius: 4px; }
+.pd-pcard__c-ev > i { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: currentColor; opacity: 0.18; }
+.pd-pcard__c-ev:before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: currentColor; }
+.pd-pcard__c-t, .pd-pcard__c-ev > small, .pd-pcard__c-entry > b { position: relative; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pd-pcard__c-t { color: var(--pd-text); }
+.pd-pcard__c-t--quiet { color: var(--pd-muted); }
+.pd-pcard__c-chip { margin-bottom: 3px; font-weight: 600; }
+.pd-pcard__c-entry { display: block; margin-bottom: 3px; padding: 0 2px; }
+.pd-pcard__c-entry > b { font-weight: 700; }
+.pd-pcard__c-more { display: block; padding: 0 3px; color: var(--pd-muted); font-weight: 600; white-space: nowrap; }
+.pd-pcard__c-strip { border-bottom: 1px solid var(--pd-border-strong); box-sizing: border-box; overflow: hidden; }
+.pd-pcard__c-time { overflow: hidden; }
+.pd-pcard__c-hour { position: absolute; left: 0; right: 3px; color: var(--pd-muted); font-size: 0.86em; text-align: right; white-space: nowrap; }
+.pd-pcard__c-rule { position: absolute; right: 0; height: 0; border-top: 1px solid var(--pd-border); }
+.pd-pcard__c-slot { border-left: 1px solid var(--pd-border); }
+.pd-pcard__c-block { position: absolute; border: 1px solid transparent; background-clip: padding-box; }
+.pd-pcard__c-block > small { color: var(--pd-muted); font-size: 0.9em; }
+.pd-pcard__c-now { position: absolute; left: 0; right: 0; height: 2px; margin-top: -1px; background: var(--pd-bad); }
+.pd-pcard__c-now:before { content: ""; position: absolute; left: -3px; top: -2px; width: 6px; height: 6px; border-radius: 999px; background: var(--pd-bad); }
 /* ---------- Home Assistant camera (camera.tsx) ---------- */
 .pd-cam { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; border-radius: inherit; background: #000; }
 .pd-cam__feed { position: relative; width: 100%; height: 100%; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; overflow: hidden; }

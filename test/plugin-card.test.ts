@@ -227,7 +227,9 @@ describe("card classes", () => {
   test("every class card.tsx uses is under its own prefix, which nothing else styles or uses", async () => {
     const src = join(import.meta.dir, "../web/deck/src");
     const tsx = await Bun.file(join(src, "card.tsx")).text();
-    const used = tsx.match(/pd-[A-Za-z0-9_-]+/g)!.filter((c) => !tsx.includes("var(--" + c));
+    // the month and week parts are drawn in a file of their own, under the same rule
+    const parts = tsx + (await Bun.file(join(src, "card-calendar.tsx")).text());
+    const used = parts.match(/pd-[A-Za-z0-9_-]+/g)!.filter((c) => !parts.includes("var(--" + c));
     expect(used.filter((c) => !c.startsWith("pd-pcard"))).toEqual([]);
     // fit() adds classes to a button by hand; a class that changes while it is busy would remove them on tap
     const buttonClass = tsx.match(/class=\{'pd-pcard__btn'.*\}/)![0];
@@ -250,7 +252,7 @@ describe("card classes", () => {
       const selectors = rule.split("{")[0]!.trim();
       if (selectors) for (const one of selectors.split(",")) expect(one.trim()).toStartWith(".pd-pcard");
     }
-    for (const f of new Bun.Glob("*.{ts,tsx}").scanSync(src)) if (f !== "card.tsx") expect(await Bun.file(join(src, f)).text()).not.toContain("pd-pcard");
+    for (const f of new Bun.Glob("*.{ts,tsx}").scanSync(src)) if (f !== "card.tsx" && f !== "card-calendar.tsx") expect(await Bun.file(join(src, f)).text()).not.toContain("pd-pcard");
   });
 });
 
