@@ -24,7 +24,7 @@ export interface CardTileProps {
 }
 
 const GAPS = ['0', '4px', '8px', '12px']
-const FIT_PASSES = [{ tight: false, labels: true }, { tight: true, labels: true }, { tight: false, labels: false }]
+const FIT_TIGHT = [false, true]
 
 export class CardTile extends Component<CardTileProps, { busy: { [path: string]: boolean } }> {
   state = { busy: {} as { [path: string]: boolean } }
@@ -43,9 +43,9 @@ export class CardTile extends Component<CardTileProps, { busy: { [path: string]:
   }
 
   /**
-   * Steps the base size down until no row or column of the card overflows and every button label shows in full; labels that
-   * still do not fit get tighter buttons. A label that fits at no size (a very long one) is left to its ellipsis, and the card
-   * is then sized by its rows and columns alone. Last, trailing parts that still do not fit are left out.
+   * Steps the base size down until no row or column of the card overflows and every button label shows in full; then the same
+   * with tighter buttons. A label that fits at no size (a very long one) leaves the card at the smallest size, so as much of
+   * every label shows as can, and it keeps its ellipsis. Last, trailing parts that still do not fit are left out.
    */
   private fit() {
     const el = this.el.current
@@ -53,11 +53,11 @@ export class CardTile extends Component<CardTileProps, { busy: { [path: string]:
     const base = cardBase(this.props.tw, this.props.th)
     show(el)
     let done = false
-    for (let k = 0; k < FIT_PASSES.length && !done; k++) {
-      el.classList.toggle('pd-pcard--tight', FIT_PASSES[k].tight)
+    for (let k = 0; k < FIT_TIGHT.length && !done; k++) {
+      el.classList.toggle('pd-pcard--tight', FIT_TIGHT[k])
       for (let s = 0; s < CARD_SHRINK.length && !done; s++) {
         el.style.fontSize = Math.max(CARD_MIN_PX, Math.round(base * CARD_SHRINK[s] * 10) / 10) + 'px'
-        done = !overflows(el) && !(FIT_PASSES[k].labels && labelClipped(el))
+        done = !overflows(el) && !labelClipped(el)
       }
     }
     trim(el)
@@ -202,13 +202,18 @@ function labelClipped(card: HTMLElement): boolean {
   return false
 }
 
-/** A label with next to no room, beside an icon, is left out: the icon alone reads better than a sliver of a letter. */
+/**
+ * A label with next to no room, beside an icon, is left out: the icon alone reads better than a sliver of a letter. Then every
+ * button with an icon shows its icon alone, so one card does not mix bare icons with cut words.
+ */
 function dropSlivers(card: HTMLElement) {
   const labels = card.querySelectorAll('.pd-pcard__bi + .pd-pcard__bl')
-  for (let i = 0; i < labels.length; i++) {
+  let sliver = false
+  for (let i = 0; i < labels.length && !sliver; i++) {
     const l = labels[i] as HTMLElement
-    if (l.scrollWidth > l.clientWidth && l.clientWidth < parseFloat(getComputedStyle(l).fontSize) * 2) l.classList.add('pd-pcard__cut')
+    sliver = l.scrollWidth > l.clientWidth && l.clientWidth < parseFloat(getComputedStyle(l).fontSize) * 2
   }
+  if (sliver) for (let i = 0; i < labels.length; i++) (labels[i] as HTMLElement).classList.add('pd-pcard__cut')
 }
 
 function Spark(props: { points: number[]; color: string }) {
