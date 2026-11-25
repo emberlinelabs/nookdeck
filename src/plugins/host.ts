@@ -5,6 +5,7 @@
 import { pathToFileURL } from "node:url";
 import { lockDown } from "./guards";
 import * as api from "./api";
+import type { PushUpdate, WidgetTile } from "./api";
 import { CARD_LIMITS, card, validateCard } from "./card";
 import {
   CALL_TIMEOUT_MS, EVERY_DEFAULT_S, EVERY_MIN_S, PluginPermissionError, RPC_ERR,
@@ -67,6 +68,21 @@ export async function runPluginHost(io: HostIO): Promise<void> {
 
   const rpc = async <T>(method: string, params: unknown): Promise<T> => { try { return await peer.call<T>(method, params, CALL_TIMEOUT_MS); } catch (e) { return rethrow(e); } };
 
+  /** Per widget, the pushes still under way: a later one waits for them, so an older card never lands on a newer one. */
+  const pushing = new Map<string, Promise<void>>();
+  function push(id: string, u: PushUpdate): void {
+    const before = pushing.get(id);
+    if (!before && typeof u !== "function") return peer.notify("widget.push", { id, update: u });
+    const next: Promise<void> = (before ?? Promise.resolve()).then(async () => {
+      if (typeof u !== "function") return peer.notify("widget.push", { id, update: u });
+      for (const t of await rpc<WidgetTile[]>("widget.tiles", { id })) {
+        try { peer.notify("widget.push", { id, key: t.key, update: await u({ w: t.size.w, h: t.size.h }) }); }
+        catch (e: any) { log(`widgets.push("${id}") failed for a ${t.size.w}x${t.size.h} tile: ${String(e?.message ?? e).slice(0, 200)}`); }
+      }
+    }).catch((e) => log(`widgets.push("${id}") failed: ${String(e?.message ?? e).slice(0, 200)}`)).then(() => { if (pushing.get(id) === next) pushing.delete(id); });
+    pushing.set(id, next);
+  }
+
   function makeContext(p: InitParams): PluginContext {
     const ctx: PluginContext = {
       id: p.id,
@@ -91,7 +107,7 @@ export async function runPluginHost(io: HostIO): Promise<void> {
           const every = Math.max(EVERY_MIN_S, Math.round(Number(o?.every ?? EVERY_DEFAULT_S)) || EVERY_DEFAULT_S);
           providers.set(String(id), { fn, every });
         },
-        push(id, u: WidgetUpdate) { peer.notify("widget.push", { id: String(id), update: u }); },
+        push(id, u: PushUpdate) { push(String(id), u); },
       },
       actions: { handle(id, fn) { handlers.set(String(id), fn); } },
     };
@@ -132,7 +148,7 @@ export async function runPluginHost(io: HostIO): Promise<void> {
       case "widget.get": {
         const prov = providers.get(String(params?.id));
         if (!prov) throw new RpcFault(RPC_ERR.unknownId, `the plugin has no provider "${params?.id}"`);
-        try { return await prov.fn(params.settings ?? {}); }
+        try { return await prov.fn(params.settings ?? {}, { w: Number(params.tile?.w) || 1, h: Number(params.tile?.h) || 1 }); }
         catch (e: any) { throw new RpcFault(RPC_ERR.pluginError, String(e?.message ?? e).slice(0, 200)); }
       }
       case "action.run": {

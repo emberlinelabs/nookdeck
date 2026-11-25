@@ -146,7 +146,7 @@ card.root(card.row([
 ], { stack: "auto", gap: 1 })); // two rows of two on a square tile, four in a line on a wide one
 ```
 
-**One card for wide and square tiles.** A provider is not told the tile's size, so a row can choose for itself: with `stack: "auto"` it is drawn as a column when its box is about square or taller (narrower than 1.4 times its height), and as a row otherwise. Such a row takes the free space. With one ring among other parts, the ring is as large as the row is high when they are side by side (unless you give it a `size`), and takes the space the others leave when stacked. Rows without `stack` never change direction.
+**One card for wide and square tiles.** A row can choose its direction itself: with `stack: "auto"` it is drawn as a column when its box is about square or taller (narrower than 1.4 times its height), and as a row otherwise. Such a row takes the free space. With one ring among other parts, the ring is as large as the row is high when they are side by side (unless you give it a `size`), and takes the space the others leave when stacked. Rows without `stack` never change direction.
 
 ```ts
 card.root(card.row([
@@ -174,7 +174,7 @@ card.root(card.col([
 Brands: `antigravity` `claude` `claude-code` `codex` `gemini` `grok` `opencode`
 <!-- card-icons:end -->
 
-**Fitting.** The same card is drawn at every tile size. The text gets smaller to fit, including until button labels show in full (one label too long for any size keeps the whole card at the smallest text, so keep labels short; when a button with an icon has no room for its label, the buttons with icons show their icons alone); if it still does not fit, the last parts of a column are left out. So put the important parts first, and use `ctx.widgets.provide`'s settings if you want a different card per tile.
+**Fitting.** The same card is drawn at every tile size, unless your provider [looks at the tile's size](#tile-size). The text gets smaller to fit, including until button labels show in full (one label too long for any size keeps the whole card at the smallest text, so keep labels short; when a button with an icon has no room for its label, the buttons with icons show their icons alone); if it still does not fit, the last parts of a column are left out. So put the important parts first.
 
 **Buttons.** A tap runs your own action with that id, through the same path as a plugin button in the layout. `args` reach `ctx.actions.handle` as the action's settings, so **declare every key in the action's `settings`**: undeclared keys are dropped, a value that does not fit its type is refused, and `secret` fields only come from the plugin's saved settings. The handler gets the plugin-wide settings plus these values (and the action's defaults), not the settings of the tile that was tapped; put what you need to tell tiles apart in `args`. The agent only accepts a button that is on the card it sent (or the one just before). After the action the agent asks your tiles for fresh data, so the card shows the new state; you can also call `ctx.widgets.push`. If the handler throws, the phone shows the message.
 
@@ -219,6 +219,22 @@ export function activate(ctx: PluginContext) {
 The builders are `card.root`, `row`, `col`, `text`, `number`, `pill`, `progress`, `ring(value, options?)`, `sparkline`, `icon`, `image`, `button(label, action, options?)` and `spacer`. `row` and `col` skip `false`, `null` and `undefined` children, so `cond && card.text("...")` works. `sparkline` keeps the last 60 points. The types are `CardNode` and `CardData`.
 
 A widget with an `http` or `command` source can use `card` too, if its mapped data is a `{ root }`.
+
+## Tile size
+
+A code plugin's provider is called once for each tile of the widget, with the tile's size in grid cells as its second argument, so two tiles of one widget can show different cards:
+
+```ts
+ctx.widgets.provide("timer", (settings, tile) => ({
+  render: "card",
+  data: tile.w >= 4 ? wideCard() : tile.h >= 2 ? squareCard() : smallCard(),
+}));
+
+// a push can do the same: the function is called once for each tile of the widget
+ctx.widgets.push("timer", (tile) => ({ render: "card", data: tile.w >= 4 ? wideCard() : smallCard() }));
+```
+
+`tile` is `{ w, h }` (type `TileSize`): the cells the tile takes in the layout, not pixels, and the same however the phone is turned. The function given to `push` may be `async`; if it throws for one tile, that tile keeps what it shows and the plugin log says why. Pushes of a widget arrive in the order you made them. A plain update given to `push` goes to every tile, as before, and a provider that takes only `settings` works unchanged. `http` and `command` widgets are not told the size. Needs Nookdeck 0.5.1: before it, `tile` is `undefined` and `push` takes only an update, so set `"nookdeck": ">=0.5.1"`.
 
 ## Settings
 

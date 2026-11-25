@@ -8,6 +8,7 @@ import {
   CALL_TIMEOUT_MS, IDLE_STOP_MS, PING_INTERVAL_MS, PING_TIMEOUT_MS, RESTART_BACKOFF_MS, RESTART_MAX, RESTART_RESET_MS, RPC_ERR,
   type ActionRunParams, type InitParams, type InitResult, type Settings, type WidgetUpdate,
 } from "./api";
+import type { WidgetGetParams, WidgetTile } from "./api";
 import { PluginServices, type ServiceDeps } from "./capabilities";
 import { RpcCallError, RpcFault, RpcPeer } from "./rpc";
 
@@ -95,7 +96,9 @@ export interface ProcessOptions {
   backoffMs?: readonly number[];
   restartResetMs?: number;
   restartMax?: number;
-  onPush?: (update: { widgetId: string; update: WidgetUpdate }) => void;
+  onPush?: (update: { widgetId: string; update: WidgetUpdate; key?: string }) => void;
+  /** The tiles of one of this plugin's widgets on the layout. */
+  tiles?: (widgetId: string) => WidgetTile[];
   /** After too many crashes in a row: the plugin is given up on. */
   onFailed?: (message: string) => void;
   /** The widget refresh intervals the plugin registered, in seconds (after every (re)start). */
@@ -141,10 +144,10 @@ export class PluginProcess {
     const child = spawn(this.o.argv ?? hostArgv(this.o.dir), hostEnv());
     this.child = child;
     const peer = new RpcPeer((l) => child.write(l), {
-      request: (method, params) => this.o.services.request(method, params),
+      request: (method, params) => method === "widget.tiles" ? Promise.resolve(this.o.tiles?.(String((params as any)?.id)) ?? []) : this.o.services.request(method, params),
       notify: (method, params) => {
         if (method === "log") this.o.log.append(((params?.args ?? []) as unknown[]).map(String).join(" "));
-        else if (method === "widget.push" && typeof params?.id === "string") this.o.onPush?.({ widgetId: params.id, update: params.update });
+        else if (method === "widget.push" && typeof params?.id === "string") this.o.onPush?.({ widgetId: params.id, update: params.update, ...(typeof params.key === "string" ? { key: params.key } : {}) });
       },
       onGarbage: (line) => this.o.log.append(`[stdout] ${line}`),
     });
@@ -235,7 +238,7 @@ export class PluginProcess {
   }
 
   /** One call into the plugin. Errors: RpcCallError (the plugin threw, timed out, ...) or Error (could not start). */
-  async call<T>(method: "widget.get" | "action.run", params: { id: string; settings: Settings } & Partial<ActionRunParams>): Promise<T> {
+  async call<T>(method: "widget.get" | "action.run", params: { id: string; settings: Settings; tile?: WidgetGetParams["tile"] }): Promise<T> {
     await this.ensureStarted();
     this.touch();
     try { return await this.peer!.call<T>(method, params, this.o.callTimeoutMs ?? CALL_TIMEOUT_MS); }

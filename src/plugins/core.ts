@@ -10,6 +10,7 @@ import { makeWeatherPlugin, type WeatherDeps } from "../../plugins/core/weather"
 import { makeQuotaPlugin, type QuotaDeps } from "../../plugins/core/quota";
 import type { Layout, PluginRef } from "../config";
 import { EVERY_DEFAULT_S, EVERY_MIN_S, PluginPermissionError, STORAGE_MAX_BYTES, type ActionHandler, type PluginContext, type PluginFetchInit, type PluginModule, type ProvideOptions, type Provider, type Settings, type WidgetUpdate } from "./api";
+import type { PushUpdate, TileSize } from "./api";
 import { parseManifest, settingFields } from "./manifest";
 import type { CustomRenderer, Manifest, WidgetDef } from "./types";
 
@@ -164,6 +165,13 @@ export function layoutPluginTiles(layout: Layout): Map<string, PluginRef> {
   return out;
 }
 
+/** The size in grid cells of every tile that can show a plugin, by tile id. */
+export function layoutTileSizes(layout: Layout): Map<string, TileSize> {
+  const out = new Map<string, TileSize>();
+  for (const p of layout.pages) for (const it of p.items) out.set(it.id, { w: it.w ?? 1, h: it.h ?? 1 });
+  return out;
+}
+
 interface Registered { fn: Provider; every: number }
 
 /** Runs the core plugins in the agent: builds their PluginContext, keeps their providers, answers `get`. */
@@ -172,7 +180,7 @@ export class CoreHost {
   private providers = new Map<string, Registered>(); // `${plugin}/${widget}`
   private actions = new Map<string, ActionHandler>();
   private data = new Map<string, Map<string, unknown>>();
-  private pushListeners = new Set<(plugin: string, widget: string, u: WidgetUpdate) => void>();
+  private pushListeners = new Set<(plugin: string, widget: string, u: PushUpdate) => void>();
   private mods: PluginModule[] = [];
 
   constructor(private services: CoreServices, entries: CoreEntry[] = loadCorePlugins(services)) {
@@ -181,7 +189,7 @@ export class CoreHost {
 
   manifests(): Manifest[] { return [...this.entries.values()].map((e) => e.manifest); }
   has(id: string): boolean { return this.entries.has(id); }
-  onPush(fn: (plugin: string, widget: string, u: WidgetUpdate) => void): () => void { this.pushListeners.add(fn); return () => this.pushListeners.delete(fn); }
+  onPush(fn: (plugin: string, widget: string, u: PushUpdate) => void): () => void { this.pushListeners.add(fn); return () => this.pushListeners.delete(fn); }
 
   async activate(): Promise<void> {
     for (const e of this.entries.values()) {
@@ -199,11 +207,11 @@ export class CoreHost {
   every(plugin: string, widget: string): number { return this.providers.get(`${plugin}/${widget}`)?.every ?? EVERY_DEFAULT_S; }
 
   /** The widget's update with the manifest's renderer applied (a provider cannot change it). Throws when the provider does. */
-  async get(plugin: string, widget: string, tile: Settings = {}): Promise<WidgetUpdate> {
+  async get(plugin: string, widget: string, tile: Settings = {}, size: TileSize = { w: 1, h: 1 }): Promise<WidgetUpdate> {
     const p = this.providers.get(`${plugin}/${widget}`);
     const def = this.entries.get(plugin)?.manifest.widgets.find((w) => w.id === widget);
     if (!p || !def) throw new Error("plugin widget missing");
-    const u = await p.fn({ ...(this.services.settings?.(plugin) ?? {}), ...tile });
+    const u = await p.fn({ ...(this.services.settings?.(plugin) ?? {}), ...tile }, { w: size.w, h: size.h });
     return { render: def.render as WidgetUpdate["render"], data: u.data };
   }
 

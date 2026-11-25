@@ -65,11 +65,18 @@ export interface WidgetUpdate {
   data: unknown;
 }
 
+/** A tile's size in grid cells, as the layout has it (not pixels, and the same however the phone is turned). */
+export interface TileSize { w: number; h: number }
+
+/** What `ctx.widgets.push` takes: one update for every tile of the widget, or a function that makes one for each tile from its size. */
+export type PushUpdate = WidgetUpdate | ((tile: TileSize) => WidgetUpdate | Promise<WidgetUpdate>);
+
 /**
  * Provides the data of a widget. Called by the agent when a phone is connected, every `every` seconds (and once at start).
  * `settings` = plugin-level settings overlaid with the tile's own settings (the tile wins). May throw: the tile shows a neutral error.
+ * It is called once for each tile, with that tile's size as `tile`, so each can get its own layout (Nookdeck 0.5.1).
  */
-export type Provider = (settings: Settings) => Promise<WidgetUpdate> | WidgetUpdate;
+export type Provider = (settings: Settings, tile: TileSize) => Promise<WidgetUpdate> | WidgetUpdate;
 
 /** Runs a button of the deck. `settings` is resolved like a provider's. A thrown error is shown to the owner. */
 export type ActionHandler = (settings: Settings) => Promise<void> | void;
@@ -123,8 +130,11 @@ export interface PluginContext {
   widgets: {
     /** Registers the provider of a widget declared in the manifest (`render` is the manifest's; a provider may not change it). */
     provide(id: string, fn: Provider, o?: ProvideOptions): void;
-    /** Pushes an update now, outside the polling (for example from a webhook or a timer of the plugin). */
-    push(id: string, u: WidgetUpdate): void;
+    /**
+     * Pushes an update now, outside the polling (for example from a webhook or a timer of the plugin). Given a function, it is
+     * called once for each tile of the widget with that tile's size (Nookdeck 0.5.1); pushes of a widget arrive in order.
+     */
+    push(id: string, u: PushUpdate): void;
   };
   actions: {
     handle(id: string, fn: ActionHandler): void;
@@ -218,7 +228,9 @@ export interface InitResult {
   /** Refresh interval in seconds per widget id, from `provide(id, fn, {every})` (already clamped to EVERY_MIN_S..). */
   every?: Record<string, number>;
 }
-export interface WidgetGetParams { id: string; settings: Settings }
+export interface WidgetGetParams { id: string; settings: Settings; tile: TileSize }
+/** One tile of a widget on the layout: `key` only names it in a push for that tile; the plugin never sees it. */
+export interface WidgetTile { key: string; size: TileSize }
 export interface ActionRunParams { id: string; settings: Settings }
 
 export interface AgentToHost {
@@ -253,12 +265,14 @@ export interface HostToAgent {
   "shell.run": { params: { cmd: string }; result: { code: number; stdout: string } };
   "keys.hotkey": { params: { k: string }; result: null };
   "keys.type": { params: { t: string }; result: null };
+  /** The tiles of one of the plugin's own widgets, for `ctx.widgets.push(id, fn)`. */
+  "widget.tiles": { params: { id: string }; result: WidgetTile[] };
 }
 /** host -> agent, no answer. */
 export interface HostNotifications {
   log: { args: string[] };
-  /** `ctx.widgets.push`. */
-  "widget.push": { id: string; update: WidgetUpdate };
+  /** `ctx.widgets.push`; with `key`, for that tile alone. */
+  "widget.push": { id: string; update: WidgetUpdate; key?: string };
 }
 
 export type AgentMethod = keyof AgentToHost;
@@ -269,5 +283,5 @@ export type ResultOf<T extends { result: unknown }, K extends keyof T> = T[K] ex
 /** Method names the host accepts / the agent accepts, for validating incoming messages. */
 export const AGENT_METHODS = ["init", "widget.get", "action.run", "ping"] as const;
 export const AGENT_NOTIFICATIONS = ["settings.changed", "shutdown"] as const;
-export const HOST_METHODS = ["storage.get", "storage.set", "net.fetch", "shell.run", "keys.hotkey", "keys.type"] as const;
+export const HOST_METHODS = ["storage.get", "storage.set", "net.fetch", "shell.run", "keys.hotkey", "keys.type", "widget.tiles"] as const;
 export const HOST_NOTIFICATIONS = ["log", "widget.push"] as const;

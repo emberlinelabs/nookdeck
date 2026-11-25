@@ -8,7 +8,8 @@ import { platform } from "../platform";
 import { covers } from "./manifest";
 import { cleanRender } from "./sources";
 import type { PluginHosts } from "./hosts";
-import { layoutPluginTiles, type CoreHost } from "./core";
+import { layoutPluginTiles, layoutTileSizes, type CoreHost } from "./core";
+import type { TileSize } from "./api";
 import { actionSteps, coerce, evaluateWidget, resolveSettings, runHttpAction, widgetEvery, type SourceDeps } from "./sources";
 import type { PluginStore } from "./store";
 import { ERR_DISABLED, ERR_MISSING, ERR_NOT_GRANTED, type Renderer, type TileItem, type TileItems } from "./types";
@@ -26,7 +27,7 @@ export interface RuntimeDeps extends SourceDeps {
   log?: (plugin: string, line: string) => void;
 }
 
-interface Tile { ref: PluginRef; timer?: ReturnType<typeof setTimeout>; gen: number; /** the buttons of the card shown now and of the one before it (a tap may be on its way while the card changes) */ buttons?: string[][] }
+interface Tile { ref: PluginRef; size: TileSize; timer?: ReturnType<typeof setTimeout>; gen: number; /** the buttons of the card shown now and of the one before it (a tap may be on its way while the card changes) */ buttons?: string[][] }
 
 type Args = Record<string, string | number | boolean>;
 const buttonKey = (action: string, args: Args | undefined): string => JSON.stringify([action, Object.keys(args ?? {}).sort().map((k) => [k, args![k]])]);
@@ -52,27 +53,39 @@ export class PluginRuntime {
 
   constructor(private store: PluginStore, private deps: RuntimeDeps) {
     store.onChange(() => this.rebuild());
-    deps.hosts?.onPush((plugin, widget, u) => this.pushCode(plugin, widget, u.render, u.data));
+    deps.hosts?.onPush((plugin, widget, u, key) => this.pushCode(plugin, widget, u.render, u.data, key));
+    deps.hosts?.setTiles?.((plugin, widget) => this.tilesOf(plugin, widget).map(([key, t]) => ({ key, size: { ...t.size } })));
     // a code plugin's process (re)started: its tiles ask it again at once
     deps.hosts?.onRegistered((plugin) => { if (!this.active) return; for (const [id, t] of this.tiles) if (t.ref.id === plugin) { clearTimeout(t.timer); t.gen = ++this.gen; void this.refresh(id, t.gen); } });
     deps.core?.onPush((plugin, widget, u) => {
-      const changed: TileItems = {};
-      for (const [id, t] of this.tiles) {
-        if (t.ref.id !== plugin || t.ref.widget !== widget || this.store.runnable(plugin) !== "ok") continue;
-        const def = this.store.entry(plugin)?.manifest.widgets.find((w) => w.id === widget);
-        if (def) this.put(id, { render: def.render as Renderer, data: u.data }, changed);
+      if (typeof u !== "function") return this.pushCore(plugin, widget, u.data);
+      for (const [id, t] of this.tilesOf(plugin, widget)) {
+        const size = { ...t.size };
+        void (async () => u(size))().then((made) => this.pushCore(plugin, widget, made.data, id), (err) => this.deps.log?.(plugin, `[agent] widgets.push("${widget}") failed: ${String(err?.message ?? err).slice(0, 200)}`));
       }
-      if (Object.keys(changed).length) this.deps.onItems(changed);
     });
   }
 
-  /** An update a code plugin pushed (ctx.widgets.push): shown on every tile of that widget, through the same checks as polled data. */
-  private pushCode(plugin: string, widgetId: string, render: unknown, data: unknown): void {
+  private tilesOf(plugin: string, widget: string): Array<[string, Tile]> {
+    return [...this.tiles].filter(([, t]) => t.ref.id === plugin && t.ref.widget === widget);
+  }
+
+  /** What a core plugin pushed: for every tile of the widget, or for the one named. */
+  private pushCore(plugin: string, widget: string, data: unknown, only?: string): void {
+    const changed: TileItems = {};
+    const def = this.store.entry(plugin)?.manifest.widgets.find((w) => w.id === widget);
+    if (!def || this.store.runnable(plugin) !== "ok") return;
+    for (const [id] of this.tilesOf(plugin, widget)) if (only === undefined || id === only) this.put(id, { render: def.render as Renderer, data }, changed);
+    if (Object.keys(changed).length) this.deps.onItems(changed);
+  }
+
+  /** An update a code plugin pushed (ctx.widgets.push): shown on every tile of that widget (or, from a push with a function, on one), through the same checks as polled data. */
+  private pushCode(plugin: string, widgetId: string, render: unknown, data: unknown, only?: string): void {
     const changed: TileItems = {};
     const def = this.store.entry(plugin)?.manifest.widgets.find((w) => w.id === widgetId);
     if (!def || this.store.runnable(plugin) !== "ok") return;
     const item = codeItem(def.render, render, data);
-    for (const [id, t] of this.tiles) if (t.ref.id === plugin && t.ref.widget === widgetId) this.put(id, item, changed);
+    for (const [id] of this.tilesOf(plugin, widgetId)) if (only === undefined || id === only) this.put(id, item, changed);
     if (Object.keys(changed).length) this.deps.onItems(changed);
   }
 
@@ -80,11 +93,14 @@ export class PluginRuntime {
   setLayout(layout: Layout): void {
     const next = layoutPluginTiles(layout); // plugin tiles, plus legacy weather/quota widgets mapped to their core plugin (D7)
     for (const [id, t] of this.tiles) if (!next.has(id)) { clearTimeout(t.timer); this.tiles.delete(id); delete this.items[id]; }
+    const sizes = layoutTileSizes(layout);
     for (const [id, ref] of next) {
       const old = this.tiles.get(id);
-      if (old && JSON.stringify(old.ref) === JSON.stringify(ref)) continue;
+      const size = sizes.get(id) ?? { w: 1, h: 1 };
+      // a tile that only changed size keeps what it shows; rebuild() below asks again with the new size
+      if (old && JSON.stringify(old.ref) === JSON.stringify(ref)) { old.size = size; continue; }
       if (old) clearTimeout(old.timer);
-      this.tiles.set(id, { ref, gen: ++this.gen });
+      this.tiles.set(id, { ref, size, gen: ++this.gen });
       delete this.items[id];
     }
     this.rebuild();
@@ -161,13 +177,13 @@ export class PluginRuntime {
     const core = this.deps.core?.has(tile.ref.id) ? this.deps.core : undefined;
     let item: TileItem;
     if (core) {
-      try { const u = await core.get(tile.ref.id, tile.ref.widget, settings); item = { render: u.render, data: u.data }; }
+      try { const u = await core.get(tile.ref.id, tile.ref.widget, settings, tile.size); item = { render: u.render, data: u.data }; }
       catch (err: any) { item = { error: String(err?.message ?? err).slice(0, 120) }; }
     } else if ("agent" in widget.source) {
       const hosts = this.deps.hosts;
       if (!hosts) item = { error: "plugin host unavailable" };
       else {
-        try { const u = await hosts.widget(tile.ref.id, tile.ref.widget, settings); item = codeItem(widget.render, u?.render, u?.data); }
+        try { const u = await hosts.widget(tile.ref.id, tile.ref.widget, settings, { ...tile.size }); item = codeItem(widget.render, u?.render, u?.data); }
         catch (err: any) { item = { error: String(err?.message ?? err).slice(0, 120) }; }
       }
     } else item = await evaluateWidget(widget, settings, e.state.granted ?? { network: [] }, this.deps);

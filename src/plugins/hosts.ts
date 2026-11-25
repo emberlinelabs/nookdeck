@@ -7,6 +7,7 @@ import { join } from "node:path";
 
 import { HOME } from "../config";
 import { EVERY_DEFAULT_S, type InitResult, type Settings, type WidgetUpdate } from "./api";
+import type { TileSize, WidgetTile } from "./api";
 import { PluginServices } from "./capabilities";
 import { PluginLog, PluginProcess, hostArgv, realSpawn, type ProcessInfo, type SpawnFn } from "./process";
 import type { PluginStore } from "./store";
@@ -26,7 +27,8 @@ interface Slot { proc: PluginProcess; version: string; sha: string; settingsJson
 
 export class PluginHosts {
   private slots = new Map<string, Slot>();
-  private pushFns = new Set<(pluginId: string, widgetId: string, update: WidgetUpdate) => void>();
+  private pushFns = new Set<(pluginId: string, widgetId: string, update: WidgetUpdate, key?: string) => void>();
+  private tilesFn: ((pluginId: string, widgetId: string) => WidgetTile[]) | undefined;
   private registeredFns = new Set<(pluginId: string) => void>();
   private failedFns = new Set<(pluginId: string, message: string) => void>();
   readonly logDir: string;
@@ -38,7 +40,9 @@ export class PluginHosts {
     store.onChange(() => void this.reconcile());
   }
 
-  onPush(fn: (pluginId: string, widgetId: string, update: WidgetUpdate) => void): void { this.pushFns.add(fn); }
+  onPush(fn: (pluginId: string, widgetId: string, update: WidgetUpdate, key?: string) => void): void { this.pushFns.add(fn); }
+  /** Who knows the layout: answers for the tiles a widget has now. */
+  setTiles(fn: (pluginId: string, widgetId: string) => WidgetTile[]): void { this.tilesFn = fn; }
   /** A host (re)started and told which widgets it serves (and how often). */
   onRegistered(fn: (pluginId: string) => void): void { this.registeredFns.add(fn); }
   onFailed(fn: (pluginId: string, message: string) => void): void { this.failedFns.add(fn); }
@@ -67,7 +71,8 @@ export class PluginHosts {
         argv: this.deps.argv ? this.deps.argv(dir) : hostArgv(dir),
         granted: () => this.store.entry(id)?.state.granted ?? { network: [] },
         settings: () => this.store.entry(id)?.state.settings ?? {},
-        onPush: ({ widgetId, update }) => { for (const f of this.pushFns) f(id, widgetId, update); },
+        onPush: ({ widgetId, update, key }) => { for (const f of this.pushFns) f(id, widgetId, update, key); },
+        tiles: (widgetId) => this.tilesFn?.(id, widgetId) ?? [],
         onRegistered: (r: InitResult) => {
           slot.every = r.every ?? {};
           // the manifest says the code serves these; a missing provide()/handle() is the author's bug: say so in the plugin's log
@@ -91,10 +96,10 @@ export class PluginHosts {
   }
 
   /** Data for a widget. Throws an Error with a short message the owner can read. */
-  async widget(id: string, widgetId: string, settings: Settings): Promise<WidgetUpdate> {
+  async widget(id: string, widgetId: string, settings: Settings, tile: TileSize = { w: 1, h: 1 }): Promise<WidgetUpdate> {
     const s = this.slot(id);
     if (!s) throw new Error("plugin not running");
-    return s.proc.call<WidgetUpdate>("widget.get", { id: widgetId, settings });
+    return s.proc.call<WidgetUpdate>("widget.get", { id: widgetId, settings, tile });
   }
 
   async action(id: string, actionId: string, settings: Settings): Promise<void> {
