@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { CARD_LIMITS, card, validateCard, type CardNode } from "../src/plugins/card";
 import { cleanRender } from "../src/plugins/sources";
 import { parseManifest } from "../src/plugins/manifest";
-import { PluginRuntime } from "../src/plugins/runtime";
+import { CARD_REFRESH_MS, PluginRuntime } from "../src/plugins/runtime";
 import { PluginStore } from "../src/plugins/store";
 import type { MacroStep } from "../src/config";
 import { cardBase, parsePluginItem, validatePlugin } from "../web/deck/src/plugin-logic";
@@ -153,9 +153,24 @@ describe("card buttons", () => {
     const before = s.polls();
     await s.tap("run", s.args);
     expect(s.ran).toEqual([{ action: "run", settings: { place: "home", token: "s3cret", name: 'my "shortcut" é', minutes: 10 } }]);
-    await s.settle();
-    expect(s.polls()).toBeGreaterThan(before); // the card is asked again at once
+    await Bun.sleep(CARD_REFRESH_MS + 50);
+    expect(s.polls()).toBe(before + 1); // the card is asked again soon after
     s.rt.stop();
+  });
+  test("taps close together share one refresh, a later one gets its own, and none runs after stop", async () => {
+    const s = await setup();
+    const before = s.polls();
+    for (let i = 0; i < 5; i++) await s.tap("run", s.args);
+    expect([s.ran.length, s.polls() - before]).toEqual([5, 0]);
+    await Bun.sleep(CARD_REFRESH_MS + 50);
+    expect(s.polls() - before).toBe(1);
+    await s.tap("run", s.args);
+    await Bun.sleep(CARD_REFRESH_MS + 50);
+    expect(s.polls() - before).toBe(2);
+    await s.tap("run", s.args);
+    s.rt.stop();
+    await Bun.sleep(CARD_REFRESH_MS + 50);
+    expect(s.polls() - before).toBe(2);
   });
   test("an undeclared action is refused and logged", async () => {
     const s = await setup();

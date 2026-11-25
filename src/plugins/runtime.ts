@@ -37,8 +37,12 @@ function cardButtons(node: any, out: string[] = []): string[] {
 
 const same = (a: TileItem | undefined, b: TileItem): boolean => !!a && JSON.stringify(a) === JSON.stringify(b);
 
+/** How long after a card tap the plugin's tiles are asked again. */
+export const CARD_REFRESH_MS = 250;
+
 export class PluginRuntime {
   private tiles = new Map<string, Tile>();
+  private soon = new Map<string, ReturnType<typeof setTimeout>>(); // plugin id -> the refresh its card taps are waiting for
   private items: TileItems = {};
   private active = false;
   private gen = 0;
@@ -94,6 +98,8 @@ export class PluginRuntime {
   stop(): void {
     this.stopped = true;
     for (const t of this.tiles.values()) clearTimeout(t.timer);
+    for (const t of this.soon.values()) clearTimeout(t);
+    this.soon.clear();
   }
 
   /** Everything known now (sent in full to a phone that just connected). */
@@ -188,10 +194,21 @@ export class PluginRuntime {
       settings[f.key] = v;
     }
     await this.runAction({ plugin, action, settings }, runSteps);
-    this.refreshPlugin(plugin);
+    this.refreshSoon(plugin);
   }
 
-  /** Asks every tile of a plugin for fresh data now. */
+  /**
+   * Taps that come close together share one refresh, CARD_REFRESH_MS after the first of them. A later tap does not push it
+   * back, so someone who keeps tapping still sees the card change.
+   */
+  private refreshSoon(plugin: string): void {
+    if (this.stopped || this.soon.has(plugin)) return;
+    const timer = setTimeout(() => { this.soon.delete(plugin); this.refreshPlugin(plugin); }, CARD_REFRESH_MS);
+    (timer as { unref?: () => void }).unref?.();
+    this.soon.set(plugin, timer);
+  }
+
+  /** Asks every tile of a plugin for fresh data. */
   private refreshPlugin(plugin: string): void {
     if (!this.active || this.stopped) return;
     for (const [id, t] of this.tiles) {
