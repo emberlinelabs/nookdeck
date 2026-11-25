@@ -133,6 +133,7 @@ export interface PluginContext {
     /**
      * Pushes an update now, outside the polling (for example from a webhook or a timer of the plugin). Given a function, it is
      * called once for each tile of the widget with that tile's size (Nookdeck 0.5.1); pushes of a widget arrive in order.
+     * While one is under way only the newest later push waits; the function has CALL_TIMEOUT_MS per tile.
      */
     push(id: string, u: PushUpdate): void;
   };

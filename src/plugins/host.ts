@@ -12,6 +12,7 @@ import {
   type ActionHandler, type FetchResult, type InitParams, type InitResult, type PluginContext, type PluginFetchInit, type PluginModule,
   type Provider, type Settings, type WidgetUpdate,
 } from "./api";
+import { createPushQueue } from "./push-queue";
 import { RpcCallError, RpcFault, RpcPeer } from "./rpc";
 
 export const SDK_NAME = "@nookdeck/plugin";
@@ -68,20 +69,11 @@ export async function runPluginHost(io: HostIO): Promise<void> {
 
   const rpc = async <T>(method: string, params: unknown): Promise<T> => { try { return await peer.call<T>(method, params, CALL_TIMEOUT_MS); } catch (e) { return rethrow(e); } };
 
-  /** Per widget, the pushes still under way: a later one waits for them, so an older card never lands on a newer one. */
-  const pushing = new Map<string, Promise<void>>();
-  function push(id: string, u: PushUpdate): void {
-    const before = pushing.get(id);
-    if (!before && typeof u !== "function") return peer.notify("widget.push", { id, update: u });
-    const next: Promise<void> = (before ?? Promise.resolve()).then(async () => {
-      if (typeof u !== "function") return peer.notify("widget.push", { id, update: u });
-      for (const t of await rpc<WidgetTile[]>("widget.tiles", { id })) {
-        try { peer.notify("widget.push", { id, key: t.key, update: await u({ w: t.size.w, h: t.size.h }) }); }
-        catch (e: any) { log(`widgets.push("${id}") failed for a ${t.size.w}x${t.size.h} tile: ${String(e?.message ?? e).slice(0, 200)}`); }
-      }
-    }).catch((e) => log(`widgets.push("${id}") failed: ${String(e?.message ?? e).slice(0, 200)}`)).then(() => { if (pushing.get(id) === next) pushing.delete(id); });
-    pushing.set(id, next);
-  }
+  const push = createPushQueue({
+    tiles: (id) => rpc<WidgetTile[]>("widget.tiles", { id }),
+    send: (id, update, key) => peer.notify("widget.push", { id, update, ...(key === undefined ? {} : { key }) }),
+    log: (m) => log(m),
+  });
 
   function makeContext(p: InitParams): PluginContext {
     const ctx: PluginContext = {

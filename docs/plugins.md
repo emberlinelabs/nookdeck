@@ -257,7 +257,7 @@ ctx.widgets.provide("timer", (settings, tile) => ({
 ctx.widgets.push("timer", (tile) => ({ render: "card", data: tile.w >= 4 ? wideCard() : smallCard() }));
 ```
 
-`tile` is `{ w, h }` (type `TileSize`): the cells the tile takes in the layout, not pixels, and the same however the phone is turned. The function given to `push` may be `async`; if it throws for one tile, that tile keeps what it shows and the plugin log says why. Pushes of a widget arrive in the order you made them. A plain update given to `push` goes to every tile, as before, and a provider that takes only `settings` works unchanged. `http` and `command` widgets are not told the size. Needs Nookdeck 0.5.1: before it, `tile` is `undefined` and `push` takes only an update, so set `"nookdeck": ">=0.5.1"`.
+`tile` is `{ w, h }` (type `TileSize`): the cells the tile takes in the layout, not pixels, and the same however the phone is turned. The function given to `push` may be `async`; if it throws for one tile, that tile keeps what it shows and the plugin log says why. Pushes of a widget arrive in the order you made them. While a function push is still under way, only the newest later push waits for it; the ones in between are dropped. The function has 20 seconds for each tile: after that the tile is skipped for this push, the plugin log says so, and a result that comes later is ignored. A plain update given to `push` goes to every tile, as before, and a provider that takes only `settings` works unchanged. `http` and `command` widgets are not told the size. Needs Nookdeck 0.5.1: before it, `tile` is `undefined` and `push` takes only an update, so set `"nookdeck": ">=0.5.1"`.
 
 ## Settings
 
