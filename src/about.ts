@@ -20,10 +20,16 @@ export interface About {
 }
 
 /** Everything is known at build or start time: no network calls, no update check. */
-/** The version a package's "nookdeck": ">=x" is checked against: a modified or source build (dirty, or no commit) counts as a development build, which satisfies any minimum. */
-export function compatVersion(): string {
-  const a = aboutInfo();
-  return a.dirty || !a.commit ? `${a.version}-dev` : a.version;
+/** True for a program built with `bun build --compile`: its own code lives in Bun's built-in file system. */
+export const isCompiled = (moduleUrl: string = import.meta.url): boolean => /(\$|%24)bunfs|(~|%7E)BUN/i.test(moduleUrl);
+
+/**
+ * The version a package's "nookdeck": ">=x" is checked against. Releases are compiled programs and report their own
+ * version. An agent run from source (a clean tree too: main already has what the next version will ship before the number
+ * moves), or built from a modified tree or without a commit, is a development build, which satisfies any minimum.
+ */
+export function compatVersion(a: About = aboutInfo(), compiled: boolean = isCompiled()): string {
+  return !compiled || a.dirty || !a.commit ? `${a.version}-dev` : a.version;
 }
 
 export function aboutInfo(): About {
