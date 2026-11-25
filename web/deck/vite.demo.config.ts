@@ -3,6 +3,7 @@ import legacy from '@vitejs/plugin-legacy'
 import { existsSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
+import { deckNotices } from './vite.notices'
 
 /** demo.html -> index.html, so the folder can be served as it is. */
 const indexName = (): Plugin => ({
@@ -18,7 +19,7 @@ const indexName = (): Plugin => ({
 export default defineConfig({
   base: './',
   publicDir: false, // no manifest or app icons: the demo is only embedded
-  plugins: [preact(), legacy({ targets: ['ios >= 12', 'safari >= 12'], renderModernChunks: false }), indexName()],
+  plugins: [preact(), legacy({ targets: ['ios >= 12', 'safari >= 12'], renderModernChunks: false }), indexName(), deckNotices()],
   build: {
     cssTarget: 'safari12',
     outDir: 'dist-demo',

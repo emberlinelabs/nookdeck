@@ -17,5 +17,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "vite.config.ts", "../shared/icons.ts", "../shared/plugin-styles.ts", "../../src/plugins/card.ts"]
+  "include": ["src", "vite.config.ts", "vite.demo.config.ts", "vite.notices.ts", "../shared/icons.ts", "../shared/plugin-styles.ts", "../../src/plugins/card.ts"]
 }

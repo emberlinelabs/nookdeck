@@ -92,6 +92,13 @@ describe("demo deck: no network beyond its own files", () => {
       expect(html).not.toContain("manifest");
       expect(existsSync(join(dir, "build.json"))).toBe(false);
     });
+    test("the notice of the adapted Knowns UI code travels with the chunk that holds it", () => {
+      const js = readdirSync(join(dir, "assets")).filter((n) => n.endsWith(".js")).map((n) => readFileSync(join(dir, "assets", n), "utf8"));
+      const calendar = js.filter((s) => s.includes("pd-pcard__c-cell"));
+      expect(calendar.length).toBeGreaterThan(0);
+      for (const s of calendar) expect(s).toContain("Copyright (c) 2026 Knowns Lab");
+      expect(js.filter((s) => s.includes("Copyright (c) 2026 Knowns Lab"))).toHaveLength(1);
+    });
     test("every file is under assets/ or one of the two pages; the bundle is Safari 12 safe", () => {
       expect(readdirSync(dir).sort()).toEqual(["assets", "index.html", "tile.html"]);
       for (const f of readdirSync(join(dir, "assets")).filter((n) => n.endsWith(".js"))) expect(readFileSync(join(dir, "assets", f), "utf8")).not.toMatch(/\?\.[A-Za-z_$\[(]|\?\? |color-mix|oklch|clamp\(/);
