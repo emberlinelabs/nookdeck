@@ -74,6 +74,8 @@ describe("month: layout", () => {
     expect(monthLayout(220, 220, 6, 14)).toMatchObject({ title: true, dotRoom: true });
     expect(monthLayout(200, 130, 6, 12)).toMatchObject({ title: true, dotRoom: false });
     expect(monthLayout(150, 90, 6, 11)).toMatchObject({ title: false });
+    // a tall narrow box does not spread the weeks out
+    expect(monthLayout(150, 300, 6, 12).rowH).toBeLessThanOrEqual(29);
     const l = monthLayout(400, 200, 5, 14);
     expect(l.d).toBeLessThanOrEqual(30);
     expect(l.gridW).toBeLessThan(400);

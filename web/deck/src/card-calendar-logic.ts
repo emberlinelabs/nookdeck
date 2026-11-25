@@ -67,8 +67,9 @@ export function monthLayout(w: number, h: number, weeks: number, base: number): 
     title = false
     dotRoom = rowFor(false) >= 19
   }
-  const rowH = Math.max(0, rowFor(title))
   const colW = w / 7
+  // on a tall box the weeks stay together: a row is not much higher than a day is wide
+  const rowH = Math.max(0, Math.min(rowFor(title), Math.max(colW * 1.35, 24)))
   const d = Math.max(0, Math.floor(Math.min(rowH - (dotRoom ? 5 : 1), colW - 1, 30)))
   return {
     title,
