@@ -229,6 +229,8 @@ export type ThemeOrientation = "landscape" | "portrait" | "auto";
 export interface ScreenSettings {
   lite?: "auto" | "on" | "off";
   keepAwake?: boolean;
+  /** Move the grid by up to 2 px every 3 minutes against burn-in. Missing = off. */
+  burnInShift?: boolean;
   standby?: { enabled: boolean; afterMin: number; style: "digital" | "analog" | "words"; showDate?: boolean; showNext?: boolean };
   /** Black overlay opacity 0..0.9; from/to "HH:MM" is the schedule (may wrap midnight); both missing = never auto-dim. */
   dim?: { level: number; from?: string; to?: string };

@@ -195,7 +195,7 @@ describe("theme.screen and layout.alarms", () => {
   const alarm = (extra: Record<string, unknown> = {}) => ({ id: "wake", time: "06:30", enabled: true, sound: "chime", sunriseMin: 10, snoozeMin: 9, ...extra });
 
   test("existing layouts are unchanged: no screen, no alarms", () => {
-    const l = validateLayout(defaultLayout());
+    const l = validateLayout(base({ theme: { mode: "dark" } }));
     expect(l.theme?.screen).toBeUndefined();
     expect(l.alarms).toBeUndefined();
     expect(validateLayout(JSON.parse(JSON.stringify(l)))).toEqual(l);

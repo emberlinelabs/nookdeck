@@ -1,4 +1,7 @@
 export const ZH: { [en: string]: string } = {
+  "Burn-in shift": "防烧屏位移",
+  "Moves the grid 2 px every 3 minutes": "每 3 分钟将网格移动 2 px",
+  "Night dim": "夜间调暗",
   "AI sessions": "AI 会话",
   "Action failed": "操作失败",
   "Alert": "警报",

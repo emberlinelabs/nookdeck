@@ -6,6 +6,10 @@ export interface LocalScreen {
   standby?: boolean
   alarms?: boolean
   header?: HeaderMode
+  /** burn-in shift on this phone, either way; missing = what the layout says */
+  shift?: boolean
+  /** false = no night dim on this phone (the dim behind the standby clock stays) */
+  nightDim?: boolean
 }
 
 const K_LOCAL = 'pd.screen.local'
@@ -240,5 +244,68 @@ export function sunriseColor(p: number): string {
   const c = [0, 1, 2].map((k) => Math.round(stops[i][k] + (stops[i + 1][k] - stops[i][k]) * f))
   return 'rgb(' + c.join(',') + ')'
 }
+
+// ---- screen care ----
+
+export const SHIFT_MS = 3 * 60000
+/** A slow ring around the resting place, never more than 2 px from it. */
+export const SHIFT_PATH: ReadonlyArray<readonly [number, number]> = [[0, 0], [2, 0], [2, 2], [0, 2], [-2, 2], [-2, 0], [-2, -2], [0, -2], [2, -2]]
+
+/** Where the grid sits at `now`. It comes from the clock, so a phone that slept lands on the right step without having counted. */
+export function shiftAt(now: number): { x: number; y: number } {
+  const p = SHIFT_PATH[Math.floor(now / SHIFT_MS) % SHIFT_PATH.length]
+  return { x: p[0], y: p[1] }
+}
+
+export function shiftOn(s: ScreenSettings | undefined): boolean {
+  const l = localScreen().shift
+  return typeof l === 'boolean' ? l : !!(s && s.burnInShift === true)
+}
+
+export function nightDimOn(): boolean {
+  return localScreen().nightDim !== false
+}
+
+/** The page parts runShift needs, so tests can drive it without a browser. */
+export interface ShiftHost {
+  hidden: () => boolean
+  onVisibility: (fn: () => void) => () => void
+  now: () => number
+  setTimeout: (fn: () => void, ms: number) => number
+  clearTimeout: (id: number) => void
+}
+
+/** Calls `apply` now and at every 3 minute step. While the page is hidden there is no timer at all. Returns the stop function. */
+export function runShift(host: ShiftHost, apply: (p: { x: number; y: number }) => void): () => void {
+  let timer = 0
+  const stop = () => {
+    if (timer) host.clearTimeout(timer)
+    timer = 0
+  }
+  const step = () => {
+    stop()
+    if (host.hidden()) return
+    const now = host.now()
+    apply(shiftAt(now))
+    timer = host.setTimeout(step, SHIFT_MS - (now % SHIFT_MS) + 50)
+  }
+  const off = host.onVisibility(step)
+  step()
+  return () => {
+    off()
+    stop()
+  }
+}
+
+export const browserShiftHost = (): ShiftHost => ({
+  hidden: () => document.visibilityState === 'hidden',
+  onVisibility: (fn) => {
+    document.addEventListener('visibilitychange', fn)
+    return () => document.removeEventListener('visibilitychange', fn)
+  },
+  now: () => Date.now(),
+  setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+  clearTimeout: (id) => window.clearTimeout(id),
+})
 
 export const pad2 = (n: number) => (n < 10 ? '0' : '') + n

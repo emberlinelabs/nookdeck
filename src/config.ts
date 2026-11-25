@@ -255,6 +255,8 @@ export interface ScreenSettings {
   keepAwake?: boolean;   // default true
   standby?: StandbySettings;
   dim?: DimSettings;
+  /** Move the whole grid by up to 2 px every 3 minutes against burn-in. Missing = off; new layouts start with it on. */
+  burnInShift?: boolean;
 }
 export const SCREEN_DEFAULTS = {
   lite: "auto" as LiteMode,
@@ -328,7 +330,7 @@ export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "gpu", "memory", "upt
 export function defaultLayout(): Layout {
   return {
     version: 1,
-    theme: { mode: "dark", orientation: "landscape", tileStyle: "ios", iconStroke: 2.25 },
+    theme: { mode: "dark", orientation: "landscape", tileStyle: "ios", iconStroke: 2.25, screen: { burnInShift: true } },
     pages: [
       {
         // Dashboard: big clock + now playing on top, four metric tiles below.
@@ -642,6 +644,7 @@ function validateScreen(v: any): ScreenSettings | undefined {
     out.lite = v.lite;
   }
   if (v.keepAwake !== undefined) out.keepAwake = bool(v.keepAwake, "theme.screen.keepAwake");
+  if (v.burnInShift !== undefined) out.burnInShift = bool(v.burnInShift, "theme.screen.burnInShift");
   if (v.standby !== undefined && v.standby !== null) {
     const s = obj(v.standby, "theme.screen.standby");
     const d = SCREEN_DEFAULTS.standby;

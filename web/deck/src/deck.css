@@ -3656,3 +3656,6 @@
 .pd-root[data-pd-theme='light'] .pd-sb__date, .pd-root[data-pd-theme='light'] .pd-sb__next { color: var(--pd-muted); }
 .pd-root[data-pd-theme='light'] .pd-sb__analog line, .pd-root[data-pd-theme='light'] .pd-sb__analog circle { stroke: var(--pd-text); }
 .pd-root[data-pd-theme='light'] .pd-sb__analog circle { fill: var(--pd-text); }
+
+/* screen care: while the night layer is up it takes the tap, so the first touch lifts the dim and presses nothing */
+.pd-dim.pd-dim--tap { pointer-events: auto; cursor: pointer; touch-action: none; -ms-touch-action: none; -webkit-tap-highlight-color: transparent; }

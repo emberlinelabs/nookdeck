@@ -202,6 +202,8 @@ export interface ScreenSettings {
   lite?: 'auto' | 'on' | 'off'
   /** keep the phone screen on; default true */
   keepAwake?: boolean
+  /** move the grid by up to 2 px every 3 minutes against burn-in; missing = off */
+  burnInShift?: boolean
   standby?: {
     enabled: boolean
     /** idle minutes (no touch) before standby, 1..120; default 5 */

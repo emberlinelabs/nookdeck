@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 import { ALARMS_MAX, type Alarm, type AlarmSoundId, type DeviceInfo, type Layout, type ScreenSettings } from "@/types";
 
 const STANDBY_DEFAULT = { enabled: false, afterMin: 5, style: "digital" as const, showDate: true, showNext: true };
+/** What the Night dim switch fills in when it is turned on. */
+const NIGHT_DEFAULT = { from: "23:00", to: "07:00" };
 const clampInt = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.round(v) || lo));
 const newId = () => `al-${Math.random().toString(36).slice(2, 8)}`;
 /** Monday first; the stored value is 0=Sun..6=Sat. */
@@ -139,6 +141,7 @@ export function ScreenPanel({ layout, pageId, update, orientation, onOrientation
   const screen: ScreenSettings = layout.theme?.screen ?? {};
   const standby = { ...STANDBY_DEFAULT, ...screen.standby };
   const dim = screen.dim ?? { level: 0.6 };
+  const night = !!(dim.from || dim.to);
   const alarms = layout.alarms ?? [];
   const setScreen = (patch: Partial<ScreenSettings>) =>
     update((l) => {
@@ -183,17 +186,20 @@ export function ScreenPanel({ layout, pageId, update, orientation, onOrientation
             )}
           </Section>
 
-          <Section title={t("Dim")} hint={t("A black layer over the screen. Any touch lifts it for 30 seconds.")}>
+          <Section title={t("Screen care")} hint={t("For a phone that stays on all day.")}>
+            <SwitchRow id="s-shift" label={t("Burn-in shift")} checked={screen.burnInShift === true} onChange={(v) => setScreen({ burnInShift: v ? true : undefined })} />
+            <p className="-mt-2 text-xs text-muted-foreground">{t("Every 3 minutes the tiles move by up to 2 px.")}</p>
+            <SwitchRow id="s-night" label={t("Night dim")} checked={night} onChange={(v) => setDim(v ? NIGHT_DEFAULT : { from: undefined, to: undefined })} />
+            <p className="-mt-2 text-xs text-muted-foreground">{t("During these hours a black layer covers the screen. The first tap only lifts it for 30 seconds and presses nothing.")}</p>
+            {night && (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label={t("Dim from")} id="s-from"><Input id="s-from" type="time" value={dim.from ?? ""} onChange={(e) => setDim({ from: e.target.value || undefined })} /></Field>
+                <Field label={t("Dim until")} id="s-to"><Input id="s-to" type="time" value={dim.to ?? ""} onChange={(e) => setDim({ to: e.target.value || undefined })} /></Field>
+              </div>
+            )}
             <Slider label={t("Dim level")} min={0} max={0.9} step={0.05} value={dim.level} formatValue={(v) => `${Math.round(v * 100)}%`} onValueChange={(v) => { setDimPreview(true); setDim({ level: Math.round(v * 100) / 100 }); }} />
-            <div className="grid grid-cols-2 gap-3">
-              <Field label={t("Dim from")} id="s-from"><Input id="s-from" type="time" value={dim.from ?? ""} onChange={(e) => setDim({ from: e.target.value || undefined })} /></Field>
-              <Field label={t("Dim until")} id="s-to"><Input id="s-to" type="time" value={dim.to ?? ""} onChange={(e) => setDim({ to: e.target.value || undefined })} /></Field>
-            </div>
             <p className="-mt-2 text-xs text-muted-foreground">{dim.from && dim.to ? t("Dims every day from {from} to {to}.", { from: dim.from, to: dim.to }) : t("No schedule: the screen only dims in standby.")}</p>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="secondary" onClick={() => setDimPreview((v) => !v)}>{dimPreview ? t("Hide dim preview") : t("Preview dim")}</Button>
-              {(dim.from || dim.to) && <Button size="sm" variant="ghost" onClick={() => setDim({ from: undefined, to: undefined })}>{t("Clear schedule")}</Button>}
-            </div>
+            <Button size="sm" variant="secondary" className="self-start" onClick={() => setDimPreview((v) => !v)}>{dimPreview ? t("Hide dim preview") : t("Preview dim")}</Button>
           </Section>
 
           <Section title={t("Alarms")} hint={t("Alarms ring on the phone itself, even when the computer is off. Tap the phone once after opening Nookdeck so the sound can play.")}>

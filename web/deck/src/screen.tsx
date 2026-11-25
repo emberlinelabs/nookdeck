@@ -5,7 +5,7 @@ import { Icon } from './icon'
 import { timeWords, timeWordsEn } from './clock-words'
 import { NOSLEEP_MP4 } from './nosleep-video'
 import { audioState, playAlarm, previewSound, unlockAudio } from './alarm-sound'
-import { active, alarmsOn, headerMode, deviceId, dimLevel, inDimWindow, keepAwakeOn, liteOn, localScreen, markFired, myAlarms, onLocalScreen, pad2, RING_MS, saveLocalScreen, standbyCfg, sunriseColor, upcoming, type Due } from './screen-logic'
+import { active, alarmsOn, headerMode, deviceId, dimLevel, inDimWindow, keepAwakeOn, liteOn, localScreen, markFired, myAlarms, nightDimOn, shiftOn, onLocalScreen, pad2, RING_MS, saveLocalScreen, standbyCfg, sunriseColor, upcoming, type Due } from './screen-logic'
 import type { Alarm, ScreenSettings } from './types'
 
 const DIM_LIFT_MS = 30000
@@ -76,6 +76,17 @@ export function ScreenLayer(props: ScreenLayerProps) {
   const cfg = standbyCfg(s)
 
   useEffect(() => onLocalScreen(() => bump((x) => x + 1)), [])
+
+  // coming back from the background: draw the right screen at once, so a dim that is due is up before the first tap
+  const [hidden, setHidden] = useState(() => document.visibilityState === 'hidden')
+  useEffect(() => {
+    const on = () => {
+      setHidden(document.visibilityState === 'hidden')
+      setNow(Date.now())
+    }
+    document.addEventListener('visibilitychange', on)
+    return () => document.removeEventListener('visibilitychange', on)
+  }, [])
 
   // keep awake: Deck.tsx holds the Wake Lock; phones without it (iOS 12) get the muted looping inline video trick
   useEffect(() => {
@@ -201,11 +212,16 @@ export function ScreenLayer(props: ScreenLayerProps) {
   // timer: 1 s while something is on screen, else 5 s
   const standby = preview ? flags.indexOf('standby') >= 0 : !!cfg && now - lastTouch.current >= cfg.afterMin * 60000 && !cur
   standbyRef.current = standby
-  const dimWin = preview ? flags.indexOf('dim') >= 0 : inDimWindow(s, new Date(now)) && now - lastTouch.current >= DIM_LIFT_MS
+  const night = nightDimOn() && inDimWindow(s, new Date(now))
+  const dimWin = preview ? flags.indexOf('dim') >= 0 : night && now - lastTouch.current >= DIM_LIFT_MS
   const dimmed = standby || dimWin
-  const fast = standby || !!cur || (!!cfg && now - lastTouch.current >= cfg.afterMin * 60000 - 6000) || (inDimWindow(s, new Date(now)) && now - lastTouch.current < DIM_LIFT_MS + 1500)
+  // the night layer takes the first tap itself, so no tile under it is pressed; standby and the alarm have their own
+  const dimBlocks = !preview && dimWin && !standby && !cur && dimLevel(s) > 0
+  // no timer behind a hidden page, unless an alarm has to be able to ring
+  const asleep = hidden && !mine.length && !snz.current
+  const fast = standby || !!cur || (!!cfg && now - lastTouch.current >= cfg.afterMin * 60000 - 6000) || (night && now - lastTouch.current < DIM_LIFT_MS + 1500)
   useEffect(() => {
-    if (preview) return
+    if (preview || asleep) return
     const iv = window.setInterval(() => {
       const n = Date.now()
       // auto stop after 10 minutes of ringing
@@ -223,7 +239,7 @@ export function ScreenLayer(props: ScreenLayerProps) {
       setNow(n)
     }, fast ? 1000 : 5000)
     return () => clearInterval(iv)
-  }, [preview, fast, props.alarms, props.settings])
+  }, [preview, fast, asleep, props.alarms, props.settings])
 
   const d = new Date(now)
   const wakeFromStandby = (e: any) => {
@@ -279,7 +295,15 @@ export function ScreenLayer(props: ScreenLayerProps) {
         </div>
       ) : null}
       {catching ? <div class="pd-sb__catch" onTouchStart={(e) => e.preventDefault()} onClick={(e) => e.preventDefault()} /> : null}
-      {dimmed ? <div class={'pd-dim' + (lite ? ' pd-dim--lite' : '')} style={{ opacity: dimLevel(s) }} /> : null}
+      {dimmed ? (
+        <div
+          class={'pd-dim' + (lite ? ' pd-dim--lite' : '') + (dimBlocks ? ' pd-dim--tap' : '')}
+          style={{ opacity: dimLevel(s) }}
+          onTouchStart={dimBlocks ? wakeFromStandby : undefined}
+          onMouseDown={dimBlocks ? wakeFromStandby : undefined}
+          onClick={dimBlocks ? (e) => e.preventDefault() : undefined}
+        />
+      ) : null}
       {al ? (
         <div class={'pd-alarm' + (ringing ? ' pd-alarm--ring' : ' pd-alarm--sun')} style={{ background: ringing ? sunriseColor(1) : sunriseColor(progress), opacity: ringing ? 1 : sunOpacity }} role={ringing ? 'alertdialog' : 'presentation'} aria-label={t('Alarm')}>
           {ringing ? (
@@ -316,6 +340,9 @@ export function ScreenSheet(props: { settings?: ScreenSettings; alarms?: Alarm[]
   const sbConfigured = !!(s && s.standby && s.standby.enabled)
   const stand = loc.standby !== false
   const alOn = loc.alarms !== false
+  const shift = shiftOn(s)
+  const nightSet = !!(s && s.dim && s.dim.from && s.dim.to)
+  const nightOn = loc.nightDim !== false
   const mine = myAlarms(props.alarms, deviceId())
   const st = audioState()
   const seg = (v: 'auto' | 'on' | 'off', label: string) => (
@@ -369,6 +396,20 @@ export function ScreenSheet(props: { settings?: ScreenSettings; alarms?: Alarm[]
               <small>{sbConfigured ? t('After {0} min without a touch', (s && s.standby && s.standby.afterMin) || 5) : t('Off in the layout')}</small>
             </div>
             {sw(stand && sbConfigured, () => saveLocalScreen({ standby: !stand }), t('Standby clock'))}
+          </div>
+          <div class="pd-scr__row">
+            <div class="pd-scr__t">
+              {t('Burn-in shift')}
+              <small>{t('Moves the grid 2 px every 3 minutes')}</small>
+            </div>
+            {sw(shift, () => saveLocalScreen({ shift: !shift }), t('Burn-in shift'))}
+          </div>
+          <div class="pd-scr__row">
+            <div class="pd-scr__t">
+              {t('Night dim')}
+              <small>{nightSet && s && s.dim ? s.dim.from + ' - ' + s.dim.to : t('Off in the layout')}</small>
+            </div>
+            {sw(nightOn && nightSet, () => saveLocalScreen({ nightDim: !nightOn }), t('Night dim'))}
           </div>
           <div class="pd-scr__row">
             <div class="pd-scr__t">

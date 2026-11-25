@@ -15,7 +15,7 @@ import { ScreenLayer, ScreenSheet } from './screen'
 import { swapPreview } from './swap'
 import { coreTileOf, previewSlot } from './plugin-logic'
 import type { PluginSlot } from './plugin-logic'
-import { headerMode, keepAwakeOn, liteOn, onLocalScreen } from './screen-logic'
+import { browserShiftHost, headerMode, keepAwakeOn, liteOn, onLocalScreen, runShift, shiftOn } from './screen-logic'
 import type { PermissionRequest, QuestionRequest, WeatherData, PushedValue, Notice, GotoReq, HassEntity, HassState, IconAssets, AiData, Item, Layout, Media, MediaCommand, Orientation, Page, Stats, TileStyle } from './types'
 
 export { Icon }
@@ -1839,6 +1839,17 @@ export function Deck(props: DeckProps) {
   const lite = liteOn(theme.screen)
   const [menu, setMenu] = useState(false)
   liteRef.current = lite && !preview
+  // burn-in shift: the grid only, inside the page padding. null = off, and then the grid has no extra style at all.
+  const shifting = !preview && shiftOn(theme.screen)
+  const [shift, setShift] = useState<{ x: number; y: number } | null>(null)
+  useEffect(() => {
+    if (!shifting) return
+    const stop = runShift(browserShiftHost(), setShift)
+    return () => {
+      stop()
+      setShift(null)
+    }
+  }, [shifting])
   // theme: look fields -> variables and data attributes; font-face, per-kind tokens and the pack's own css are injected as <style> / <link>.
   // `?theme=off` is safe mode (the look is ignored); a failure here never takes the deck down. A rule can override the mode while it is active.
   const themeOff = useRef(/[?&]theme=off(&|$)/.test(location.search)).current
@@ -2009,7 +2020,7 @@ export function Deck(props: DeckProps) {
                       <div
                         class="pd-grid"
                         data-grid={p.id}
-                        style={{ gridTemplateColumns: 'repeat(' + cols + ', ' + cell + 'px)', gridTemplateRows: 'repeat(' + rows + ', ' + cell + 'px)' }}
+                        style={{ gridTemplateColumns: 'repeat(' + cols + ', ' + cell + 'px)', gridTemplateRows: 'repeat(' + rows + ', ' + cell + 'px)', left: shift ? shift.x + 'px' : '', top: shift ? shift.y + 'px' : '' }}
                       >
                         {slots}
                         {items.map((it) => (
