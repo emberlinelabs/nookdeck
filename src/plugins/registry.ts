@@ -3,6 +3,7 @@
  * (10 minutes, ETag, last good copy kept on disk for offline use) and checks every install against the entry's sha256.
  * NOOKDECK_REGISTRY_URL overrides the address (tests, a mirror).
  */
+import { cleanOs, type PluginOs } from "./os";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { HOME, PLUGIN_ID_RE } from "../config";
@@ -31,6 +32,8 @@ export interface RegistryEntry {
   /** "theme" for a theme package; missing means plugin. */
   type?: "plugin" | "theme";
   permissions?: unknown;
+  /** The systems it works on, when the registry lists them; the manifest decides at install. */
+  os?: PluginOs[];
 }
 /** What the UI shows about a registry plugin before it is installed (parsed from its nookdeck.json in the repo). */
 export interface RegistryManifest {
@@ -45,6 +48,7 @@ export interface RegistryManifest {
   layouts: Array<{ id: string; name: string }>;
   /** The entry module of a code plugin, or null for a no-code one. */
   main: string | null;
+  os?: PluginOs[];
   /** The version the registry lists; `version` above is what the repo's manifest says now (they can differ until the entry is updated). */
   registryVersion: string;
 }
@@ -68,6 +72,8 @@ export function parseRegistry(raw: unknown): RegistryEntry[] {
     for (const k of ["description", "author", "tier"] as const) { const v = str(e[k], 300); if (v) o[k] = v; }
     for (const k of ["icon", "screenshot"] as const) { const v = str(e[k], 400); if (v && /^https:\/\//i.test(v)) o[k] = v; }
     if (e.permissions && typeof e.permissions === "object") o.permissions = e.permissions;
+    const os = cleanOs(e.os);
+    if (os) o.os = os;
     out.push(o);
   }
   return out;
@@ -199,7 +205,7 @@ export class Registry {
       widgets: m.widgets.map((w) => ({ id: w.id, name: w.name, render: w.render, sizes: w.sizes, settings: w.settings, ...(w.preview !== undefined ? { preview: w.preview } : {}) })),
       actions: m.actions.map((a) => ({ id: a.id, name: a.name, settings: a.settings })),
       themes: m.themes.map((t) => ({ id: t.id, name: t.name })), layouts: m.layouts.map((l) => ({ id: l.id, name: l.name })),
-      main: m.main, registryVersion: entry.version,
+      main: m.main, ...(m.os ? { os: m.os } : {}), registryVersion: entry.version,
     };
     this.manifests.set(key, { at: this.now(), m: out });
     return out;

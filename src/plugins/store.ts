@@ -2,6 +2,8 @@
  * Installed plugins on disk: ~/.nookdeck/plugins/<id>/<version>/ (the files) and ~/.nookdeck/plugins.json (state: enabled,
  * pinned version and sha256, granted permissions, settings). Install from a local folder or manifest file, or from an https URL.
  */
+import { osReason, type PluginOs } from "./os";
+import { platform } from "../platform";
 import { userHome } from "../home";
 import { createHash } from "node:crypto";
 import { chmod, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
@@ -84,6 +86,8 @@ export interface StoreOptions {
   /** Test hook: where GitHub packages come from (default https://codeload.github.com). */
   codeloadBase?: string;
   now?: () => number;
+  /** Test hook: which system this computer is (default: the real one). */
+  platform?: string;
 }
 
 export interface PluginSummary {
@@ -110,7 +114,9 @@ export interface PluginSummary {
   actions: Array<{ id: string; name: string; settings: SettingField[] }>;
   themes: Array<{ id: string; name: string; theme: unknown }>;
   layouts: Array<{ id: string; name: string; layout: unknown }>;
-  /** Why it cannot run (files changed since install, manifest unreadable). */
+  /** The systems it works on; missing = every one. */
+  os?: PluginOs[];
+  /** Why it cannot run (files changed since install, manifest unreadable, another operating system). */
   error?: string;
   /** The plugin runs code (`main`): trusted code, not a sandbox. */
   code: boolean;
@@ -177,6 +183,9 @@ export class PluginStore {
         if (st.linked) { st.sha256 = packageHash(files); st.version = manifest.version; this.manifests.set(id, { manifest }); }
         else if (packageHash(files) !== st.sha256) { st.enabled = false; this.manifests.set(id, { manifest, error: "the plugin's files changed after install: reinstall it" }); }
         else this.manifests.set(id, { manifest });
+        // D3: copied from another computer, or updated by hand: kept, shown disabled with the reason
+        const wrongOs = this.osReason(manifest);
+        if (wrongOs && !this.manifests.get(id)!.error) this.manifests.set(id, { manifest, error: wrongOs });
       } catch (e: any) {
         st.enabled = false;
         this.manifests.set(id, { manifest: placeholder(id, st.version), error: `cannot read the plugin: ${String(e?.message ?? e).slice(0, 120)}` });
@@ -197,6 +206,9 @@ export class PluginStore {
     }
     this.changed();
   }
+
+  /** Why this computer cannot run the plugin, if it is made for other systems. */
+  osReason(m: { os?: PluginOs[] }): string | undefined { return osReason(m.os, this.opts.platform ?? platform.id); }
 
   isBuiltin(id: string): boolean { return this.builtin.has(id); }
 
@@ -256,7 +268,7 @@ export class PluginStore {
       return f;
     });
     return {
-      id, name: m.name, version: s.version, ...(m.author ? { author: m.author } : {}), ...(m.description ? { description: m.description } : {}), ...(m.icon ? { icon: m.icon } : {}),
+      id, name: m.name, version: s.version, ...(m.author ? { author: m.author } : {}), ...(m.description ? { description: m.description } : {}), ...(m.icon ? { icon: m.icon } : {}), ...(m.os ? { os: m.os } : {}),
       source: s.source, sha256: s.sha256, installedAt: s.installedAt, unreviewed: !this.builtin.has(id) && !s.reviewed, ...(this.builtin.has(id) ? { builtin: true } : {}), ...(s.reviewed ? { registryVersion: s.registryVersion } : {}), enabled: s.enabled && !e.error,
       permissions: m.permissions, granted: s.granted ?? { network: [] }, needsApproval: !covers(s.granted, m.permissions),
       permissionLines: describePermissions(m.permissions), fields, settings: values,
@@ -357,6 +369,8 @@ export class PluginStore {
     let manifest: Manifest;
     try { manifest = parseManifest(JSON.parse(new TextDecoder().decode(files.get(MANIFEST_FILE))), { agentVersion: this.opts.agentVersion }); }
     catch (e: any) { throw new PluginError(e instanceof SyntaxError ? `${MANIFEST_FILE} is not valid JSON: ${e.message}` : `${MANIFEST_FILE}: ${e?.message ?? e}`); }
+    const wrongOs = this.osReason(manifest);
+    if (wrongOs) throw new PluginError(wrongOs, 409);
     if (manifest.main && files.size === 1 && /^https?:/i.test(source.trim()) && !githubRepo(source.trim())) throw new PluginError("a plugin with code cannot be installed from a single manifest address: install code plugins from a GitHub repository URL or a folder");
     if (manifest.main && !files.has(manifest.main)) throw new PluginError(`${MANIFEST_FILE}: main is "${manifest.main}", but that file is not in the plugin`);
     const sha = packageHash(files);
@@ -405,6 +419,8 @@ export class PluginStore {
     let manifest: Manifest;
     try { manifest = parseManifest(JSON.parse(new TextDecoder().decode(files.get(MANIFEST_FILE))), { agentVersion: this.opts.agentVersion }); }
     catch (e: any) { throw new PluginError(e instanceof SyntaxError ? `${MANIFEST_FILE} is not valid JSON: ${e.message}` : `${MANIFEST_FILE}: ${e?.message ?? e}`); }
+    const wrongOs = this.osReason(manifest);
+    if (wrongOs) throw new PluginError(wrongOs, 409);
     if (manifest.main && !files.has(manifest.main)) throw new PluginError(`${MANIFEST_FILE}: main is "${manifest.main}", but that file is not in the folder`);
     const prev = this.state.plugins[manifest.id];
     if (prev && !prev.linked) throw new PluginError(`${manifest.id} is already installed from a package: remove it first, then link the folder`, 409);
@@ -433,7 +449,8 @@ export class PluginStore {
     }
     if (manifest.id !== id) throw new PluginError(`the id changed to ${manifest.id}; link the folder again`);
     s.version = manifest.version; s.sha256 = packageHash(files); s.granted = manifest.permissions; s.enabled = true;
-    this.manifests.set(id, { manifest });
+    const wrongOs = this.osReason(manifest);
+    this.manifests.set(id, { manifest, ...(wrongOs ? { error: wrongOs } : {}) });
     await this.save();
     this.changed();
     return this.summary(id)!;

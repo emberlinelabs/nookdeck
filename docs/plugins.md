@@ -32,7 +32,12 @@ A plugin adds tiles and buttons to Nookdeck. It is a folder (usually a GitHub re
 | `version` | Exact version. Each install is pinned to a version and a hash of the package. |
 | `nookdeck` | The Nookdeck versions the plugin works with. |
 | `permissions` | Everything the plugin may touch. See below. |
+| `os` | Optional: `["darwin"]`, `["win32"]`, `["linux"]` or several of them. Leave it out when the plugin works on every system. |
 | `widgets`, `actions` | What the plugin adds. |
+
+### One system only
+
+Set `"os": ["darwin"]` for a plugin that needs a Mac. On another system the install (also `nookdeck plugin dev`) is refused with "This plugin works on macOS only" (the message names your list), a copy that is already there is shown disabled with the same reason, and the Store shows a macOS badge. Nookdeck before 0.5.0 ignores the field, so also set `"nookdeck": ">=0.5.0"`; the same goes for a `card` widget.
 
 ## Permissions
 

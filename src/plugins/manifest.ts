@@ -1,4 +1,5 @@
 import { PLUGIN_ID_RE, STYLES, validateLayout, validateLook, validatePackLook, validateTheme, type Look, type PackLook, type MacroStep } from "../config";
+import { cleanOs } from "./os";
 import { macroSteps } from "../automation";
 import { cleanRender } from "./sources";
 import {
@@ -286,6 +287,7 @@ export function parseManifest(raw: unknown, opts: { agentVersion?: string; allow
     if (opts.agentVersion && !versionAtLeast(opts.agentVersion, nookdeck)) fail(`this plugin needs Nookdeck ${nookdeck}, you have ${opts.agentVersion}. Update Nookdeck first.`);
   }
   const main = parseMain(raw.main);
+  const os = raw.os === undefined ? undefined : cleanOs(raw.os) ?? fail('os must be a list of "darwin", "win32" and/or "linux" (leave it out for every system)');
   const permissions = parsePermissions(raw.permissions);
   const settings = settingFields(raw.settings, "settings");
   const widgets = (raw.widgets === undefined ? [] : Array.isArray(raw.widgets) && raw.widgets.length <= 20 ? raw.widgets : fail("widgets must be a list of up to 20 widgets")).map((w: unknown, i: number) => parseWidget(w, permissions, settings, i, main !== null));
@@ -318,6 +320,7 @@ export function parseManifest(raw: unknown, opts: { agentVersion?: string; allow
     ...(raw.description !== undefined ? { description: text(raw.description, "description", 300, false) } : {}),
     ...(raw.icon !== undefined ? { icon: text(raw.icon, "icon", 140, false) } : {}),
     permissions, settings, widgets, actions, themes, layouts, main,
+    ...(os ? { os } : {}),
   };
 }
 

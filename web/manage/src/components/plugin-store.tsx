@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/knowns/badge";
 import { Button } from "@/components/ui/knowns/button";
 import { TilePreview } from "@/components/tile-preview";
 import { api } from "@/api";
-import { permChips, riskTone } from "@/lib/plugin-ui";
+import { osBadges, permChips, riskTone } from "@/lib/plugin-ui";
 import { Row } from "@/components/plugin-view";
 import { t, useLanguage } from "@/lib/i18n";
 import type { RegistryEntry, RegistryManifest, Theme } from "@/types";
@@ -12,6 +12,7 @@ import type { RegistryEntry, RegistryManifest, Theme } from "@/types";
 /** The button of a Store card: Add, Update, or a quiet "Installed". */
 export function EntryButton({ entry, busy, onAdd, size = "sm" }: { entry: RegistryEntry; busy: boolean; onAdd: () => void; size?: "sm" | "xs" }) {
   useLanguage();
+  if (entry.unavailable && (!entry.installed || entry.updateAvailable || entry.fromLink)) return <Button size={size} variant="secondary" disabled title={entry.unavailable} aria-label={`${entry.name}: ${entry.unavailable}`}>{entry.updateAvailable ? t("Update") : t("Add")}</Button>;
   if (entry.fromLink) return <Button size={size} loading={busy} icon={<Refresh />} onClick={onAdd} aria-label={t("Switch {name} to the reviewed version", { name: entry.name })}>{t("Switch to the reviewed version")}</Button>;
   if (entry.updateAvailable) return <Button size={size} loading={busy} icon={<Refresh />} onClick={onAdd} aria-label={t("Update {name}", { name: entry.name })}>{t("Update")}</Button>;
   if (entry.installed) return <Button size={size} variant="secondary" disabled aria-label={t("{name} is installed", { name: entry.name })}>{t("Installed")}</Button>;
@@ -43,6 +44,8 @@ export function EntryCard({ entry, theme, busy, onAdd, onOpen }: { entry: Regist
   const perms = man?.permissions ?? entry.permissions;
   const chips = perms ? permChips(perms) : [];
   const first = man?.widgets[0];
+  const os = osBadges(man?.os ?? entry.os);
+  const unavailable = man?.unavailable ?? entry.unavailable;
   const h = hueOf(entry.id);
   return (
     <article ref={ref} className="group flex flex-col overflow-hidden rounded-2xl border bg-card text-card-foreground transition-colors hover:border-foreground/30" aria-label={entry.name}>
@@ -66,12 +69,14 @@ export function EntryCard({ entry, theme, busy, onAdd, onOpen }: { entry: Regist
         </div>
         {entry.description && <p className="line-clamp-2 text-[13px] text-muted-foreground">{entry.description}</p>}
         <div className="flex flex-wrap gap-1.5">
+          {os.map((n) => <Badge key={n} size="sm" tone="neutral">{n}</Badge>)}
           {!perms ? <span className="text-xs text-muted-foreground">…</span> : chips.length === 0 ? <Badge size="sm" tone="success" variant="outline">{t("No special access")}</Badge> : chips.map((c) => <Badge key={c.key} size="sm" tone={riskTone(c.risk)} variant="outline">{c.label}</Badge>)}
         </div>
         {entry.fromLink && <p className="text-xs text-muted-foreground">{t("You installed this from a link. The Store has a version Nookdeck checked. Your settings and tiles stay.")}</p>}
+        {unavailable && <p className="text-xs text-muted-foreground">{unavailable}</p>}
         <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2">
           <Button size="sm" variant="ghost" onClick={onOpen}>{t("Details")}</Button>
-          <EntryButton entry={entry} busy={busy} onAdd={onAdd} />
+          <EntryButton entry={{ ...entry, unavailable }} busy={busy} onAdd={onAdd} />
         </div>
       </div>
     </article>
@@ -84,6 +89,8 @@ export function EntryRow({ entry, busy, onAdd, onOpen }: { entry: RegistryEntry;
   const [ref, man] = useLazyManifest(entry.id);
   const perms = man?.permissions ?? entry.permissions;
   const chips = perms ? permChips(perms) : [];
+  const os = osBadges(man?.os ?? entry.os);
+  const unavailable = man?.unavailable ?? entry.unavailable;
   return (
     <Row label={entry.name} onOpen={onOpen}>
       <span ref={ref as React.RefObject<HTMLSpanElement>} className="grid size-8 flex-none place-items-center overflow-hidden rounded-lg bg-muted text-muted-foreground">
@@ -98,9 +105,10 @@ export function EntryRow({ entry, busy, onAdd, onOpen }: { entry: RegistryEntry;
       </div>
       <p className="min-w-0 basis-56 flex-[2] truncate text-[13px] text-muted-foreground">{entry.description}</p>
       <div className="flex flex-wrap items-center gap-1">
+        {os.map((n) => <Badge key={n} size="sm" tone="neutral" title={unavailable}>{n}</Badge>)}
         {perms && chips.length === 0 ? <span className="text-xs text-muted-foreground">{t("No special access")}</span> : chips.map((c) => <Badge key={c.key} size="sm" tone={riskTone(c.risk)} variant="outline">{c.label}</Badge>)}
       </div>
-      <div className="ml-auto flex-none"><EntryButton entry={entry} busy={busy} onAdd={onAdd} size="xs" /></div>
+      <div className="ml-auto flex-none"><EntryButton entry={{ ...entry, unavailable }} busy={busy} onAdd={onAdd} size="xs" /></div>
     </Row>
   );
 }

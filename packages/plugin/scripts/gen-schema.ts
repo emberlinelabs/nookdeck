@@ -41,6 +41,7 @@ const schema = {
     actions: { type: "array", items: { $ref: "#/$defs/action" }, maxItems: 20 },
     themes: { type: "array", maxItems: 20, items: { type: "object", required: ["id", "theme"], properties: { id: { type: "string", pattern: idPart }, name: { type: "string", maxLength: 60 }, theme: { type: "object", description: "A Nookdeck theme object (same as layout.theme)." } }, additionalProperties: false } },
     layouts: { type: "array", maxItems: 10, items: { type: "object", required: ["id", "layout"], properties: { id: { type: "string", pattern: idPart }, name: { type: "string", maxLength: 60 }, layout: { type: "object", description: "A Nookdeck layout object." } }, additionalProperties: false } },
+    os: { type: "array", minItems: 1, uniqueItems: true, items: { enum: ["darwin", "win32", "linux"] }, description: "The systems the plugin works on. Leave it out when it works everywhere." },
     main: { type: ["string", "null"], description: "Entry module of a code plugin (JS or TS) that exports activate(ctx). Omit or null for a no-code plugin." },
   },
   $defs: {

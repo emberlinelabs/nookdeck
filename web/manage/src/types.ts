@@ -460,6 +460,10 @@ export interface PluginPermissions {
 }
 /** One plugin of the community registry (GET /api/plugins/registry). Entries carry no tiles or buttons: see RegistryManifest. */
 export interface RegistryEntry {
+  /** The systems it works on ("darwin" ...); missing = every one. */
+  os?: string[];
+  /** Why this computer cannot install it. */
+  unavailable?: string;
   id: string;
   name: string;
   version: string;
@@ -499,6 +503,10 @@ export interface TileDef {
 }
 /** GET /api/plugins/registry/:id/manifest: what a not-yet-installed plugin adds and asks for. */
 export interface RegistryManifest {
+  /** The systems it works on ("darwin" ...); missing = every one. */
+  os?: string[];
+  /** Why this computer cannot install it. */
+  unavailable?: string;
   id: string;
   name: string;
   version: string;
@@ -522,6 +530,8 @@ export interface PluginProcess {
   lastError?: string;
 }
 export interface PluginInfo {
+  /** The systems it works on ("darwin" ...); missing = every one. */
+  os?: string[];
   /** Reviewed through the registry (not just installed from a link). */
   reviewed?: boolean;
   registryVersion?: string;

@@ -316,7 +316,8 @@ export async function startServer(opts: StartOptions = {}) {
   const annotate = (e: RegistryEntry) => {
     const have = pluginStore.has(e.id) && !pluginStore.isBuiltin(e.id) ? pluginStore.entry(e.id) : undefined;
     const installedVersion = have?.state.version;
-    return { ...e, installed: !!have, ...(installedVersion ? { installedVersion } : {}), updateAvailable: !!installedVersion && compareVersions(e.version, installedVersion) > 0 };
+    const unavailable = pluginStore.osReason(e);
+    return { ...e, ...(unavailable ? { unavailable } : {}), installed: !!have, ...(installedVersion ? { installedVersion } : {}), updateAvailable: !!installedVersion && compareVersions(e.version, installedVersion) > 0 };
   };
   const pluginRuntime = new PluginRuntime(pluginStore, {
     core: coreHost,
@@ -928,7 +929,9 @@ export async function startServer(opts: StartOptions = {}) {
           if (regRoute[1] === "registry" && regRoute[2] && regRoute[3] === "manifest" && req.method === "GET") {
             const entry = await registry.entry(regRoute[2]);
             if (!entry) return json({ error: "that plugin is not in the registry" }, 404);
-            return json(await registry.manifest(entry));
+            const m = await registry.manifest(entry);
+            const unavailable = pluginStore.osReason(m);
+            return json(unavailable ? { ...m, unavailable } : m);
           }
           if (regRoute[1] === "registry" && regRoute[2] && regRoute[3] === "readme" && req.method === "GET") {
             const entry = await registry.entry(regRoute[2]);

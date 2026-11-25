@@ -8,6 +8,7 @@
  *   Layout  widget {kind:"widget", widget:"plugin", plugin:{id,widget,settings}}, action {type:"plugin", plugin, action, settings}
  */
 import type { Layout, MacroStep, Theme } from "../config";
+import type { PluginOs } from "./os";
 
 export const RENDERERS = ["stat", "gauge", "text", "list", "chart", "image", "status", "card"] as const;
 export type Renderer = (typeof RENDERERS)[number];
@@ -78,6 +79,8 @@ export interface Manifest {
   layouts: { id: string; name: string; layout: Layout }[];
   /** Code entry, a relative path inside the plugin folder (P2); null for a no-code plugin. */
   main: string | null;
+  /** The systems it works on (D3); missing = every one. */
+  os?: PluginOs[];
 }
 
 /** One entry of ~/.nookdeck/plugins.json. */

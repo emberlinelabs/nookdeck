@@ -1,3 +1,4 @@
+import { OS_NAMES, type PluginOs } from "../../../../src/plugins/os";
 import type { Layout, PluginInfo } from "@/types";
 import { t } from "@/lib/i18n";
 import type { PluginPermissions } from "@/types";
@@ -53,3 +54,6 @@ export function previewPluginData(layout: Layout, plugins: PluginInfo[]): Record
   }
   return out;
 }
+
+/** The badges of a plugin made for some systems only ("macOS"); none when it works everywhere. */
+export const osBadges = (os: string[] | undefined): string[] => (os ?? []).map((x) => OS_NAMES[x as PluginOs] ?? x);

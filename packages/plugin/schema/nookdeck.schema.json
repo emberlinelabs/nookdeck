@@ -121,6 +121,19 @@
         "additionalProperties": false
       }
     },
+    "os": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "darwin",
+          "win32",
+          "linux"
+        ]
+      },
+      "description": "The systems the plugin works on. Leave it out when it works everywhere."
+    },
     "main": {
       "type": [
         "string",

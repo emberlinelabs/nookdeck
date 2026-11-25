@@ -131,6 +131,7 @@ function normalizeFields(raw: unknown, saved: Record<string, unknown> = {}): Plu
 }
 
 /** permissions: {network?: string[], shell?: bool, keyboard?: bool, storage?: bool}; anything else is ignored. */
+const osList = (v: unknown): string[] | undefined => { const l = Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []; return l.length ? l : undefined; };
 export function normalizePermissions(raw: unknown): PluginPermissions {
   const r = rec(raw);
   return {
@@ -153,6 +154,7 @@ function normalizeRegistryManifest(raw: unknown): RegistryManifest | null {
     widgets: (Array.isArray(r.widgets) ? r.widgets : []).flatMap((x: unknown) => { const o = rec(x); const i = str(o.id); return i ? [{ id: i, name: str(o.name) ?? i, render: str(o.render) ?? "", sizes: (Array.isArray(o.sizes) ? o.sizes : []).filter((s): s is string => typeof s === "string"), preview: o.preview }] : []; }),
     actions: (Array.isArray(r.actions) ? r.actions : []).flatMap((x: unknown) => { const o = rec(x); const i = str(o.id); return i ? [{ id: i, name: str(o.name) ?? i }] : []; }),
     main: typeof r.main === "string" ? r.main : null,
+    os: osList(r.os), unavailable: str(r.unavailable),
   };
 }
 export function normalizeRegistryEntry(raw: unknown): RegistryEntry | null {
@@ -164,6 +166,7 @@ export function normalizeRegistryEntry(raw: unknown): RegistryEntry | null {
     screenshot: str(r.screenshot), tier: str(r.tier), verified: r.tier === "verified" || r.verified === true,
     permissions: r.permissions && typeof r.permissions === "object" ? normalizePermissions(r.permissions) : undefined,
     installed: r.installed === true, installedVersion: str(r.installedVersion), updateAvailable: r.updateAvailable === true,
+    os: osList(r.os), unavailable: str(r.unavailable),
   };
 }
 
@@ -230,6 +233,7 @@ export function normalizePlugin(raw: unknown): PluginInfo | null {
     builtin: r.builtin === true ? true : undefined,
     unreviewed: r.builtin === true ? false : r.unreviewed !== false,
     needsApproval: r.needsApproval === true,
+    os: osList(r.os),
     error: str(r.error),
     permissions: normalizePermissions(r.permissions),
     granted: normalizePermissions(r.granted),

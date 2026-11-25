@@ -20,8 +20,8 @@ import type { Layout, PluginInfo, PluginPermissions, RegistryEntry, RegistryMani
 
 const GUIDE = "https://github.com/howznguyen/nookdeck/blob/main/docs/plugins.md";
 type Tab = "discover" | "installed" | "updates";
-type Filter = "all" | "nocode" | "code" | "net" | "shell" | "keys";
-const FILTERS: { id: Filter; label: string }[] = [{ id: "all", label: "All" }, { id: "nocode", label: "No code" }, { id: "code", label: "Runs code" }, { id: "net", label: "Uses the internet" }, { id: "shell", label: "Runs commands" }, { id: "keys", label: "Presses keys" }];
+type Filter = "all" | "nocode" | "code" | "net" | "shell" | "keys" | "mac";
+const FILTERS: { id: Filter; label: string }[] = [{ id: "all", label: "All" }, { id: "nocode", label: "No code" }, { id: "code", label: "Runs code" }, { id: "net", label: "Uses the internet" }, { id: "shell", label: "Runs commands" }, { id: "keys", label: "Presses keys" }, { id: "mac", label: "macOS" }];
 const matches = (e: { name: string; id: string; author?: string; description?: string }, q: string): boolean => !q || `${e.name} ${e.id} ${e.author ?? ""} ${e.description ?? ""}`.toLowerCase().includes(q.toLowerCase());
 
 const fromEntry = (e: RegistryEntry): PluginDetails => ({ id: e.id, name: e.name, author: e.author, version: e.version, description: e.description, verified: e.verified, permissions: e.permissions, widgets: [], actions: [], source: e.repo, screenshot: e.screenshot, readme: true });
@@ -77,6 +77,8 @@ export function PluginsOverview({ deeplink, onDeeplinkDone, update, layout, onSa
     setBusy(e.id);
     const m = await api.getRegistryManifest(e.id);
     setBusy(null);
+    const unavailable = m?.unavailable ?? e.unavailable;
+    if (unavailable) return setError(unavailable);
     const permissions = m?.permissions ?? e.permissions;
     if (!permissions) return setError(t("Could not read what this plugin asks for, so it was not installed. Try again in a moment."));
     setAsk({ entry: e, permissions });
@@ -143,6 +145,7 @@ export function PluginsOverview({ deeplink, onDeeplinkDone, update, layout, onSa
     if (filter === "all") return true;
     const m = mans[e.id];
     const perms = m?.permissions ?? e.permissions;
+    if (filter === "mac") return (m?.os ?? e.os)?.includes("darwin") === true; // the ones with a macOS badge
     if (filter === "nocode" || filter === "code") return m ? (filter === "nocode" ? m.main === null : m.main !== null) : false;
     if (!perms) return false;
     return filter === "net" ? perms.network.length > 0 : filter === "shell" ? perms.shell : perms.keyboard;

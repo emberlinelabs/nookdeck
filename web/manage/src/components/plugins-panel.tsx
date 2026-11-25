@@ -18,7 +18,7 @@ import { Switch } from "@/components/ui/knowns/switch";
 import { api } from "@/api";
 import { t, useLanguage } from "@/lib/i18n";
 import { addLayoutPack, pluginUsage, removePluginItems } from "@/lib/plugins";
-import { permChips, riskTone } from "@/lib/plugin-ui";
+import { osBadges, permChips, riskTone } from "@/lib/plugin-ui";
 import { Row, type PluginView, RowList } from "@/components/plugin-view";
 import type { Layout, PluginField, PluginInfo, PluginPermissions } from "@/types";
 
@@ -371,6 +371,7 @@ function PluginCard({ plugin: p, busy, onToggle, onRemove, onSaved, onError, onR
               {onDetails ? <button type="button" onClick={onDetails} className="rounded font-semibold underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring">{p.name}</button> : <span className="font-semibold">{p.name}</span>}
               <span className="text-xs text-muted-foreground">v{p.version}{p.author ? ` · ${p.author}` : ""}</span>
               {status}
+              {osBadges(p.os).map((n) => <Badge key={n} size="sm" tone="neutral">{n}</Badge>)}
               {p.builtin ? <Badge size="sm" tone="neutral">{t("Built-in")}</Badge> : p.unreviewed && <Badge size="sm" tone="warning">{t("Unreviewed")}</Badge>}
               {(p.permissions.shell || p.permissions.keyboard) && <Badge size="sm" tone="danger" variant="outline" title={t("It can run commands or press keys on this computer. Only allow plugins you trust.")}>{t("Runs trusted code")}</Badge>}
             </div>
@@ -448,6 +449,7 @@ function PluginRow({ plugin: p, busy, onToggle, onRemove, onSaved, onError, onRe
           <div className="flex items-center gap-1.5">
             <button type="button" onClick={onDetails} className="truncate rounded text-left text-[13.5px] font-medium underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring">{p.name}</button>
             {p.unreviewed && <Badge size="sm" tone="warning">{t("Unreviewed")}</Badge>}
+            {osBadges(p.os).map((n) => <Badge key={n} size="sm" tone="neutral">{n}</Badge>)}
           </div>
           <div className="truncate text-xs text-muted-foreground">{p.author ? `${p.author} · ` : ""}v{p.version}</div>
         </div>
