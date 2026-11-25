@@ -347,52 +347,63 @@ function arrangeTiles(card: HTMLElement) {
   }
 }
 
+/** The sizes a tile label may take, largest first (parts of the card's font). */
+const TILE_LABEL = [1, 0.92, 0.85, 0.8]
+
 /**
  * The icons of upright tiles grow with their cell (1.4 to 2.4 em). A label that needs two lines gets them if the icon can
- * shrink enough, no further than 1.4 em. Cells of one height get icons of one size, the smallest any of them needs. A word
- * too wide for its tile gets smaller text.
+ * shrink enough, no further than 1.4 em; failing that the labels get a little smaller (and that least icon with them),
+ * before any is cut to one line. Cells of one height get labels of one size and icons of one size. A word too wide for
+ * its tile gets smaller text again.
  */
 function sizeTiles(card: HTMLElement) {
   const tiles = card.querySelectorAll('.pd-pcard__btn--tile')
   const font = parseFloat(card.style.fontSize)
-  const least = Math.round(font * 1.4)
-  const found: { icon: HTMLElement; cell: number; bare: boolean }[] = []
-  const smallest: { [cell: string]: number } = {}
+  const setLabel = (label: HTMLElement, step: number) => { label.style.fontSize = step ? TILE_LABEL[step] + 'em' : '' }
+  const found: { tile: HTMLElement; icon: HTMLElement | null; label: HTMLElement | null; key: string; step: number }[] = []
+  const stepOf: { [cell: string]: number } = {}
   for (let i = 0; i < tiles.length; i++) {
     const t = tiles[i] as HTMLElement
     const icon = t.querySelector('.pd-pcard__bi') as HTMLElement | null
-    const label = t.querySelector('.pd-pcard__bl') as HTMLElement | null
-    if (label) { label.style.fontSize = ''; label.classList.remove('pd-pcard__bl--one', 'pd-pcard__bl--break') }
+    let label = t.querySelector('.pd-pcard__bl') as HTMLElement | null
+    if (label) { setLabel(label, 0); label.classList.remove('pd-pcard__bl--one', 'pd-pcard__bl--break') }
     if (icon) icon.style.width = icon.style.height = icon.style.fontSize = ''
     if (!upright(t)) continue
-    const bare = !label || t.classList.contains('pd-pcard__btn--bare')
-    let px = 0
-    if (icon) {
-      const want = Math.min(t.clientHeight * (bare ? 0.55 : 0.38), t.clientWidth * 0.55)
-      px = Math.round(Math.max(font * 1.4, Math.min(font * 2.4, want)))
+    if (t.classList.contains('pd-pcard__btn--bare')) label = null
+    const key = (label ? '' : 'bare ') + t.clientHeight
+    // the first size at which the label, as it wraps then, leaves room for the least icon (7: the margin between them and the button's padding)
+    let step = -1
+    for (let k = 0; label && step < 0 && k < TILE_LABEL.length; k++) {
+      setLabel(label, k)
+      if (t.clientHeight - label.offsetHeight >= (icon ? Math.round(font * TILE_LABEL[k] * 1.4) + 7 : 4)) step = k
     }
-    if (label && !bare) {
-      // what is left for the icon above the label as it wraps now (7: the margin between them and the button's padding)
-      const room = () => Math.floor(t.clientHeight - label.offsetHeight - 7)
-      if (icon && room() < least) label.classList.add('pd-pcard__bl--one') // not even the smallest icon leaves two lines
-      else if (!icon && t.clientHeight < label.offsetHeight + 4) label.classList.add('pd-pcard__bl--one')
-      if (icon) px = Math.max(least, Math.min(px, room()))
+    if (label) setLabel(label, 0)
+    if (step > (stepOf[key] || 0)) stepOf[key] = step
+    found.push({ tile: t, icon, label, key, step })
+  }
+  const smallest: { [cell: string]: number } = {}
+  for (let i = 0; i < found.length; i++) {
+    const f = found[i]
+    const step = f.step < 0 ? 0 : stepOf[f.key] || 0
+    if (f.label) {
+      if (f.step < 0) f.label.classList.add('pd-pcard__bl--one') // no size leaves two lines
+      else setLabel(f.label, step)
     }
-    if (icon) {
-      const key = (bare ? 'bare ' : '') + t.clientHeight
-      found.push({ icon, cell: t.clientHeight, bare })
-      if (smallest[key] === undefined || px < smallest[key]) smallest[key] = px
-    }
+    if (!f.icon) continue
+    const least = Math.round(font * TILE_LABEL[step] * 1.4)
+    const want = Math.min(f.tile.clientHeight * (f.label ? 0.38 : 0.55), f.tile.clientWidth * 0.55)
+    let px = Math.round(Math.max(font * 1.4, Math.min(font * 2.4, want)))
+    if (f.label) px = Math.max(least, Math.min(px, Math.floor(f.tile.clientHeight - f.label.offsetHeight - 7)))
+    if (smallest[f.key] === undefined || px < smallest[f.key]) smallest[f.key] = px
   }
   for (let i = 0; i < found.length; i++) {
     const f = found[i]
-    f.icon.style.width = f.icon.style.height = f.icon.style.fontSize = smallest[(f.bare ? 'bare ' : '') + f.cell] + 'px'
-  }
-  for (let i = 0; i < tiles.length; i++) {
-    const label = tiles[i].querySelector('.pd-pcard__bl') as HTMLElement | null
-    if (!label || !upright(tiles[i] as HTMLElement) || tiles[i].classList.contains('pd-pcard__btn--bare')) continue
-    const steps = ['0.92em', '0.85em', '0.78em']
-    for (let s = 0; s < steps.length && label.scrollWidth > label.clientWidth; s++) label.style.fontSize = steps[s]
+    if (f.icon) f.icon.style.width = f.icon.style.height = f.icon.style.fontSize = smallest[f.key] + 'px'
+    const label = f.label
+    if (!label) continue
+    const now = f.step < 0 ? 1 : TILE_LABEL[stepOf[f.key] || 0]
+    const narrower = [0.92, 0.85, 0.78].filter((x) => x < now)
+    for (let k = 0; k < narrower.length && label.scrollWidth > label.clientWidth; k++) label.style.fontSize = narrower[k] + 'em'
     if (label.scrollWidth > label.clientWidth) label.classList.add('pd-pcard__bl--break')
   }
 }
