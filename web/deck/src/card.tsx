@@ -347,30 +347,53 @@ function arrangeTiles(card: HTMLElement) {
   }
 }
 
-/** The icons of upright tiles grow with their cell (1.4 to 2.4 em); a word too wide for its tile gets smaller text. */
+/**
+ * The icons of upright tiles grow with their cell (1.4 to 2.4 em). A label that needs two lines gets them if the icon can
+ * shrink enough, no further than 1.4 em. Cells of one height get icons of one size, the smallest any of them needs. A word
+ * too wide for its tile gets smaller text.
+ */
 function sizeTiles(card: HTMLElement) {
   const tiles = card.querySelectorAll('.pd-pcard__btn--tile')
   const font = parseFloat(card.style.fontSize)
+  const least = Math.round(font * 1.4)
+  const found: { icon: HTMLElement; cell: number; bare: boolean }[] = []
+  const smallest: { [cell: string]: number } = {}
   for (let i = 0; i < tiles.length; i++) {
     const t = tiles[i] as HTMLElement
     const icon = t.querySelector('.pd-pcard__bi') as HTMLElement | null
     const label = t.querySelector('.pd-pcard__bl') as HTMLElement | null
-    if (label) { label.style.fontSize = ''; label.classList.remove('pd-pcard__bl--break') }
+    if (label) { label.style.fontSize = ''; label.classList.remove('pd-pcard__bl--one', 'pd-pcard__bl--break') }
     if (icon) icon.style.width = icon.style.height = icon.style.fontSize = ''
     if (!upright(t)) continue
     const bare = !label || t.classList.contains('pd-pcard__btn--bare')
+    let px = 0
     if (icon) {
       const want = Math.min(t.clientHeight * (bare ? 0.55 : 0.38), t.clientWidth * 0.55)
-      const px = Math.round(Math.max(font * 1.4, Math.min(font * 2.4, want)))
-      icon.style.width = icon.style.height = icon.style.fontSize = px + 'px'
+      px = Math.round(Math.max(font * 1.4, Math.min(font * 2.4, want)))
     }
     if (label && !bare) {
-      // one line only when the cell has no height for two
-      label.classList.toggle('pd-pcard__bl--one', t.clientHeight < (icon ? icon.offsetHeight : 0) + font * 2.3 + 6)
-      const steps = ['0.92em', '0.85em', '0.78em']
-      for (let s = 0; s < steps.length && label.scrollWidth > label.clientWidth; s++) label.style.fontSize = steps[s]
-      if (label.scrollWidth > label.clientWidth) label.classList.add('pd-pcard__bl--break')
+      // what is left for the icon above the label as it wraps now (7: the margin between them and the button's padding)
+      const room = () => Math.floor(t.clientHeight - label.offsetHeight - 7)
+      if (icon && room() < least) label.classList.add('pd-pcard__bl--one') // not even the smallest icon leaves two lines
+      else if (!icon && t.clientHeight < label.offsetHeight + 4) label.classList.add('pd-pcard__bl--one')
+      if (icon) px = Math.max(least, Math.min(px, room()))
     }
+    if (icon) {
+      const key = (bare ? 'bare ' : '') + t.clientHeight
+      found.push({ icon, cell: t.clientHeight, bare })
+      if (smallest[key] === undefined || px < smallest[key]) smallest[key] = px
+    }
+  }
+  for (let i = 0; i < found.length; i++) {
+    const f = found[i]
+    f.icon.style.width = f.icon.style.height = f.icon.style.fontSize = smallest[(f.bare ? 'bare ' : '') + f.cell] + 'px'
+  }
+  for (let i = 0; i < tiles.length; i++) {
+    const label = tiles[i].querySelector('.pd-pcard__bl') as HTMLElement | null
+    if (!label || !upright(tiles[i] as HTMLElement) || tiles[i].classList.contains('pd-pcard__btn--bare')) continue
+    const steps = ['0.92em', '0.85em', '0.78em']
+    for (let s = 0; s < steps.length && label.scrollWidth > label.clientWidth; s++) label.style.fontSize = steps[s]
+    if (label.scrollWidth > label.clientWidth) label.classList.add('pd-pcard__bl--break')
   }
 }
 
@@ -436,9 +459,10 @@ function Ring(props: { node: Extract<CardNode, { t: 'ring' }>; color: string; te
               style={{ stroke: props.color, strokeDashoffset: (length * (1 - n.value)).toFixed(2), strokeOpacity: n.value > 0 ? '1' : '0' }} />
           </svg>
           {n.text !== undefined && n.text !== '' ? (
-            <span class="pd-pcard__rmid"><span class="pd-pcard__rt" data-part="tile-value" style={{ color: props.textColor }}>{n.text}</span></span>
+            // keys: the two centres get their sizes by hand (sizeRings), so one must never be reused as the other
+            <span key="text" class="pd-pcard__rmid"><span class="pd-pcard__rt" data-part="tile-value" style={{ color: props.textColor }}>{n.text}</span></span>
           ) : n.icon ? (
-            <span class="pd-pcard__rmid" style={{ color: props.textColor }}><span class="pd-pcard__ri"><TileIcon value={n.icon} size={24} assets={props.assets} /></span></span>
+            <span key="icon" class="pd-pcard__rmid" style={{ color: props.textColor }}><span class="pd-pcard__ri"><TileIcon value={n.icon} size={24} assets={props.assets} /></span></span>
           ) : null}
         </span>
         {n.label ? <span class="pd-pcard__rl" data-part="tile-sub">{n.label}</span> : null}

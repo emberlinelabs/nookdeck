@@ -3759,7 +3759,7 @@
 .pd-pcard .pd-pcard__col[data-gap="4px"] > * + .pd-pcard__btn.pd-pcard__btn--tile.pd-pcard__btn--tile { margin-top: 4px; }
 .pd-pcard .pd-pcard__col[data-gap="8px"] > * + .pd-pcard__btn.pd-pcard__btn--tile.pd-pcard__btn--tile { margin-top: 8px; }
 .pd-pcard .pd-pcard__col[data-gap="12px"] > * + .pd-pcard__btn.pd-pcard__btn--tile.pd-pcard__btn--tile { margin-top: 12px; }
-.pd-pcard__btn--tile > .pd-pcard__bl { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; max-width: 100%; max-height: 2.4em; white-space: normal; line-height: 1.2; }
+.pd-pcard__btn--tile > .pd-pcard__bl { -webkit-flex: 0 0 auto; flex: 0 0 auto; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; max-width: 100%; max-height: 2.4em; white-space: normal; line-height: 1.2; }
 .pd-pcard__btn--tile > .pd-pcard__bl.pd-pcard__bl--one { -webkit-line-clamp: 1; max-height: 1.2em; }
 .pd-pcard__btn--tile > .pd-pcard__bl.pd-pcard__bl--break { word-break: break-word; }
 .pd-pcard__btn--tile > .pd-pcard__bi + .pd-pcard__bl { margin-left: 0; margin-top: 3px; }
@@ -3769,7 +3769,7 @@
 /* too short for icon over text: side by side, one line, like an ordinary button */
 .pd-pcard .pd-pcard__box > .pd-pcard__btn.pd-pcard__btn--side.pd-pcard__btn--side.pd-pcard__btn--side, .pd-pcard > .pd-pcard__btn.pd-pcard__btn--tile.pd-pcard__btn--side { -webkit-flex-direction: row; flex-direction: row; padding: 0 0.5em; }
 .pd-pcard.pd-pcard--tight .pd-pcard__box > .pd-pcard__btn.pd-pcard__btn--side.pd-pcard__btn--side.pd-pcard__btn--side { padding: 0 0.25em; }
-.pd-pcard__btn--tile.pd-pcard__btn--side > .pd-pcard__bl { display: block; white-space: nowrap; max-height: none; }
+.pd-pcard__btn--tile.pd-pcard__btn--side > .pd-pcard__bl { -webkit-flex: 0 1 auto; flex: 0 1 auto; display: block; white-space: nowrap; max-height: none; }
 .pd-pcard__btn--tile.pd-pcard__btn--side > .pd-pcard__bi + .pd-pcard__bl { margin-left: 0.3em; margin-top: 0; }
 .pd-pcard .pd-pcard__btn--tile.pd-pcard__btn--side > .pd-pcard__bi > * { width: 1.25em !important; height: 1.25em !important; font-size: 1.1em !important; }
 .pd-pcard.pd-pcard--tight .pd-pcard__btn { padding-left: 0.3em; padding-right: 0.3em; }

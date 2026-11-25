@@ -234,6 +234,9 @@ describe("card classes", () => {
     // fit() adds classes to a button by hand; a class that changes while it is busy would remove them on tap
     const buttonClass = tsx.match(/class=\{'pd-pcard__btn'.*\}/)![0];
     expect(buttonClass).not.toContain("busy");
+    // a ring's centre is sized by hand: keys keep Preact from turning the icon's element into the text's, styles and all
+    expect(tsx).toContain('<span key="text" class="pd-pcard__rmid"');
+    expect(tsx).toContain('<span key="icon" class="pd-pcard__rmid"');
     const css = await Bun.file(join(src, "deck.css")).text();
     const block = css.indexOf("/* ---------- plugin card renderer");
     expect(block).toBeGreaterThan(0);

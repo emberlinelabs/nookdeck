@@ -157,7 +157,7 @@ card.root(card.row([
 ], { stack: "auto", gap: 2 }));
 ```
 
-**Tile buttons.** `layout: "tile"` puts the icon above a label of up to two lines, centred, and lets the button fill its share of the free space: use it for a panel of controls. Buttons in a row get equal widths, and rows of them share the height. The icon grows with the button; with no label it is a big icon. On a short tile (such as 2x1) the card's tile buttons put icon and label side by side, and on a very narrow one they show icons alone. Buttons without `layout` are not changed.
+**Tile buttons.** `layout: "tile"` puts the icon above a label of up to two lines, centred, and lets the button fill its share of the free space: use it for a panel of controls. Buttons in a row get equal widths, and rows of them share the height. The icon grows with the button, and gets smaller again to leave a long label its second line; with no label it is a big icon. On a short tile (such as 2x1) the card's tile buttons put icon and label side by side, and on a very narrow one they show icons alone. Buttons without `layout` are not changed.
 
 ```ts
 const key = (label: string, action: string, icon: string, active = false) => card.button(label, action, { icon, active, layout: "tile" });
