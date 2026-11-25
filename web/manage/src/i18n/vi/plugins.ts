@@ -195,7 +195,6 @@ export const VI_PLUGINS: Record<string, string> = {
   "List": "Danh sách",
   "Chart": "Biểu đồ",
   "Status light": "Đèn trạng thái",
-  "Card": "Thẻ",
   "AI usage tile": "Ô mức dùng AI",
   "Weather tile": "Ô thời tiết",
   "Custom tile": "Ô tùy chỉnh",

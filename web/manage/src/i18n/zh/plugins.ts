@@ -198,7 +198,6 @@ export const ZH_PLUGINS: Record<string, string> = {
   "List": "列表",
   "Chart": "图表",
   "Status light": "状态灯",
-  "Card": "卡片",
   "AI usage tile": "AI 用量图块",
   "Weather tile": "天气图块",
   "Custom tile": "自定义图块",
