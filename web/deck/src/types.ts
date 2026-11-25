@@ -93,6 +93,8 @@ export interface EntityOptions {
   name?: string
   readOnly?: boolean
   show?: 'auto' | 'state' | 'value' | 'toggle'
+  /** camera.*: seconds between pictures on the tile, 5 to 60 (default 10) */
+  refresh?: number
 }
 /** one Home Assistant entity as the agent sends it ({type:'hass', entities, connected}) */
 export interface HassEntity {

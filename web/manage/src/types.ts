@@ -171,6 +171,8 @@ export interface EntityOptions {
   tap?: "sheet" | "toggle";
   /** Show the domain's controls on the tile itself when it is big enough. */
   inlineControls?: boolean;
+  /** camera.*: seconds between pictures on the tile, 5 to 60 (default 10) */
+  refresh?: number
 }
 
 export interface HassConfig {

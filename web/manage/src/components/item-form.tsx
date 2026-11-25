@@ -364,6 +364,12 @@ function EntityForm({ value, onChange }: { value: EntityOptions | undefined; onC
       <Field label={t("Display name")} id="f-ent-name" hint={t("Leave empty to use the name from Home Assistant.")}>
         <Input id="f-ent-name" value={v.name ?? ""} maxLength={60} placeholder={t("E.g. Kitchen light")} onChange={(e) => set({ name: e.target.value })} />
       </Field>
+      {v.id.startsWith("camera.") ? (
+        <>
+          <Slider label={t("New picture every")} aria-label={t("New picture every")} min={5} max={60} step={5} value={v.refresh ?? 10} onValueChange={(x) => set({ refresh: x === 10 ? undefined : x })} formatValue={(x) => `${x} s`} />
+          <p className="-mt-2 text-[11.5px] text-muted-foreground">{t("Still pictures, only while the tile is on screen. Tap the tile for a large view that updates every 2 seconds.")}</p>
+        </>
+      ) : <>
       <Field label={t("Display")} id="f-ent-show">
         <Select id="f-ent-show" value={v.show ?? "auto"} onChange={(e) => set({ show: e.target.value === "auto" ? undefined : (e.target.value as EntityOptions["show"]) })}
           options={[{ value: "auto", label: t("Automatic") }, { value: "toggle", label: t("Switch") }, { value: "state", label: t("State") }, { value: "value", label: t("Value") }]} />
@@ -385,6 +391,7 @@ function EntityForm({ value, onChange }: { value: EntityOptions | undefined; onC
         <label htmlFor="f-ent-ro" className="text-[13px]">{t("View only (pressing does not control)")}</label>
         <Switch id="f-ent-ro" checked={!!v.readOnly} onCheckedChange={(readOnly) => set({ readOnly: readOnly || undefined })} aria-label={t("View only")} />
       </div>
+      </>}
     </>
   );
 }

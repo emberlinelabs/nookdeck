@@ -44,7 +44,7 @@ account, no cloud.
 | **AI coding** | Claude, Codex and Antigravity quotas with reset times; pick which windows to show (5 hours, 7 days, per model); local Claude Code / Codex sessions |
 | **Claude Code from the couch** | Answer **Allow / Deny** permission prompts and Claude's multiple-choice questions on the phone (opt-in hooks) |
 | **Everyday** | Now Playing with artwork and Resume, 6 clock styles and world clocks, weather (hourly and daily, °C or °F), a soundboard, notifications |
-| **Home Assistant** | Lights with colour, colour temperature, scenes and effects; climate (mode, fan, swing), fans, covers, vacuums, locks and sensors (optional) |
+| **Home Assistant** | Lights with colour, colour temperature, scenes and effects; climate (mode, fan, swing), fans, covers, vacuums, locks, sensors and camera stills (optional) |
 | **Automation** | Webhooks that push values and notifications, rules that react to activity on the computer |
 | **Make it yours** | Drag-and-drop grid (8×4, 8×3, 5×3…) with a preview for every screen size, 4 tile styles (Soft, Solid, Outline, iOS), any colour per tile, 5,000+ icons, English, Vietnamese or Simplified Chinese |
 | **Plugins** | Add tiles and buttons from the [plugin Store](https://nookdeck.app/plugins) ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)), or build your own in TypeScript: see the [plugin guide](docs/plugins.md) |

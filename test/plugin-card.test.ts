@@ -208,7 +208,10 @@ describe("card classes", () => {
     const block = css.indexOf("/* ---------- plugin card renderer");
     expect(block).toBeGreaterThan(0);
     expect(css.slice(0, block)).not.toContain("pd-pcard");
-    for (const rule of css.slice(block).replace(/\/\*[\s\S]*?\*\//g, "").split("}")) {
+    const next = css.indexOf("/* ----------", block + 10); // the section after the card's, if any
+    const own = css.slice(block, next < 0 ? undefined : next);
+    expect(css.slice(block + own.length)).not.toContain("pd-pcard");
+    for (const rule of own.replace(/\/\*[\s\S]*?\*\//g, "").split("}")) {
       const selectors = rule.split("{")[0]!.trim();
       if (selectors) for (const one of selectors.split(",")) expect(one.trim()).toStartWith(".pd-pcard");
     }

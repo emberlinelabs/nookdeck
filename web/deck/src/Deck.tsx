@@ -14,6 +14,7 @@ import { PermissionSheet, ProcessSheet, QuestionSheet } from './sheets'
 import { ScreenLayer, ScreenSheet } from './screen'
 import { swapPreview } from './swap'
 import { coreTileOf, previewSlot } from './plugin-logic'
+import { CameraView, setCameraBase } from './camera'
 import type { PluginSlot } from './plugin-logic'
 import { browserShiftHost, headerMode, keepAwakeOn, liteOn, onLocalScreen, runShift, shiftOn } from './screen-logic'
 import type { PermissionRequest, QuestionRequest, WeatherData, PushedValue, Notice, GotoReq, HassEntity, HassState, IconAssets, AiData, Item, Layout, Media, MediaCommand, Orientation, Page, Stats, TileStyle } from './types'
@@ -597,7 +598,7 @@ function Tile(props: {
   const down = props.preview ? (e: PointerEvent) => props.onDown(e, page, item, 'move') : undefined
   const handle = props.showHandle ? <span class="pd-handle" onPointerDown={(e) => props.onDown(e as PointerEvent, page, item, 'resize')} /> : null
 
-  const entTap = !props.preview && item.kind === 'widget' && item.widget === 'entity' && !!item.entity && !item.entity.readOnly && (item.entity.id.indexOf('lock.') !== 0) && (item.entity.id.indexOf('sensor.') !== 0) && (item.entity.id.indexOf('binary_sensor.') !== 0) && (item.entity.id.indexOf('climate.') !== 0 ? true : true)
+  const entTap = !props.preview && item.kind === 'widget' && item.widget === 'entity' && !!item.entity && !item.entity.readOnly && item.entity.id.indexOf('camera.') !== 0 && (item.entity.id.indexOf('lock.') !== 0) && (item.entity.id.indexOf('sensor.') !== 0) && (item.entity.id.indexOf('binary_sensor.') !== 0) && (item.entity.id.indexOf('climate.') !== 0 ? true : true)
   const entDom = item.kind === 'widget' && item.widget === 'entity' && item.entity ? item.entity.id.split('.')[0] : ''
   // climate / cover / vacuum: a tap opens the control sheet; light / fan: a tap toggles and a long press (500 ms) opens it
   const sheetTap = entTap && (entDom === 'climate' || entDom === 'cover' || entDom === 'vacuum')
@@ -611,6 +612,8 @@ function Tile(props: {
     }, 500)
   }
   const entHoldEnd = () => clearTimeout(entHoldT)
+  // a camera tile opens the large view, view-only or not: it only looks
+  const camTap = !props.preview && entDom === 'camera' && !!props.onEntity
   const entClick = () => {
     if (entHeld) {
       entHeld = false
@@ -623,7 +626,7 @@ function Tile(props: {
   if (item.kind === 'widget') {
     return (
       <div
-        class={cls + ' pd-tile--widget' + (entTap ? ' pd-tile--tap' : '') + (sty === 'ios' ? ' pd-tile--iosw' : '') + (item.widget === 'nowplaying' ? ' pd-tile--np' : '') + (tappable ? ' pd-tile--tap' : '')}
+        class={cls + ' pd-tile--widget' + (entTap || camTap ? ' pd-tile--tap' : '') + (sty === 'ios' ? ' pd-tile--iosw' : '') + (item.widget === 'nowplaying' ? ' pd-tile--np' : '') + (tappable ? ' pd-tile--tap' : '')}
         style={style}
         data-id={item.id}
         data-part="tile"
@@ -631,7 +634,7 @@ function Tile(props: {
         data-kind={tileKind(item)}
         data-size={item.pw + 'x' + item.ph}
         onPointerDown={down}
-        onClick={tappable ? () => props.onWidget(item.widget as string) : entTap ? () => entClick() : undefined}
+        onClick={tappable ? () => props.onWidget(item.widget as string) : camTap ? () => (props.onEntity as NonNullable<typeof props.onEntity>)(page, item, 'sheet') : entTap ? () => entClick() : undefined}
         onTouchStart={holdable ? () => entHoldStart() : undefined}
         onTouchEnd={holdable ? entHoldEnd : undefined}
         onTouchMove={holdable ? entHoldEnd : undefined}
@@ -956,6 +959,7 @@ const orientOf = (l: Layout | null): Orientation => (l && l.theme && l.theme.ori
 export function Deck(props: DeckProps) {
   const preview = !!props.preview
   const client = useMemo(() => new DeckClient(props.baseUrl), [props.baseUrl])
+  setCameraBase(props.baseUrl || '')
   const liteRef = useRef(false)
   const live = useClientState(client, liteRef)
   const [, bumpLocal] = useState(0)
@@ -2120,7 +2124,9 @@ export function Deck(props: DeckProps) {
               ) : null}
             </>
           )}
-          {sheet && sheet.item.entity && hass && hass.entities[sheet.item.entity.id] ? (
+          {sheet && sheet.item.entity && sheet.item.entity.id.indexOf('camera.') === 0 ? (
+            <CameraView id={sheet.item.entity.id} name={sheet.item.entity.name || (hass && hass.entities[sheet.item.entity.id] && hass.entities[sheet.item.entity.id].name) || sheet.item.entity.id} onClose={() => setSheet(null)} />
+          ) : sheet && sheet.item.entity && hass && hass.entities[sheet.item.entity.id] ? (
             <ControlSheet
               id={sheet.item.entity.id}
               ent={hass.entities[sheet.item.entity.id]}

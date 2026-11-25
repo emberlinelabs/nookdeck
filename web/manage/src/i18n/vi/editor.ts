@@ -151,6 +151,8 @@ export const VI_EDITOR: Record<string, string> = {
   "The control panel has all the adjustments (temperature, brightness, speed...).": "Bảng điều khiển có đủ nút chỉnh (nhiệt độ, độ sáng, tốc độ…).",
   "Open control panel": "Mở bảng điều khiển",
   "On / off": "Bật / tắt",
+  "New picture every": "Tải hình mới mỗi",
+  "Still pictures, only while the tile is on screen. Tap the tile for a large view that updates every 2 seconds.": "Ảnh tĩnh, chỉ tải khi ô đang hiện trên màn hình. Chạm vào ô để xem lớn, cập nhật mỗi 2 giây.",
   "Show controls on the tile": "Hiện nút điều khiển trên ô",
   "Only shown when the tile is big enough (2×1 or larger).": "Chỉ hiện khi ô đủ lớn (từ 2×1 trở lên).",
   "View only (pressing does not control)": "Chỉ xem (bấm không điều khiển)",

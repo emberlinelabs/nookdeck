@@ -14,6 +14,7 @@ import { HassConfigStore } from "./hass/config";
 import { HassOAuth } from "./hass/oauth";
 import { wantedEntities } from "./hass/entities";
 import { entityPress } from "./hass/press";
+import { CAMERA_ENTITY_RE, CameraError } from "./hass/camera";
 import { planControl } from "./hass/control";
 import { tempUnitOf } from "./temperature";
 import { PUSH_KEY_RE } from "./automation";
@@ -260,7 +261,7 @@ export async function startServer(opts: StartOptions = {}) {
   // ----- automation: pushed values, notifications, macros, rules, weather -----
   // Home Assistant: the real client stays idle until a url and token are configured (then it connects and reconnects by itself)
   const hassStore = opts.hassStore ?? new HassConfigStore();
-  const hassClient: HassClient | undefined = opts.hass ? (opts.hass instanceof HassClient ? opts.hass : undefined) : new HassClient({ store: hassStore, oauth: new HassOAuth({ store: hassStore, fetch: opts.hassFetch }) });
+  const hassClient: HassClient | undefined = opts.hass ? (opts.hass instanceof HassClient ? opts.hass : undefined) : new HassClient({ store: hassStore, oauth: new HassOAuth({ store: hassStore, fetch: opts.hassFetch }), fetch: opts.hassFetch });
   const hass: HassLike = opts.hass ?? hassClient!;
   const syncHass = () => hassClient?.setWanted(wantedEntities(layout));
   syncHass();
@@ -615,6 +616,7 @@ export async function startServer(opts: StartOptions = {}) {
   }
 
   const sndPhone = /^\/sounds\/[^/]+$/;
+  const camPhone = /^\/api\/hass\/camera\/([^/]+)$/;
 
   /** A request that takes more than 10 s is logged (once, while it is still running): a hung route shows up in agent.err.log. */
   const slowWatch = <A extends unknown[], R>(h: (req: Request, ...rest: A) => Promise<R>) => async (req: Request, ...rest: A): Promise<R> => {
@@ -631,7 +633,7 @@ export async function startServer(opts: StartOptions = {}) {
       const url = new URL(req.url);
       const path = url.pathname;
 
-      if (path === "/ws" || path === "/api/pair" || sndPhone.test(path)) {
+      if (path === "/ws" || path === "/api/pair" || sndPhone.test(path) || camPhone.test(path)) {
         const bad = await guardPhone(server, req);
         if (bad) return bad;
       }
@@ -754,6 +756,22 @@ export async function startServer(opts: StartOptions = {}) {
         if (typeof body?.name !== "string" || !body.name.trim()) return json({ error: "name must be a non-empty string" }, 400);
         const info = await sounds.rename(id, body.name);
         return info ? json({ id: info.id, name: info.name, durationMs: info.durationMs, size: info.size }) : json({ error: "not found" }, 404);
+      }
+      const camFile = camPhone.exec(path);
+      if (camFile && req.method === "GET") {
+        // Home Assistant camera stills (D7): paired phones, for cameras that are on the layout; this computer (the preview) for any
+        const local = isLocalPeer(server, req);
+        if (!local && !(await pairing.findDevice(cookieToken(req.headers.get("cookie")) || url.searchParams.get("token")))) return json({ error: "unauthorized" }, 401);
+        const id = camFile[1]!;
+        if (!CAMERA_ENTITY_RE.test(id) || (!local && !wantedEntities(layout).includes(id))) return json({ error: "that camera is not on the layout" }, 404);
+        if (!hassClient) return json({ error: "Home Assistant client is not available" }, 501);
+        try {
+          const image = await hassClient.cameraImage(id);
+          // same-origin only: another website must not be able to put a camera picture on its own page
+          return new Response(image.bytes as unknown as BodyInit, { headers: { "content-type": image.type, "cache-control": "no-store", "cross-origin-resource-policy": "same-origin", "x-content-type-options": "nosniff" } });
+        } catch (err: any) {
+          return json({ error: err?.message ?? String(err) }, err instanceof CameraError ? err.status : 502);
+        }
       }
       const sndFile = path.match(/^\/sounds\/([^/]+)$/);
       if (sndFile && (req.method === "GET" || req.method === "HEAD")) {

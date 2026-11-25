@@ -75,6 +75,8 @@ export const VI: { [en: string]: string } = {
   "Full": "Đầy",
   "Fullscreen": "Toàn màn hình",
   "Go now": "Đi ngay",
+  "No picture": "Chưa có hình",
+  "Old picture": "Hình cũ",
   "HA offline": "HA mất kết nối",
   "Hail": "Mưa đá",
   "Heat": "Sưởi",

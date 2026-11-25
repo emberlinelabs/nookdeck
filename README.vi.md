@@ -44,7 +44,7 @@ tài khoản, không dùng đám mây.
 | **Lập trình với AI** | Quota và thời điểm reset của Claude, Codex, Antigravity; chọn được mốc muốn xem (5 giờ, 7 ngày, theo model); các phiên Claude Code / Codex trên máy |
 | **Điều khiển Claude Code từ xa** | Trả lời **Cho phép / Từ chối** và các câu hỏi nhiều lựa chọn của Claude ngay trên điện thoại (bật khi cần) |
 | **Hằng ngày** | Đang phát kèm ảnh bìa và nút phát tiếp, 6 kiểu đồng hồ và giờ thế giới, thời tiết (theo giờ, theo ngày, °C hoặc °F), soundboard, thông báo |
-| **Home Assistant** | Đèn có màu, nhiệt độ màu, cảnh và hiệu ứng; điều hòa (chế độ, quạt, đảo gió), quạt, rèm, robot hút bụi, khóa và cảm biến (tùy chọn) |
+| **Home Assistant** | Đèn có màu, nhiệt độ màu, cảnh và hiệu ứng; điều hòa (chế độ, quạt, đảo gió), quạt, rèm, robot hút bụi, khóa, cảm biến và ảnh từ camera (tùy chọn) |
 | **Tự động hóa** | Webhook đẩy giá trị và thông báo, rule phản ứng theo hoạt động trên máy |
 | **Tùy biến** | Lưới kéo thả (8×4, 8×3, 5×3…) có xem trước theo từng cỡ màn hình, 4 kiểu ô (Soft, Solid, Outline, iOS), màu riêng cho từng ô, hơn 5.000 icon, tiếng Anh, tiếng Việt và tiếng Trung |
 | **Plugin** | Thêm ô và nút từ [Cửa hàng plugin](https://nookdeck.app/plugins) ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)), hoặc tự viết bằng TypeScript: xem [hướng dẫn plugin](docs/plugins.md) |

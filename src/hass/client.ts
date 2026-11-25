@@ -1,6 +1,7 @@
 import type { HassLike, HassState, HassWeather } from "../automation-types";
 import { HassConfigStore, hassWsUrl, normalizeHassUrl } from "./config";
 import { tempUnitOf, type TempUnit } from "../temperature";
+import { CameraError, cameraCache, fetchCamera } from "./camera";
 import { toPhoneEntity, type PhoneEntity, type PhoneRelated } from "./entities";
 import { t } from "../i18n";
 import type { HassOAuth } from "./oauth";
@@ -25,6 +26,8 @@ export interface HassClientOptions {
   backoffMs?: number[];
   pingMs?: number;
   requestTimeoutMs?: number;
+  /** For camera pictures (the only plain HTTP calls the client makes itself). */
+  fetch?: typeof fetch;
   /** Waiting for the TCP/TLS connection (default 8 s), for HA's auth_required (5 s) and for auth_ok (8 s). */
   connectMs?: number;
   greetMs?: number;
@@ -120,6 +123,13 @@ export class HassClient implements HassLike {
     }
     return out;
   }
+  /** A still from a camera entity, fetched with the agent's own token. */
+  readonly cameraImage = cameraCache(async (id) => {
+    const url = await this.store.url();
+    const token = this.ready && url ? await this.credential() : null;
+    if (!url || !token) throw new CameraError(t("Home Assistant is not connected"), 503);
+    return fetchCamera(this.o.fetch ?? fetch, url, token, id);
+  });
   private phone(id: string, s: HassState): PhoneEntity {
     const e = toPhoneEntity(id, s.state, s.attributes, this.sysUnit);
     const rel = this.related(id);

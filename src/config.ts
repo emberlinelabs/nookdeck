@@ -50,6 +50,8 @@ export interface EntityOptions {
   tap?: "sheet" | "toggle";
   /** Show -/+ or a slider on the tile itself when it is big enough (default true). */
   inlineControls?: boolean;
+  /** camera.*: seconds between pictures on the tile, 5 to 60 (default 10). */
+  refresh?: number;
 }
 
 export type SoundTarget = "mac" | "phone" | "both";
@@ -994,6 +996,10 @@ export function validateLayout(raw: any): Layout {
           if (e.readOnly !== undefined) entity.readOnly = bool(e.readOnly, `${w}.entity.readOnly`);
           if (e.tap !== undefined) { if (e.tap !== "sheet" && e.tap !== "toggle") throw new Error(`${w}.entity.tap must be sheet or toggle`); entity.tap = e.tap; }
           if (e.inlineControls !== undefined) entity.inlineControls = bool(e.inlineControls, `${w}.entity.inlineControls`);
+          if (e.refresh !== undefined) {
+            if (!Number.isInteger(e.refresh) || e.refresh < 5 || e.refresh > 60) throw new Error(`${w}.entity.refresh must be a whole number of seconds from 5 to 60`);
+            entity.refresh = e.refresh;
+          }
           if (e.show !== undefined) { if (!["auto", "state", "value", "toggle"].includes(e.show)) throw new Error(`${w}.entity.show is invalid`); entity.show = e.show; }
         }
         let plugin: PluginRef | undefined;

@@ -50,6 +50,8 @@ export const ZH: { [en: string]: string } = {
   "Full": "满",
   "Fullscreen": "全屏",
   "Go now": "立即前往",
+  "No picture": "无画面",
+  "Old picture": "旧画面",
   "HA offline": "HA 离线",
   "Hail": "冰雹",
   "Heat": "制热",

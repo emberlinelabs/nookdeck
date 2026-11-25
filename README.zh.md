@@ -43,7 +43,7 @@ Nookdeck 是电脑上的一个小型 agent，通过 Wi-Fi 提供触控面板：�
 | **AI 编程** | Claude、Codex 和 Antigravity 的额度与重置时间；可选择要显示的时间窗口（5 小时、7 天、按模型）；本机的 Claude Code / Codex 会话 |
 | **在沙发上用 Claude Code** | 在手机上回答**允许 / 拒绝**权限请求和 Claude 的选择题（需手动开启 hook） |
 | **日常** | 带封面和继续播放的正在播放、6 种时钟样式和世界时钟、天气（逐小时和逐日，°C 或 °F）、音效板、通知 |
-| **Home Assistant** | 支持颜色、色温、场景和效果的灯；空调（模式、风速、摆风）、风扇、窗帘、扫地机器人、门锁和传感器（可选） |
+| **Home Assistant** | 支持颜色、色温、场景和效果的灯；空调（模式、风速、摆风）、风扇、窗帘、扫地机器人、门锁、传感器和摄像头静态画面（可选） |
 | **自动化** | 推送数值和通知的 Webhook，以及根据电脑上的活动触发的规则 |
 | **个性化** | 可拖放的网格（8×4、8×3、5×3…），可按每种屏幕尺寸预览，4 种磁贴样式（Soft、Solid、Outline、iOS），每个磁贴可设任意颜色，5,000+ 图标，English、Vietnamese 和 Chinese |
 | **插件** | 从[插件商店](https://nookdeck.app/plugins)（[nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)）添加磁贴和按钮，或用 TypeScript 自己开发：参阅[插件指南](docs/plugins.md) |

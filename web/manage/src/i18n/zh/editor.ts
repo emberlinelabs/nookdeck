@@ -151,6 +151,8 @@ export const ZH_EDITOR: Record<string, string> = {
   "The control panel has all the adjustments (temperature, brightness, speed...).": "控制面板包含所有调节项（温度、亮度、速度…）。",
   "Open control panel": "打开控制面板",
   "On / off": "开 / 关",
+  "New picture every": "画面刷新间隔",
+  "Still pictures, only while the tile is on screen. Tap the tile for a large view that updates every 2 seconds.": "静态画面，仅在磁贴显示在屏幕上时更新。点按磁贴可打开大图，每 2 秒更新一次。",
   "Show controls on the tile": "在磁贴上显示控件",
   "Only shown when the tile is big enough (2×1 or larger).": "仅当磁贴足够大时显示（2×1 或更大）。",
   "View only (pressing does not control)": "仅查看（按下不执行控制）",

@@ -10,6 +10,7 @@ import { ClockWidget } from './clocks'
 import { PluginTile } from './plugin'
 import type { PluginSlot } from './plugin-logic'
 import { EntityTile } from './entity'
+import { CameraTile } from './camera'
 import { NotificationsTile, ValueTile, WeatherTile } from './automation'
 import { AnimatedNumber, BAND_COLOR, DeltaPill, Gauge, type Band } from './knowns'
 import { tint, chartColor } from './theme'
@@ -123,6 +124,7 @@ export interface WidgetProps {
 
 export function Widget(props: WidgetProps) {
   if (props.kind === 'clock') return <ClockWidget tw={props.tw} th={props.th} scale={props.scale} showLabel={props.showLabel} textColor={props.textColor} color={props.color} opts={props.clock} caption={t(LABEL.clock)} />
+  if (props.kind === 'entity' && props.entity && props.entity.id.indexOf('camera.') === 0) return <CameraTile id={props.entity.id} cfg={props.entity} ent={props.hassEnt} connected={props.hassConnected !== false} showLabel={props.showLabel} preview={props.preview} />
   if (props.kind === 'entity' && props.entity) return <EntityTile id={props.entity.id} cfg={props.entity} ent={props.hassEnt} forceOn={props.hassForceOn} pend={props.entPend} onStep={props.onStep} onLight={props.onLight} connected={props.hassConnected !== false} tw={props.tw} th={props.th} scale={props.scale} showLabel={props.showLabel} color={props.color} textColor={props.textColor} assets={props.assets} />
   // the legacy weather and quota tiles are core plugins: when the plugin is off or missing, say so instead of showing stale data
   if ((props.kind === 'weather' || props.kind === 'quota') && props.plug && 'error' in props.plug) return <PluginTile entry={props.plug} tw={props.tw} th={props.th} showLabel={props.showLabel} color={props.color} textColor={props.textColor} assets={props.assets} label={props.label} />
