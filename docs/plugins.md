@@ -125,7 +125,7 @@ A widget can suggest a style with `"style"` in its manifest entry, for example `
 | `progress` | `value` 0 to 1, `tone?` |
 | `ring` | `value` 0 to 1, `tone?` (colour of the arc), `icon?` or `text?` in the centre (`text` up to 6 characters, such as `"95"` or `"18:16"`; it wins over `icon`), `label?` under the ring (up to 40 characters), `size?` `s` / `m` / `l` (default `m`), `arc?` `full` (default) / `gauge` (270 degrees, open at the bottom). Needs Nookdeck 0.5.1 |
 | `sparkline` | `points` (up to 60 numbers), `tone?` |
-| `icon` | `name` (the same names as button icons), `tone?` |
+| `icon` | `name` (see **Icons** below), `tone?` |
 | `image` | `src` (`data:image/png;base64,...` or `data:image/jpeg;base64,...` only), `fit?` `cover` / `contain` |
 | `button` | `action` (the id of one of your `actions`), `label?` and/or `icon?`, `args?`, `tone?`, `active?` (drawn filled), `layout?` `"tile"` (see below; needs Nookdeck 0.5.1) |
 | `spacer` | none; takes the free space |
@@ -165,6 +165,14 @@ card.root(card.col([
   card.row([key("Lock", "lock", "lock"), key("Display off", "display-off", "monitor")], { gap: 1, grow: true }),
 ], { gap: 1, grow: true }));
 ```
+
+**Icons.** `icon` in a card (the `icon` part, a button's and a ring's) takes a built-in name: [Tabler](https://tabler.io/icons) names, and a few brand marks. Older short names such as `laptop`, `monitor` and `battery` work too. The full Tabler catalog is not available in cards. Any other name is drawn as a dim square; `nookdeck plugin dev` warns about names in your previews, and the plugin log (`nookdeck plugin logs <id>`) about names in live cards.
+
+<!-- card-icons:start -->
+`activity` `adjustments-horizontal` `alarm` `alert-triangle` `arrow-back-up` `arrow-down` `arrow-down-left` `arrow-forward-up` `arrow-left` `arrow-right` `arrow-up` `arrows-shuffle` `ban` `battery-4` `bell` `bell-off` `bluetooth` `bolt` `bookmark` `brand-apple` `brand-chrome` `brand-discord` `brand-figma` `brand-github` `brand-google` `brand-notion` `brand-slack` `brand-spotify` `brand-telegram` `brand-twitch` `brand-vscode` `brand-x` `brand-youtube` `brightness` `bulb` `calendar` `calendar-check` `calendar-event` `camera` `check` `chevron-left` `chevron-right` `circle-check` `circle-x` `clipboard` `clock` `code` `coffee` `command` `copy` `cpu` `device-desktop` `device-floppy` `device-gamepad-2` `device-laptop` `device-speaker` `download` `external-link` `file` `file-text` `flag` `folder` `folder-open` `gauge` `headphones` `heart` `home` `keyboard` `layout-dashboard` `layout-grid` `link` `lock` `lock-open` `mail` `maximize` `message` `message-circle` `microphone` `microphone-off` `minimize` `minus` `moon` `mouse` `music` `photo` `player-pause` `player-play` `player-skip-back` `player-skip-forward` `player-stop` `player-track-next` `player-track-prev` `plus` `power` `radio` `refresh` `repeat` `robot` `rocket` `scissors` `screen-share` `search` `server` `settings` `shopping-cart` `sparkles` `stack-2` `star` `sun` `terminal-2` `trash` `typography` `upload` `video` `volume` `volume-2` `volume-3` `wifi` `world` `x` `zoom-in` `zoom-out`
+
+Brands: `antigravity` `claude` `claude-code` `codex` `gemini` `grok` `opencode`
+<!-- card-icons:end -->
 
 **Fitting.** The same card is drawn at every tile size. The text gets smaller to fit, including until button labels show in full (one label too long for any size keeps the whole card at the smallest text, so keep labels short; when a button with an icon has no room for its label, the buttons with icons show their icons alone); if it still does not fit, the last parts of a column are left out. So put the important parts first, and use `ctx.widgets.provide`'s settings if you want a different card per tile.
 

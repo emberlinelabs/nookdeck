@@ -2,6 +2,7 @@
  * Keeps the data of every plugin tile on the layout fresh and tells the phones: one timer per tile at its source's `every`, only while
  * a phone is connected. Also runs plugin actions. A plugin that is missing, disabled or not granted gives its tiles a neutral error.
  */
+import { iconWarning, unknownCardIcons } from "./card-icons";
 import type { Layout, MacroStep, PluginRef } from "../config";
 import { platform } from "../platform";
 import { covers } from "./manifest";
@@ -42,6 +43,7 @@ export const CARD_REFRESH_MS = 250;
 
 export class PluginRuntime {
   private tiles = new Map<string, Tile>();
+  private warned = new Set<string>(); // "plugin icon" already reported
   private soon = new Map<string, ReturnType<typeof setTimeout>>(); // plugin id -> the refresh its card taps are waiting for
   private items: TileItems = {};
   private active = false;
@@ -133,9 +135,20 @@ export class PluginRuntime {
     }
     if (same(this.items[id], item)) return;
     const tile = this.tiles.get(id);
+    if (tile && "render" in item && item.render === "card") this.warnIcons(tile.ref.id, (item.data as any)?.root);
     if (tile) tile.buttons = "render" in item && item.render === "card" ? [cardButtons((item.data as any)?.root), tile.buttons?.[0] ?? []] : undefined;
     this.items[id] = item;
     out[id] = item;
+  }
+
+  /** Says once in the plugin's log that a card names an icon the phone does not have. */
+  private warnIcons(plugin: string, root: any): void {
+    for (const name of unknownCardIcons(root)) {
+      const key = `${plugin} ${name}`;
+      if (this.warned.has(key) || this.warned.size >= 500) continue;
+      this.warned.add(key);
+      this.deps.log?.(plugin, `[agent] ${iconWarning(name)}`);
+    }
   }
 
   private async refresh(id: string, gen: number): Promise<void> {

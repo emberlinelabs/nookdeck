@@ -5,10 +5,12 @@
  *   pack [dir] [--out file.zip]                  a zip of the plugin and the sha256 the registry pins
  */
 import { createHash } from "node:crypto";
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { watch } from "node:fs";
 import { join, resolve } from "node:path";
 import { deflateRawSync } from "node:zlib";
+import { validateCard } from "./card";
+import { iconWarning, unknownCardIcons } from "./card-icons";
 import { parseManifest } from "./manifest";
 import { MANIFEST_FILE, packageHash, readFolder, type Files } from "./store";
 
@@ -155,6 +157,13 @@ export async function pluginDev(dir: string, port: number, d: DevDeps = {}): Pro
     try { const r = await post(`/api/plugins/${linked.id}/reload`); log(`Reloaded ${r.id} ${r.version}`); }
     catch (e: any) { log(`Could not reload: ${e?.message ?? e}`); }
   };
+  // the preview cards are known before any code runs; icons in live cards are reported in the plugin's log
+  try {
+    const m = JSON.parse(await readFile(join(abs, "nookdeck.json"), "utf8"));
+    const names = new Set<string>();
+    for (const w of m.widgets ?? []) if (w?.render === "card") { const c = validateCard(w.preview); if ("data" in c) unknownCardIcons(c.data.root).forEach((n) => names.add(n)); }
+    for (const n of names) log(`Warning: ${iconWarning(n)}`);
+  } catch { /* the agent has already accepted the manifest: a warning is not worth failing for */ }
   const watcher = (d.watch ?? watch)(abs, { recursive: true }, (_ev, name) => {
     if (name && /(^|[\\/])(node_modules|\.git)([\\/]|$)/.test(String(name))) return;
     clearTimeout(timer);

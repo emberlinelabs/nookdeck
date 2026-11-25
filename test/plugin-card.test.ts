@@ -6,6 +6,8 @@ import { CARD_LIMITS, card, validateCard, type CardNode } from "../src/plugins/c
 import { cleanRender } from "../src/plugins/sources";
 import { parseManifest } from "../src/plugins/manifest";
 import { CARD_REFRESH_MS, PluginRuntime } from "../src/plugins/runtime";
+import { unknownCardIcons } from "../src/plugins/card-icons";
+import { BRANDS, ICONS } from "../web/shared/icons";
 import { cardStacks, ringTextPx } from "../web/deck/src/plugin-logic";
 import { PluginStore } from "../src/plugins/store";
 import type { MacroStep } from "../src/config";
@@ -173,6 +175,13 @@ describe("card buttons", () => {
     await Bun.sleep(CARD_REFRESH_MS + 50);
     expect(s.polls() - before).toBe(2);
   });
+  test("an unknown icon in a live card is reported once in the plugin's log", async () => {
+    const s = await setup();
+    await s.shown([card.button("a", "run", { icon: "no-such-thing" })]);
+    await s.shown([card.button("b", "run", { icon: "no-such-thing" })]);
+    expect(s.logs.filter((l) => l.includes('card icon "no-such-thing"'))).toHaveLength(1);
+    s.rt.stop();
+  });
   test("an undeclared action is refused and logged", async () => {
     const s = await setup();
     await s.shown([card.button("Bad", "format-disk")]);
@@ -272,5 +281,19 @@ describe("rings, stack rows and tile buttons (C3)", () => {
       expect(px).toBeLessThanOrEqual(side * 0.28);
     }
     expect(ringTextPx(52, "18:16")).toBeGreaterThanOrEqual(11.5);
+  });
+});
+
+describe("card icons", () => {
+  test("names the phone has no glyph for are listed once; text, aliases, brands and app icons are not", () => {
+    const r = card.col([card.icon("calendar-check"), card.icon("calendar-event"), card.ring(1, { icon: "circle-check" }), card.ring(1, { icon: "airpods-max" }),
+      card.row([card.button("x", "a", { icon: "no-such-thing" }), card.icon("no-such-thing"), card.icon("laptop"), card.icon("claude"), card.icon("OK"), card.icon("app:com.apple.Safari")])]);
+    expect(unknownCardIcons(r)).toEqual(["airpods-max", "no-such-thing"]);
+  });
+  test("docs/plugins.md lists exactly the built-in icons", async () => {
+    const doc = await Bun.file(join(import.meta.dir, "../docs/plugins.md")).text();
+    const block = doc.slice(doc.indexOf("<!-- card-icons:start -->"), doc.indexOf("<!-- card-icons:end -->"));
+    const listed = block.match(/`[^`]+`/g)!.map((s) => s.slice(1, -1)).sort();
+    expect(listed).toEqual([...Object.keys(ICONS), ...Object.keys(BRANDS)].sort());
   });
 });
