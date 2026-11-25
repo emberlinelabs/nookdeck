@@ -5,12 +5,14 @@
 //   ci     MACOS_SIGN_P12 (base64 .p12) + MACOS_SIGN_P12_PASSWORD: a temporary keychain is made, used and deleted
 //   local  ~/.config/nookdeck-signing/signing.keychain-db (NOOKDECK_SIGN_DIR overrides): unlocked with its password file
 //   adhoc  otherwise, with a loud log line. A tag build (NOOKDECK_REQUIRE_CI_SIGNING=1) refuses to fall back.
+// The agent also gets its Info.plist here (the texts of macOS's privacy prompts), between unsigning and signing.
 // Nothing from the signing folder is ever printed; the keychain is never added to the user's search list.
 import { existsSync } from "node:fs";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
+import { agentInfoPlist, embedInfoPlist, isMacho64, packageVersion } from "./embed-info-plist";
 
 export const IDENTIFIER = "dev.nookdeck.agent";
 export type SignMode = "ci" | "local" | "adhoc";
@@ -44,11 +46,18 @@ function sh(argv: string[], secrets: string[] = []): string {
   return out;
 }
 
+function addInfoPlist(file: string): void {
+  const program = readFileSync(file);
+  if (!isMacho64(program)) return console.warn(`${file} is not a thin Mach-O program: no Info.plist added`);
+  writeFileSync(file, embedInfoPlist(program, Buffer.from(agentInfoPlist(IDENTIFIER, packageVersion())))); // in place: the mode stays
+}
+
 /** `identifier`: the code-signing identifier (the agent's dev.nookdeck.agent, or dev.nookdeck.app for the menu bar app bundle). */
 export function signMacos(file: string, env: Record<string, string | undefined> = process.env, identifier: string = IDENTIFIER): SignMode {
   const mode = chooseMode(env);
   checkRequired(mode, env);
   try { sh(["codesign", "--remove-signature", file]); } catch { /* an unsigned bundle has nothing to remove */ }
+  if (identifier === IDENTIFIER) addInfoPlist(file);
   if (mode === "adhoc") {
     sh(["codesign", "--force", "-s", "-", file]);
     console.warn(`signed ${file} AD-HOC: no signing identity found. Accessibility resets on every update. Set MACOS_SIGN_P12 (CI) or create ${signDir(env)}.`);
