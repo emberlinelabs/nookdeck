@@ -196,3 +196,22 @@ describe("card buttons", () => {
     s.rt.stop();
   });
 });
+
+describe("card classes", () => {
+  // .pd-card is the pairing screen's form: a plugin card that shared it got its max-width, padding and border
+  test("every class card.tsx uses is under its own prefix, which nothing else styles or uses", async () => {
+    const src = join(import.meta.dir, "../web/deck/src");
+    const tsx = await Bun.file(join(src, "card.tsx")).text();
+    const used = tsx.match(/pd-[A-Za-z0-9_-]+/g)!.filter((c) => !tsx.includes("var(--" + c));
+    expect(used.filter((c) => !c.startsWith("pd-pcard"))).toEqual([]);
+    const css = await Bun.file(join(src, "deck.css")).text();
+    const block = css.indexOf("/* ---------- plugin card renderer");
+    expect(block).toBeGreaterThan(0);
+    expect(css.slice(0, block)).not.toContain("pd-pcard");
+    for (const rule of css.slice(block).replace(/\/\*[\s\S]*?\*\//g, "").split("}")) {
+      const selectors = rule.split("{")[0]!.trim();
+      if (selectors) for (const one of selectors.split(",")) expect(one.trim()).toStartWith(".pd-pcard");
+    }
+    for (const f of new Bun.Glob("*.{ts,tsx}").scanSync(src)) if (f !== "card.tsx") expect(await Bun.file(join(src, f)).text()).not.toContain("pd-pcard");
+  });
+});

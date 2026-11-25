@@ -24,6 +24,7 @@ export interface CardTileProps {
 }
 
 const GAPS = ['0', '4px', '8px', '12px']
+const FIT_PASSES = [{ tight: false, labels: true }, { tight: true, labels: true }, { tight: false, labels: false }]
 
 export class CardTile extends Component<CardTileProps, { busy: { [path: string]: boolean } }> {
   state = { busy: {} as { [path: string]: boolean } }
@@ -41,17 +42,26 @@ export class CardTile extends Component<CardTileProps, { busy: { [path: string]:
     this.alive = false
   }
 
-  /** Steps the base size down until no row or column of the card overflows; then drops trailing parts that still do not fit. */
+  /**
+   * Steps the base size down until no row or column of the card overflows and every button label shows in full; labels that
+   * still do not fit get tighter buttons. A label that fits at no size (a very long one) is left to its ellipsis, and the card
+   * is then sized by its rows and columns alone. Last, trailing parts that still do not fit are left out.
+   */
   private fit() {
     const el = this.el.current
     if (!el) return
     const base = cardBase(this.props.tw, this.props.th)
     show(el)
-    for (let s = 0; s < CARD_SHRINK.length; s++) {
-      el.style.fontSize = Math.max(CARD_MIN_PX, Math.round(base * CARD_SHRINK[s] * 10) / 10) + 'px'
-      if (!overflows(el)) break
+    let done = false
+    for (let k = 0; k < FIT_PASSES.length && !done; k++) {
+      el.classList.toggle('pd-pcard--tight', FIT_PASSES[k].tight)
+      for (let s = 0; s < CARD_SHRINK.length && !done; s++) {
+        el.style.fontSize = Math.max(CARD_MIN_PX, Math.round(base * CARD_SHRINK[s] * 10) / 10) + 'px'
+        done = !overflows(el) && !(FIT_PASSES[k].labels && labelClipped(el))
+      }
     }
     trim(el)
+    dropSlivers(el)
     const fonts = (document as unknown as { fonts?: { ready?: Promise<unknown> } }).fonts
     if (!this.fontsAsked && fonts && fonts.ready) {
       this.fontsAsked = true
@@ -82,7 +92,7 @@ export class CardTile extends Component<CardTileProps, { busy: { [path: string]:
       return (
         <div
           key={path}
-          class={'pd-card__box pd-card__' + n.t + ' pd-card__al-' + (n.align || 'start') + (n.grow ? ' pd-card__grow' : '')}
+          class={'pd-pcard__box pd-pcard__' + n.t + ' pd-pcard__al-' + (n.align || 'start') + (n.grow ? ' pd-pcard__grow' : '')}
           data-gap={GAPS[n.gap === undefined ? 1 : n.gap]}
         >
           {n.children.map((c, i) => this.node(c, path + '.' + i))}
@@ -90,12 +100,12 @@ export class CardTile extends Component<CardTileProps, { busy: { [path: string]:
       )
     }
     if (n.t === 'text') {
-      return <span key={path} class={'pd-card__text pd-card__text--' + (n.size || 'm') + (n.bold ? ' pd-card__b' : '')} data-part={n.tone === 'muted' ? 'tile-sub' : undefined} style={{ color: this.tone(n.tone, text) }}>{n.text}</span>
+      return <span key={path} class={'pd-pcard__text pd-pcard__text--' + (n.size || 'm') + (n.bold ? ' pd-pcard__b' : '')} data-part={n.tone === 'muted' ? 'tile-sub' : undefined} style={{ color: this.tone(n.tone, text) }}>{n.text}</span>
     }
     if (n.t === 'number') {
       return (
-        <span key={path} class={'pd-card__num pd-card__num--' + (n.size || 'l')}>
-          <span class="pd-card__nv" data-part="tile-value" style={{ color: this.tone(n.tone, text) }}>
+        <span key={path} class={'pd-pcard__num pd-pcard__num--' + (n.size || 'l')}>
+          <span class="pd-pcard__nv" data-part="tile-value" style={{ color: this.tone(n.tone, text) }}>
             {typeof n.value === 'number' ? fmt(n.value) : n.value}
             {n.unit ? <i>{n.unit}</i> : null}
           </span>
@@ -104,22 +114,22 @@ export class CardTile extends Component<CardTileProps, { busy: { [path: string]:
     }
     if (n.t === 'pill') {
       return (
-        <span key={path} class="pd-card__pill" style={{ color: this.tone(n.tone, text) }}>{n.text}</span>
+        <span key={path} class="pd-pcard__pill" style={{ color: this.tone(n.tone, text) }}>{n.text}</span>
       )
     }
     if (n.t === 'progress') {
       return (
-        <span key={path} class="pd-card__prog" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(n.value * 100)}>
+        <span key={path} class="pd-pcard__prog" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(n.value * 100)}>
           <i style={{ width: n.value * 100 + '%', background: this.tone(n.tone, this.props.color || 'var(--pd-accent)') }} />
         </span>
       )
     }
     if (n.t === 'sparkline') return <Spark key={path} points={n.points} color={this.tone(n.tone, this.props.color || 'var(--pd-accent)') as string} />
     if (n.t === 'icon') {
-      return <span key={path} class="pd-card__icon" style={{ color: this.tone(n.tone, text) }}><TileIcon value={n.name} size={24} assets={this.props.assets} /></span>
+      return <span key={path} class="pd-pcard__icon" style={{ color: this.tone(n.tone, text) }}><TileIcon value={n.name} size={24} assets={this.props.assets} /></span>
     }
     if (n.t === 'image') {
-      return <span key={path} class="pd-card__img" role="img" style={{ backgroundImage: 'url("' + n.src + '")', backgroundSize: n.fit === 'contain' ? 'contain' : 'cover' }} />
+      return <span key={path} class="pd-pcard__img" role="img" style={{ backgroundImage: 'url("' + n.src + '")', backgroundSize: n.fit === 'contain' ? 'contain' : 'cover' }} />
     }
     if (n.t === 'button') {
       const c = this.tone(n.tone, n.active ? this.props.color || 'var(--pd-accent)' : text)
@@ -128,24 +138,24 @@ export class CardTile extends Component<CardTileProps, { busy: { [path: string]:
         <button
           key={path}
           type="button"
-          class={'pd-card__btn' + (n.active ? ' pd-card__btn--active' : '') + (busy ? ' pd-card__btn--busy' : '') + (n.label ? '' : ' pd-card__btn--icon')}
+          class={'pd-pcard__btn' + (n.active ? ' pd-pcard__btn--active' : '') + (busy ? ' pd-pcard__btn--busy' : '') + (n.label ? '' : ' pd-pcard__btn--icon')}
           style={n.active ? { background: c || 'var(--pd-accent)', borderColor: c || 'var(--pd-accent)' } : { color: c }}
           aria-label={n.label || n.icon}
           aria-pressed={n.active === undefined ? undefined : n.active}
           onClick={(e: Event) => { e.stopPropagation(); this.tap(path, n.action, n.args) }}
         >
-          {n.icon ? <span class="pd-card__bi"><TileIcon value={n.icon} size={16} assets={this.props.assets} /></span> : null}
-          {n.label ? <span class="pd-card__bl">{n.label}</span> : null}
+          {n.icon ? <span class="pd-pcard__bi"><TileIcon value={n.icon} size={16} assets={this.props.assets} /></span> : null}
+          {n.label ? <span class="pd-pcard__bl">{n.label}</span> : null}
         </button>
       )
     }
-    return <span key={path} class="pd-card__spacer" />
+    return <span key={path} class="pd-pcard__spacer" />
   }
 
   render() {
     const pad = this.props.th < 100 ? 6 : this.props.tw >= 170 ? 12 : 8
     return (
-      <div ref={this.el} class="pd-card" style={{ padding: pad + 'px', fontSize: cardBase(this.props.tw, this.props.th) + 'px' }}>
+      <div ref={this.el} class="pd-pcard" style={{ padding: pad + 'px', fontSize: cardBase(this.props.tw, this.props.th) + 'px' }}>
         {this.node(this.props.data.root, 'r')}
       </div>
     )
@@ -160,21 +170,21 @@ const fmt = (v: number) => (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString()
 
 /** Brings back the parts an earlier fit left out. */
 function show(card: HTMLElement) {
-  const hidden = card.querySelectorAll('.pd-card__cut')
-  for (let i = 0; i < hidden.length; i++) (hidden[i] as HTMLElement).classList.remove('pd-card__cut')
+  const hidden = card.querySelectorAll('.pd-pcard__cut')
+  for (let i = 0; i < hidden.length; i++) (hidden[i] as HTMLElement).classList.remove('pd-pcard__cut')
 }
 
 /** Deepest columns first: hides a column's last parts while it is taller than its room (at least one part stays). */
 function trim(card: HTMLElement) {
-  const cols = card.querySelectorAll('.pd-card__col')
+  const cols = card.querySelectorAll('.pd-pcard__col')
   for (let i = cols.length - 1; i >= 0; i--) {
     const col = cols[i] as HTMLElement
-    for (let j = col.children.length - 1; j > 0 && col.scrollHeight > col.clientHeight + 1; j--) col.children[j].classList.add('pd-card__cut')
+    for (let j = col.children.length - 1; j > 0 && col.scrollHeight > col.clientHeight + 1; j--) col.children[j].classList.add('pd-pcard__cut')
   }
 }
 
 function overflows(card: HTMLElement): boolean {
-  const boxes = card.querySelectorAll('.pd-card__box')
+  const boxes = card.querySelectorAll('.pd-pcard__box')
   for (let i = -1; i < boxes.length; i++) {
     const b = (i < 0 ? card : boxes[i]) as HTMLElement
     if (b.scrollHeight > b.clientHeight + 1 || b.scrollWidth > b.clientWidth + 1) return true
@@ -182,15 +192,34 @@ function overflows(card: HTMLElement): boolean {
   return false
 }
 
+/** A label ellipsizes instead of overflowing its row, so it is asked itself. */
+function labelClipped(card: HTMLElement): boolean {
+  const labels = card.querySelectorAll('.pd-pcard__bl')
+  for (let i = 0; i < labels.length; i++) {
+    const l = labels[i] as HTMLElement
+    if (l.scrollWidth > l.clientWidth) return true
+  }
+  return false
+}
+
+/** A label with next to no room, beside an icon, is left out: the icon alone reads better than a sliver of a letter. */
+function dropSlivers(card: HTMLElement) {
+  const labels = card.querySelectorAll('.pd-pcard__bi + .pd-pcard__bl')
+  for (let i = 0; i < labels.length; i++) {
+    const l = labels[i] as HTMLElement
+    if (l.scrollWidth > l.clientWidth && l.clientWidth < parseFloat(getComputedStyle(l).fontSize) * 2) l.classList.add('pd-pcard__cut')
+  }
+}
+
 function Spark(props: { points: number[]; color: string }) {
   const p = props.points
-  if (p.length < 2) return <span class="pd-card__spark" />
+  if (p.length < 2) return <span class="pd-pcard__spark" />
   let lo = Math.min.apply(null, p)
   let hi = Math.max.apply(null, p)
   if (hi === lo) { lo -= 1; hi += 1 }
   const pts = p.map((v, i) => ((i / (p.length - 1)) * 100).toFixed(2) + ',' + (27 - ((v - lo) / (hi - lo)) * 24).toFixed(2)).join(' ')
   return (
-    <span class="pd-card__spark" aria-hidden="true">
+    <span class="pd-pcard__spark" aria-hidden="true">
       <svg width="100%" height="100%" viewBox="0 0 100 30" preserveAspectRatio="none">
         <polygon points={'0,30 ' + pts + ' 100,30'} style={{ fill: props.color, opacity: 0.14 }} />
         <polyline points={pts} fill="none" vector-effect="non-scaling-stroke" style={{ stroke: props.color, strokeWidth: 2 }} stroke-linecap="round" stroke-linejoin="round" />
