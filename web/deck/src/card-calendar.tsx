@@ -88,7 +88,8 @@ export function CardWeek(props: { node: Extract<CardNode, { t: 'week' }>; path: 
   const n = props.node
   const l = props.box ? weekLayout(n, props.box.w, props.box.h, props.box.base) : null
   return (
-    <span class="pd-pcard__cal pd-pcard__cal--week" data-cal={props.path} role="group" aria-label={intl(n.start, { month: 'long', day: 'numeric' })}>
+    // with no timed events the part is no taller than its lines, so what the card has under it comes right after them
+    <span class="pd-pcard__cal pd-pcard__cal--week" data-cal={props.path} role="group" aria-label={intl(n.start, { month: 'long', day: 'numeric' })} style={l && l.mode === 'days' ? { maxHeight: px(l.natural), minHeight: 0 } : { maxHeight: '', minHeight: '' }}>
       {l ? <span class={'pd-pcard__cin pd-pcard__cin--week pd-pcard__cin--' + l.mode} style={{ fontSize: px(l.font), lineHeight: px(l.lineH), color: props.paint.textColor }}>{week(n, l, props.box as CalBox, props.paint)}</span> : null}
     </span>
   )
@@ -121,6 +122,25 @@ function week(n: Extract<CardNode, { t: 'week' }>, l: WeekLayout, box: CalBox, p
     </span>
   )
   const more = (c: WeekColumn) => (c.more ? <span class="pd-pcard__c-more" style={{ height: px(l.lineH) }}>+{c.more}</span> : null)
+
+  if (l.mode === 'days') {
+    const day = (iso: string) => intl(iso, { weekday: 'short' }) + ' ' + +iso.slice(8)
+    return [
+      head,
+      l.rows.length || l.rowsMore ? (
+        <span key="days" class="pd-pcard__c-rows">
+          {l.rows.map((r, k) => (
+            <span key={k} class="pd-pcard__c-ev pd-pcard__c-row" style={{ color: color(r.ev), height: px(l.rowH - 3) }}>
+              <i />
+              <b>{day(r.from) + (r.to !== r.from ? ' - ' + day(r.to) : '') + ' · '}</b>
+              {title(r.ev)}
+            </span>
+          ))}
+          {l.rowsMore ? <span class="pd-pcard__c-more" style={{ height: px(l.lineH) }}>+{l.rowsMore}</span> : null}
+        </span>
+      ) : null,
+    ]
+  }
 
   if (l.mode === 'list') {
     return [

@@ -132,8 +132,17 @@ export interface WeekColumn {
   more: number
 }
 
+/** A line of a week with no timed events: an all-day event and the day, or the run of days, it is on. */
+export interface DayRow { ev: CardWeekEvent; from: string; to: string }
+
 export interface WeekLayout {
-  mode: 'grid' | 'list'
+  /** "days": no event is timed, so there are no hours and no columns under the headers, only a line for each event */
+  mode: 'grid' | 'list' | 'days'
+  /** days only: the lines drawn, how many events found none, and the height the whole part would take with all of them */
+  rows: DayRow[]
+  rowH: number
+  rowsMore: number
+  natural: number
   font: number
   lineH: number
   headH: number
@@ -244,6 +253,23 @@ export function fillList(allDay: CardWeekEvent[], timed: Timed[], room: number, 
   return { list: taken.map((x) => ({ ev: x.ev, start: x.start })), hidden: items.length - taken.length }
 }
 
+/** One line for each all-day event; the same one on days that follow each other is a single line. In order of the first day. */
+export function dayRows(days: { date: string; allDay: CardWeekEvent[] }[]): DayRow[] {
+  const rows: (DayRow & { last: number })[] = []
+  for (let i = 0; i < days.length; i++) {
+    for (let k = 0; k < days[i].allDay.length; k++) {
+      const ev = days[i].allDay[k]
+      let run: (DayRow & { last: number }) | null = null
+      for (let r = 0; r < rows.length && !run; r++) if (rows[r].last === i - 1 && rows[r].ev.title === ev.title && rows[r].ev.tone === ev.tone) run = rows[r]
+      if (run) {
+        run.to = days[i].date
+        run.last = i
+      } else rows.push({ ev, from: days[i].date, to: days[i].date, last: i })
+    }
+  }
+  return rows.map((r) => ({ ev: r.ev, from: r.from, to: r.to }))
+}
+
 export function weekLayout(input: WeekInput, w: number, h: number, base: number): WeekLayout {
   const days = input.days || 7
   const hour24 = input.hour24 !== false
@@ -261,6 +287,23 @@ export function weekLayout(input: WeekInput, w: number, h: number, base: number)
     else day.timed.push({ ev: e, start: minutes(e.start as string), end: endOf(e) })
   }
   for (let i = 0; i < days; i++) perDay[i].timed.sort((a, b) => a.start - b.start || a.end - b.end)
+  const none = { rows: [] as DayRow[], rowH: 0, rowsMore: 0, natural: 0 }
+
+  if (perDay.every((d) => !d.timed.length)) {
+    const all = dayRows(perDay)
+    const extra = perDay.reduce((n, d) => n + d.extra, 0)
+    const rowH = lineH + 6
+    const gap = 6
+    // from the width and the events alone, never from h: the part is held to this height, and then measured again
+    const natural = headH + (all.length || extra ? gap + all.length * rowH + (extra ? lineH : 0) : 0)
+    const room = h - headH - gap
+    const fit = !extra && all.length * rowH <= room ? all.length : Math.max(0, Math.min(all.length, Math.floor((room - lineH) / rowH)))
+    // the ones that are over give way first
+    const keep = all.slice().sort((a, b) => quiet(a.ev) - quiet(b.ev)).slice(0, fit)
+    const rows = all.filter((r) => keep.indexOf(r) >= 0)
+    const columns = perDay.map((d) => ({ date: d.date, today: d.date === input.today, allDay: [], blocks: [], list: [], more: 0 }))
+    return { mode: 'days', rows, rowH, rowsMore: extra + all.length - rows.length, natural, font, lineH, headH, gutter: 0, stripH: 0, gridH: 0, footH: 0, from: 0, to: 0, timeLine: false, columns }
+  }
 
   const span = hourSpan(input.events, input.from, input.to)
   const gutter = Math.round(font * (hour24 ? 3.1 : 3.6))
@@ -279,7 +322,7 @@ export function weekLayout(input: WeekInput, w: number, h: number, base: number)
       const strip = d.allDay.slice().sort((a, b) => quiet(a) - quiet(b)).slice(0, GRID_ALLDAY_ROWS)
       return { date: d.date, today: d.date === input.today, allDay: strip, blocks: placed.blocks, list: [], more: d.extra + placed.hidden + d.allDay.length - strip.length }
     })
-    return { mode: 'grid', font, lineH, headH, gutter, stripH, gridH, footH, from: span.from, to: span.to, timeLine: true, columns }
+    return { ...none, mode: 'grid', font, lineH, headH, gutter, stripH, gridH, footH, from: span.from, to: span.to, timeLine: true, columns }
   }
   let out = grid(0)
   if (out && out.columns.some((c) => c.more > 0)) out = grid(lineH)
@@ -292,5 +335,5 @@ export function weekLayout(input: WeekInput, w: number, h: number, base: number)
     const filled = fillList(d.allDay, d.timed, room, lineH, timeLine, d.extra)
     return { date: d.date, today: d.date === input.today, allDay: [], blocks: [], list: filled.list, more: d.extra + filled.hidden }
   })
-  return { mode: 'list', font, lineH, headH, gutter: 0, stripH: 0, gridH: room, footH: 0, from: span.from, to: span.to, timeLine, columns }
+  return { ...none, mode: 'list', font, lineH, headH, gutter: 0, stripH: 0, gridH: room, footH: 0, from: span.from, to: span.to, timeLine, columns }
 }

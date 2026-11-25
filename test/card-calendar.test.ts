@@ -124,6 +124,32 @@ describe("week: layout", () => {
     expect(weekLayout({ start: "2026-11-23", events }, 600, 120, 13).mode).toBe("list");
     expect(weekLayout({ start: "2026-12-29", days: 4, events: [] }, 600, 300, 13).columns.map((c) => c.date)).toEqual(["2026-12-29", "2026-12-30", "2026-12-31", "2027-01-01"]);
   });
+  test("no timed events: no hours, a line for each all-day event, no taller than its lines", () => {
+    const day = (d: number, title: string, tone?: "muted"): CardWeekEvent => ({ day: d, allDay: true, title, ...(tone ? { tone } : {}) });
+    const holidays = [day(1, "Vietnam Culture Day", "muted"), day(3, "Trip"), day(4, "Trip"), day(5, "Trip"), day(4, "Market")];
+    const l = weekLayout({ start: "2026-11-23", today: "2026-11-25", events: holidays, from: 8, to: 20 }, 600, 300, 13);
+    expect(l.mode).toBe("days");
+    expect(l.columns.map((c) => [c.date.slice(8), c.today])).toEqual([["23", false], ["24", false], ["25", true], ["26", false], ["27", false], ["28", false], ["29", false]]);
+    expect(l.rows.map((r) => `${r.from.slice(8)}-${r.to.slice(8)} ${r.ev.title}`)).toEqual(["24-24 Vietnam Culture Day", "26-28 Trip", "27-27 Market"]);
+    expect([l.rowsMore, l.gridH]).toEqual([0, 0]);
+    expect(l.natural).toBe(l.headH + 6 + 3 * l.rowH);
+    // held to its own height and measured again, it draws the same
+    expect(weekLayout({ start: "2026-11-23", today: "2026-11-25", events: holidays }, 600, l.natural, 13).rows).toEqual(l.rows);
+    // nothing at all: the days alone
+    const empty = weekLayout({ start: "2026-11-23", events: [] }, 600, 300, 13);
+    expect([empty.mode, empty.rows.length, empty.natural]).toEqual(["days", 0, empty.headH]);
+    // one timed event brings the columns back
+    expect(weekLayout({ start: "2026-11-23", events: [...holidays, { day: 0, start: "09:00", title: "x" }] }, 600, 300, 13).mode).toBe("grid");
+  });
+  test("too many lines for the room: past ones give way, the rest and the card's own more are counted", () => {
+    const events: CardWeekEvent[] = [0, 1, 2, 3, 4, 5].map((d) => ({ day: d, allDay: true, title: `e${d}`, ...(d < 2 ? { tone: "muted" as const } : {}) }));
+    const probe = weekLayout({ start: "2026-11-23", events, more: [0, 0, 0, 0, 0, 0, 2] }, 600, 400, 13);
+    expect([probe.rows.length, probe.rowsMore, probe.natural]).toEqual([6, 2, probe.headH + 6 + 6 * probe.rowH + probe.lineH]);
+    expect(weekLayout({ start: "2026-11-23", events, more: [0, 0, 0, 0, 0, 0, 2] }, 600, probe.natural, 13).rows).toHaveLength(6);
+    const low = weekLayout({ start: "2026-11-23", events }, 600, probe.headH + 6 + 3 * probe.rowH + probe.lineH, 13);
+    expect([low.rows.map((r) => r.ev.title), low.rowsMore]).toEqual([["e2", "e3", "e4"], 3]);
+    expect(weekLayout({ start: "2026-11-23", events }, 600, 20, 13).rows).toEqual([]);
+  });
   test("the list: all day first, +n includes the card's own more", () => {
     const l = weekLayout({ start: "2026-11-23", events, more: [3] }, 420, 150, 12);
     expect(l.mode).toBe("list");

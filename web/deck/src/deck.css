@@ -3811,6 +3811,11 @@
 .pd-pcard__c-t { color: var(--pd-text); }
 .pd-pcard__c-t--quiet { color: var(--pd-muted); }
 .pd-pcard__c-chip { margin-bottom: 3px; font-weight: 600; }
+/* a week with no timed events: a line across the card for each all-day event */
+.pd-pcard__c-rows { display: block; -webkit-flex: 0 0 auto; flex: 0 0 auto; margin-top: 6px; overflow: hidden; }
+.pd-pcard__c-row { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; margin-bottom: 3px; padding-left: 8px; }
+.pd-pcard__c-row > b { position: relative; -webkit-flex: 0 0 auto; flex: 0 0 auto; white-space: pre; font-weight: 700; }
+.pd-pcard__c-row > .pd-pcard__c-t { -webkit-flex: 1 1 0%; flex: 1 1 0%; min-width: 0; font-weight: 600; }
 .pd-pcard__c-entry { display: block; margin-bottom: 3px; padding: 0 2px; }
 .pd-pcard__c-entry > b { font-weight: 700; }
 .pd-pcard__c-more { display: block; padding: 0 3px; color: var(--pd-muted); font-weight: 600; white-space: nowrap; }
