@@ -1,3 +1,10 @@
+## Nookdeck 0.5.2
+
+Upgrading: run the install command below again, or `nookdeck update`, or use **Check for updates** in the app.
+
+- **Plugin tiles on web pages.** `nookdeck-demo.tgz` now has a `tile.html` page that draws one plugin tile with the real deck renderer from a `postMessage`, so the website can show live previews of every plugin. Guide: [docs/plugins.md](https://github.com/howznguyen/nookdeck/blob/main/docs/plugins.md).
+- Fixed: plugin tiles that show an image could draw blank.
+
 ## Nookdeck 0.5.1: rings, calendars and better-looking plugins
 
 Upgrading: run the install command below again, or `nookdeck update`, or use **Check for updates** in the app.
