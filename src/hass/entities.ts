@@ -38,6 +38,18 @@ export function toPhoneEntity(id: string, state: string, attributes: Record<stri
   };
 }
 
+/**
+ * The cameras whose picture a paired phone may ask for: those shown as an entity tile. A camera named only by a button,
+ * a macro step, the weather or a rule is watched for its state, and its picture stays on this computer.
+ */
+export function cameraTiles(layout: Layout): Set<string> {
+  const out = new Set<string>();
+  for (const p of layout.pages) for (const it of p.items) {
+    if (it.kind === "widget" && it.widget === "entity" && it.entity?.id.startsWith("camera.")) out.add(it.entity.id);
+  }
+  return out;
+}
+
 /** Entities the layout needs live: entity tiles, hass actions (buttons and macro steps) and hass-state rules. */
 export function wantedEntities(layout: Layout): string[] {
   const out = new Set<string>();

@@ -6,7 +6,7 @@ import { networkInterfaces, tmpdir } from "node:os";
 import { join } from "node:path";
 import { CAMERA_MAX_BYTES, CAMERA_MAX_HELD, CAMERA_REUSE_MS, cameraCache, fetchCamera } from "../src/hass/camera";
 import { validateLayout, defaultLayout } from "../src/config";
-import { toPhoneEntity, wantedEntities } from "../src/hass/entities";
+import { cameraTiles, toPhoneEntity, wantedEntities } from "../src/hass/entities";
 import { CAMERA_STUCK_MS, CAMERA_VIEW_S, cameraDue, cameraEvery, cameraUrl } from "../web/deck/src/camera-logic";
 
 process.env.NOOKDECK_HOME ??= mkdtempSync(join(tmpdir(), "pd-cam-"));
@@ -104,6 +104,17 @@ describe("camera tile timing and settings", () => {
     for (const refresh of [4, 61, 7.5, "10"]) expect(() => validateLayout(layoutWith({ id: "camera.door", refresh }))).toThrow("5 to 60");
     expect(wantedEntities(validateLayout(layoutWith({ id: "camera.door" })))).toEqual(["camera.door"]);
   });
+  test("only an entity tile opens a camera to phones: not a button, a macro step, the weather or a rule", () => {
+    const l: any = { pages: [{ items: [
+      { kind: "widget", widget: "entity", entity: { id: "camera.door" } },
+      { kind: "widget", widget: "entity", entity: { id: "light.hall" } },
+      { kind: "widget", widget: "weather", weather: { entity: "camera.weather" } },
+      { kind: "button", action: { type: "hass", entityId: "camera.button" } },
+      { kind: "button", action: { type: "macro", steps: [{ kind: "hass", entityId: "camera.macro" }] } },
+    ] }], rules: [{ when: { kind: "hass-state", entityId: "camera.rule" } }] };
+    expect([...cameraTiles(l)]).toEqual(["camera.door"]);
+    expect(wantedEntities(l)).toContain("camera.rule"); // still watched
+  });
   test("a camera's own access token and picture address never reach the phone", () => {
     const e = toPhoneEntity("camera.door", "idle", { friendly_name: "Door", access_token: "abc123", entity_picture: "/api/camera_proxy/camera.door?token=abc123", supported_features: 2 });
     expect(JSON.stringify(e)).not.toContain("abc123");
@@ -153,7 +164,10 @@ describe("GET /api/hass/camera/<entity>, with a fake Home Assistant", () => {
       aiSources: { claude: async () => null, codex: async () => null, antigravity: async () => null, sessions: async () => [] } as any,
     });
     const l: any = defaultLayout();
-    l.pages = [{ id: "p", name: "P", columns: 4, rows: 3, items: [{ id: "c", kind: "widget", widget: "entity", x: 0, y: 0, w: 2, h: 2, entity: { id: "camera.door" } }] }];
+    l.pages = [{ id: "p", name: "P", columns: 4, rows: 3, items: [
+      { id: "c", kind: "widget", widget: "entity", x: 0, y: 0, w: 2, h: 2, entity: { id: "camera.door" } },
+      { id: "b", kind: "button", x: 2, y: 0, w: 1, h: 1, label: "Snap", action: { type: "hass", service: "camera.turn_on", entityId: "camera.button" } },
+    ] }];
     const put = await fetch(`http://127.0.0.1:${app.port}/api/layout`, { method: "PUT", body: JSON.stringify(l) });
     expect(put.status).toBe(200);
     const end = Date.now() + 3000;
@@ -193,6 +207,8 @@ describe("GET /api/hass/camera/<entity>, with a fake Home Assistant", () => {
     expect(ok.status).toBe(200);
     expect(new Uint8Array(await ok.arrayBuffer())).toEqual(JPEG);
     expect((await at("/api/hass/camera/camera.bedroom", { headers: cookie })).status).toBe(404);
-    expect(asked.some((a) => a.path.endsWith("camera.bedroom"))).toBe(false);
+    expect((await at("/api/hass/camera/camera.button", { headers: cookie })).status).toBe(404);
+    expect(asked.some((a) => /camera\.(bedroom|button)$/.test(a.path))).toBe(false);
+    expect((await fetch(`http://127.0.0.1:${app.port}/api/hass/camera/camera.button`)).status).toBe(200); // this computer: any camera
   });
 });

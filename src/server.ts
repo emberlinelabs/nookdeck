@@ -12,7 +12,7 @@ import type { HassLike } from "./automation-types";
 import { HassClient } from "./hass/client";
 import { HassConfigStore } from "./hass/config";
 import { HassOAuth } from "./hass/oauth";
-import { wantedEntities } from "./hass/entities";
+import { cameraTiles, wantedEntities } from "./hass/entities";
 import { entityPress } from "./hass/press";
 import { CAMERA_ENTITY_RE, CameraError } from "./hass/camera";
 import { planControl } from "./hass/control";
@@ -763,7 +763,7 @@ export async function startServer(opts: StartOptions = {}) {
         const local = isLocalPeer(server, req);
         if (!local && !(await pairing.findDevice(cookieToken(req.headers.get("cookie")) || url.searchParams.get("token")))) return json({ error: "unauthorized" }, 401);
         const id = camFile[1]!;
-        if (!CAMERA_ENTITY_RE.test(id) || (!local && !wantedEntities(layout).includes(id))) return json({ error: "that camera is not on the layout" }, 404);
+        if (!CAMERA_ENTITY_RE.test(id) || (!local && !cameraTiles(layout).has(id))) return json({ error: "that camera is not on the layout" }, 404);
         if (!hassClient) return json({ error: "Home Assistant client is not available" }, 501);
         try {
           const image = await hassClient.cameraImage(id);
