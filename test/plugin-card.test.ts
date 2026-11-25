@@ -208,6 +208,12 @@ describe("card classes", () => {
     const block = css.indexOf("/* ---------- plugin card renderer");
     expect(block).toBeGreaterThan(0);
     expect(css.slice(0, block)).not.toContain("pd-pcard");
+    // a gap is a margin on the next sibling: its rule needs more classes than the button's margin reset, or buttons touch
+    const classes = (sel: string) => (sel.match(/\.[A-Za-z_-]|\[/g) ?? []).length;
+    const reset = css.match(/^([^{\n]*\.pd-pcard__btn) \{[^}]*margin: 0/m)![1]!;
+    const gaps = css.match(/^[^{\n]*\[data-gap="\d+px"\] > \* \+ \*/gm)!;
+    expect(gaps.length).toBe(6);
+    for (const g of gaps) expect(classes(g)).toBeGreaterThan(classes(reset));
     const next = css.indexOf("/* ----------", block + 10); // the section after the card's, if any
     const own = css.slice(block, next < 0 ? undefined : next);
     expect(css.slice(block + own.length)).not.toContain("pd-pcard");

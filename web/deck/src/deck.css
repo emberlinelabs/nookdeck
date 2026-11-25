@@ -3677,12 +3677,13 @@
 .pd-pcard__col > .pd-pcard__box, .pd-pcard__col > .pd-pcard__prog, .pd-pcard__col > .pd-pcard__spark, .pd-pcard__col > .pd-pcard__img { -webkit-align-self: stretch; align-self: stretch; }
 .pd-pcard__row > .pd-pcard__box { -webkit-flex: 0 1 auto; flex: 0 1 auto; }
 .pd-pcard__box.pd-pcard__grow, .pd-pcard__row > .pd-pcard__box.pd-pcard__grow { -webkit-flex: 1 1 0%; flex: 1 1 0%; }
-.pd-pcard__row[data-gap="4px"] > * + * { margin-left: 4px; }
-.pd-pcard__row[data-gap="8px"] > * + * { margin-left: 8px; }
-.pd-pcard__row[data-gap="12px"] > * + * { margin-left: 12px; }
-.pd-pcard__col[data-gap="4px"] > * + * { margin-top: 4px; }
-.pd-pcard__col[data-gap="8px"] > * + * { margin-top: 8px; }
-.pd-pcard__col[data-gap="12px"] > * + * { margin-top: 12px; }
+/* one class more than .pd-pcard .pd-pcard__btn, whose margin: 0 (Safari gives buttons one) would otherwise win over the gap */
+.pd-pcard .pd-pcard__row[data-gap="4px"] > * + * { margin-left: 4px; }
+.pd-pcard .pd-pcard__row[data-gap="8px"] > * + * { margin-left: 8px; }
+.pd-pcard .pd-pcard__row[data-gap="12px"] > * + * { margin-left: 12px; }
+.pd-pcard .pd-pcard__col[data-gap="4px"] > * + * { margin-top: 4px; }
+.pd-pcard .pd-pcard__col[data-gap="8px"] > * + * { margin-top: 8px; }
+.pd-pcard .pd-pcard__col[data-gap="12px"] > * + * { margin-top: 12px; }
 .pd-pcard__spacer { -webkit-flex: 1 1 0%; flex: 1 1 0%; }
 .pd-pcard__text { display: block; min-width: 0; max-width: 100%; -webkit-flex: 0 0 auto; flex: 0 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pd-pcard__row > .pd-pcard__text { -webkit-flex: 0 1 auto; flex: 0 1 auto; }
