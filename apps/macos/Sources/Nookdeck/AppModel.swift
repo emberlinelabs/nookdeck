@@ -127,6 +127,8 @@ final class AppModel: ObservableObject {
         NSWorkspace.shared.open(config.logsDir)
     }
     func openWebsite() { NSWorkspace.shared.open(URL(string: "https://nookdeck.app")!) }
+    func openGitHub() { NSWorkspace.shared.open(URL(string: "https://github.com/howznguyen/nookdeck")!) }
+    func openKofi() { NSWorkspace.shared.open(URL(string: "https://ko-fi.com/howznguyen")!) }
     func openDocs() { NSWorkspace.shared.open(URL(string: "https://nookdeck.app/docs")!) }
 
     func loadPairing(regenerate: Bool = false) async {

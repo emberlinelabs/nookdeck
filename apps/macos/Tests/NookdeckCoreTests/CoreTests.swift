@@ -144,7 +144,7 @@ final class StringsTests: XCTestCase {
         let s = try Self.shared()
         let used = ["status.running", "status.stopped", "status.settingUp", "status.needsPermission", "status.unreachable", "status.starting", "status.stopping", "status.restarting",
                     "menu.pair", "menu.openManage", "menu.start", "menu.stop", "menu.restart", "menu.checkUpdates", "menu.checking", "menu.updateNow", "menu.updateAvailable", "menu.upToDate",
-                    "menu.openAtLogin", "menu.help", "menu.help.permissions", "menu.help.logs", "menu.help.website", "menu.help.docs", "menu.version", "menu.quit", "menu.quit.hint",
+                    "menu.openAtLogin", "menu.help", "menu.help.permissions", "menu.help.logs", "menu.help.website", "menu.help.docs", "menu.star", "menu.kofi", "menu.version", "menu.quit", "menu.quit.hint",
                     "pair.title", "pair.scan", "pair.scan.wifi", "pair.scan.tailscale", "pair.qrLabel", "pair.pin", "pair.newPin", "pair.via", "pair.copyLink", "pair.copied", "pair.loading", "pair.done", "pair.error", "pair.notRunning",
                     "error.startFailed", "error.stopFailed", "error.restartFailed", "error.setupFailed", "error.updateCheckFailed", "error.updateFailed", "error.loginItemFailed", "common.retry", "common.close"]
         for k in used { for l in Strings.Lang.allCases { XCTAssertTrue(s.has(k, l), "\(k) missing in \(l)") } }

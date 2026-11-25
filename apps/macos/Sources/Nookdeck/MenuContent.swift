@@ -50,6 +50,9 @@ struct MenuContent: View {
             Button(model.t("menu.help.website")) { model.openWebsite() }
         }
         Divider()
+        Button(model.t("menu.star")) { model.openGitHub() }
+        Button(model.t("menu.kofi")) { model.openKofi() }
+        Divider()
         Text(model.t("menu.version", ["version": model.appVersion])).disabled(true)
         Button(model.t("menu.quit")) { NSApp.terminate(nil) }
             .keyboardShortcut("q")

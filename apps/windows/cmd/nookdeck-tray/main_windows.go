@@ -148,6 +148,7 @@ func manageURL() string { return "http://127.0.0.1:" + strconv.Itoa(client().Por
 var (
 	mStatus, mPhones, mPair, mManage, mToggle, mRestart, mUpdate, mUpdateNow, mLogin *systray.MenuItem
 	mHelp, mDoctor, mLogs, mDocs, mSite, mVersion, mQuit                           *systray.MenuItem
+	mStar, mKofi                                                                   *systray.MenuItem
 	pair                                                                           *core.PairServer
 )
 
@@ -189,6 +190,9 @@ func onReady() {
 	mLogs = mHelp.AddSubMenuItem(t("menu.help.logs"), "")
 	mDocs = mHelp.AddSubMenuItem(t("menu.help.docs"), "")
 	mSite = mHelp.AddSubMenuItem(t("menu.help.website"), "")
+	systray.AddSeparator()
+	mStar = systray.AddMenuItem(t("menu.star"), "")
+	mKofi = systray.AddMenuItem(t("menu.kofi"), "")
 	systray.AddSeparator()
 	mVersion = systray.AddMenuItem(t("menu.version", "version", version), "")
 	mVersion.Disable()
@@ -238,6 +242,10 @@ func onReady() {
 				openURL("https://github.com/howznguyen/nookdeck#readme")
 			case <-mSite.ClickedCh:
 				openURL("https://nookdeck.app")
+			case <-mStar.ClickedCh:
+				openURL("https://github.com/howznguyen/nookdeck")
+			case <-mKofi.ClickedCh:
+				openURL("https://ko-fi.com/howznguyen")
 			case <-mQuit.ClickedCh:
 				if pair != nil {
 					pair.Close()
