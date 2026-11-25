@@ -1,9 +1,11 @@
 /** Pure validation for plugin tiles. No DOM, no deck imports: the agent sends {render, data} and the deck never trusts it. */
 import { PLUGIN_STYLES } from '../../shared/plugin-styles'
+import { validateCard } from '../../../src/plugins/card'
+import type { CardData } from '../../../src/plugins/card'
 import type { AiData, AiProviderInfo, QuotaChart, QuotaOptions, WeatherData, WeatherOptions } from './types'
 
-export type PluginRender = 'stat' | 'gauge' | 'text' | 'list' | 'chart' | 'image' | 'status'
-export const PLUGIN_RENDERS: PluginRender[] = ['stat', 'gauge', 'text', 'list', 'chart', 'image', 'status']
+export type PluginRender = 'stat' | 'gauge' | 'text' | 'list' | 'chart' | 'image' | 'status' | 'card'
+export const PLUGIN_RENDERS: PluginRender[] = ['stat', 'gauge', 'text', 'list', 'chart', 'image', 'status', 'card']
 export const MAX_LIST = 20
 export const MAX_POINTS = 120
 export type PluginState = 'ok' | 'warn' | 'error' | 'off'
@@ -34,6 +36,7 @@ export type PluginEntry =
   | { render: 'chart'; data: ChartData; style?: string }
   | { render: 'image'; data: ImageData; style?: string }
   | { render: 'status'; data: StatusData; style?: string }
+  | { render: 'card'; data: CardData; style?: string }
 
 const isObj = (x: unknown): x is { [k: string]: unknown } => !!x && typeof x === 'object' && !Array.isArray(x)
 const isNum = (x: unknown): x is number => typeof x === 'number' && isFinite(x)
@@ -54,6 +57,10 @@ export function safeImageUrl(u: unknown): string | null {
 export function validatePlugin(render: unknown, data: unknown): PluginEntry | null {
   if (typeof render !== 'string' || !isObj(data)) return null
   const d = data
+  if (render === 'card') {
+    const c = validateCard(d)
+    return 'error' in c ? null : { render, data: c.data }
+  }
   if (render === 'stat') {
     const v = d.value
     if (!(typeof v === 'string' || isNum(v))) return null
@@ -123,6 +130,13 @@ export function validatePlugin(render: unknown, data: unknown): PluginEntry | nu
   }
   return null
 }
+
+/** The base text size of a card, from the tile's own size; card.tsx steps it down when the parts do not fit. */
+export function cardBase(tw: number, th: number): number {
+  return Math.max(11, Math.min(15, Math.round(Math.min(tw, th * 1.5) / 12)))
+}
+export const CARD_SHRINK = [1, 0.92, 0.85, 0.78, 0.7]
+export const CARD_MIN_PX = 9
 
 /** An error tile: `error` is the agent's text (may be empty when the data was just invalid). */
 export interface PluginError { error: string }

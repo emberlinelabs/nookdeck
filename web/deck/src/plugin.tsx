@@ -7,9 +7,11 @@ import { BarSpark, Donut, MeterBar } from './metric-charts'
 import type { Band } from './knowns'
 import type { IconAssets } from './types'
 import { friendlyError, pickStyle } from './plugin-logic'
+import { CardTile } from './card'
+import type { CardArgs } from '../../../src/plugins/card'
 import type { PluginSlot, PluginState } from './plugin-logic'
 
-/** Plugin tiles: seven renderers fed by validated data (plugin-logic.ts). Reuses the value tile look and the shared charts. */
+/** Plugin tiles: eight renderers (card.tsx is one) fed by validated data (plugin-logic.ts). Reuses the value tile look and the shared charts. */
 
 export const STATE_COLOR: { [k in PluginState]: string } = { get ok() { return PAL.ok }, get warn() { return PAL.warn }, get error() { return PAL.error }, off: '#8b8b94' }
 const band = (v: number): Band => (v >= 85 ? 'risk' : v >= 65 ? 'watch' : 'good')
@@ -27,6 +29,8 @@ export interface PluginTileProps {
   label?: string
   /** the tile's chosen display style (plugin.view.style); the widget's suggestion and the default follow */
   style?: string
+  /** a card button was tapped (absent in previews) */
+  onCard?: (action: string, args: CardArgs | undefined) => Promise<unknown>
 }
 
 export function PluginTile(props: PluginTileProps) {
@@ -48,6 +52,7 @@ export function PluginTile(props: PluginTileProps) {
       </div>
     )
   }
+  if (e.render === 'card') return <CardTile data={e.data} tw={tw} th={th} color={props.color} textColor={col} assets={props.assets} onAction={props.onCard} />
   const st = pickStyle(e.render, props.style, e.style)
   if (e.render === 'stat') {
     const d = e.data

@@ -87,6 +87,7 @@ The phone draws your data with a built-in renderer. No plugin code runs on the p
 | `chart` | `{ points: number[], label?, unit? }`, up to 120 points |
 | `image` | `{ url (https or data:), fit? }` |
 | `status` | `{ state: ok / warn / error / off, label, title?, value?, unit?, detail?, points? }`: `title` up to 40 characters, `value` up to 12, `unit` up to 8, `detail` up to 60, `points` up to 60 numbers |
+| `card` | `{ root }`, a tree of parts you lay out yourself (see [Cards](#cards)) |
 
 If the data does not fit the renderer, the tile shows a neutral error instead of breaking.
 
@@ -105,6 +106,73 @@ Each renderer can be drawn in more than one way. The person who adds your tile p
 | `status` | `card`, `pill`, `dot` |
 
 A widget can suggest a style with `"style"` in its manifest entry, for example `{ "id": "history", "render": "chart", "style": "area", ... }`. It must be one of the renderer's styles. The tile's own choice wins, then your suggestion, then the default. The manage page marks the suggestion "Suggested". The table lives in `web/shared/plugin-styles.ts`.
+
+### Cards
+
+`card` is the renderer for a tile you design: rows, columns, texts, numbers, buttons. You send a tree of parts; the phone draws them with the current theme. There is no HTML, CSS or script, so a card cannot run anything on the phone. A card has no styles.
+
+| `t` | Fields (`?` = optional) |
+|---|---|
+| `row`, `col` | `children`, `gap?` 0-3 (default 1), `align?` `start` / `center` / `end` / `between` (along the row or column), `grow?` (takes the free space) |
+| `text` | `text`, `size?` `s` / `m` / `l`, `tone?`, `bold?` |
+| `number` | `value` (number or text, such as `"12:30"`), `unit?`, `size?` `m` / `l` / `xl` (default `l`), `tone?` |
+| `pill` | `text`, `tone?` |
+| `progress` | `value` 0 to 1, `tone?` |
+| `sparkline` | `points` (up to 60 numbers), `tone?` |
+| `icon` | `name` (the same names as button icons), `tone?` |
+| `image` | `src` (`data:image/png;base64,...` or `data:image/jpeg;base64,...` only), `fit?` `cover` / `contain` |
+| `button` | `action` (the id of one of your `actions`), `label?` and/or `icon?`, `args?`, `tone?`, `active?` (drawn filled) |
+| `spacer` | none; takes the free space |
+
+`tone` is `default`, `muted`, `accent` (the tile's colour), `ok`, `warn` or `bad`.
+
+**Limits.** At most 6 levels and 60 parts; a text (any string you show, and each string in `args`) up to 200 characters; `args` up to 20 keys; the card as JSON up to 32 KB not counting image `src` strings; all image `src` strings of one card together up to 204800 characters. Unknown parts and unknown fields are refused. A card that breaks a rule is not drawn: the tile shows the reason (it starts with `card:`). Check it yourself with `validateCard(data)`.
+
+**Fitting.** The same card is drawn at every tile size. The text gets smaller to fit; if it still does not fit, the last parts of a column are left out. So put the important parts first, and use `ctx.widgets.provide`'s settings if you want a different card per tile.
+
+**Buttons.** A tap runs your own action with that id, through the same path as a plugin button in the layout. `args` reach `ctx.actions.handle` as the action's settings, so **declare every key in the action's `settings`**: undeclared keys are dropped, a value that does not fit its type is refused, and `secret` fields only come from the plugin's saved settings. The handler gets the plugin-wide settings plus these values (and the action's defaults), not the settings of the tile that was tapped; put what you need to tell tiles apart in `args`. The agent only accepts a button that is on the card it sent (or the one just before). After the action the agent asks your tiles for fresh data, so the card shows the new state; you can also call `ctx.widgets.push`. If the handler throws, the phone shows the message.
+
+In `nookdeck.json`:
+
+```json
+{
+  "main": "index.ts",
+  "widgets": [{ "id": "timer", "name": "Focus timer", "render": "card", "sizes": ["2x2", "4x2"],
+    "preview": { "root": { "t": "col", "children": [{ "t": "number", "value": "25:00", "size": "xl" }] } } }],
+  "actions": [{ "id": "toggle", "name": "Start or pause",
+    "settings": [{ "key": "to", "type": "select", "label": "To", "options": ["run", "pause"] }] }]
+}
+```
+
+In `index.ts`:
+
+```ts
+import { card, type PluginContext } from "@nookdeck/plugin";
+
+let running = false;
+
+export function activate(ctx: PluginContext) {
+  const view = () => ({
+    render: "card" as const,
+    data: card.root(card.col([
+      card.row([card.icon("clock", { tone: "accent" }), card.text("Focus", { bold: true }), card.spacer(),
+        card.pill(running ? "running" : "paused", { tone: running ? "ok" : "warn" })]),
+      card.number("25:00", { size: "xl" }),
+      card.progress(running ? 0.4 : 0, { tone: "ok" }),
+      card.button(running ? "Pause" : "Start", "toggle", { args: { to: running ? "pause" : "run" }, active: running }),
+    ], { gap: 2, align: "between", grow: true })),
+  });
+  ctx.widgets.provide("timer", view, { every: 60 });
+  ctx.actions.handle("toggle", (settings) => {
+    running = settings.to === "run";
+    ctx.widgets.push("timer", view());
+  });
+}
+```
+
+The builders are `card.root`, `row`, `col`, `text`, `number`, `pill`, `progress`, `sparkline`, `icon`, `image`, `button(label, action, options?)` and `spacer`. `row` and `col` skip `false`, `null` and `undefined` children, so `cond && card.text("...")` works. `sparkline` keeps the last 60 points. The types are `CardNode` and `CardData`.
+
+A widget with an `http` or `command` source can use `card` too, if its mapped data is a `{ root }`.
 
 ## Settings
 

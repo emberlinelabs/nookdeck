@@ -509,6 +509,7 @@ function Tile(props: {
   wxData?: WeatherData
   pushed?: PushedValue
   plug?: PluginSlot
+  onCard?: (itemId: string, action: string, args: { [k: string]: string | number | boolean } | undefined) => Promise<unknown>
   notes?: Notice[]
   busy?: boolean
   entPend?: number
@@ -668,6 +669,7 @@ function Tile(props: {
           pushed={props.pushed}
           plug={core ? undefined : props.plug}
           plugStyle={item.plugin && item.plugin.view ? item.plugin.view.style : undefined}
+          onCard={props.onCard && !props.preview ? (a, args) => (props.onCard as NonNullable<typeof props.onCard>)(item.id, a, args) : undefined}
           label={item.label}
           notes={props.notes}
           hassEnt={props.hassEnt}
@@ -1641,6 +1643,11 @@ export function Deck(props: DeckProps) {
       )
   }
 
+  const pressCard = (itemId: string, action: string, args: { [k: string]: string | number | boolean } | undefined) =>
+    client.cardAction(itemId, action, args).then((r) => {
+      if (!r.ok) showToast(r.error || t('Action failed'))
+    })
+
   const press = (page: Page, item: Item) => {
     if (item.kind === 'widget' && item.widget === 'entity' && item.entity) {
       const eid = item.entity.id
@@ -2055,6 +2062,7 @@ export function Deck(props: DeckProps) {
                             plug={it.widget === 'plugin' ? (preview ? previewSlot(pv.pluginData, it.id, it.plugin ? it.plugin.widget : it.id, it.plugin ? it.plugin.id : undefined) : st.plugins ? st.plugins[it.id] : null) : (it.widget === 'weather' || it.widget === 'quota') && !preview && st.plugins ? st.plugins[it.id] : undefined}
                             notes={st.notes}
                             entPend={it.entity ? pend[it.entity.id] : undefined}
+                            onCard={pressCard}
                             onEntity={(pg, itm) => setSheet({ page: pg, item: itm })}
                             onStep={stepTemp}
                             onLight={(pg, itm, op, v) => { ctl(pg, itm, op, v) }}

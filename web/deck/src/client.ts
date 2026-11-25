@@ -505,6 +505,10 @@ export class DeckClient {
   press(pageId: string, itemId: string): Promise<PressResult> {
     return this.request({ type: 'press', pageId, itemId })
   }
+  /** A button of a plugin card tile. */
+  cardAction(tile: string, action: string, args?: { [k: string]: string | number | boolean }): Promise<PressResult> {
+    return this.request({ type: 'plugin-card-action', tile, action, args })
+  }
   /** Answer a Claude Code question: answers {questionText: label | typed text}, other {questionText: true} for typed text; release hands it back to the terminal. */
   answerQuestion(id: string, body: { answers?: { [q: string]: string }; other?: { [q: string]: boolean }; choices?: { [q: string]: string[] }; custom?: { [q: string]: string }; release?: boolean }): Promise<PressResult> {
     const req: { [k: string]: unknown } = { type: 'question-answer', id }

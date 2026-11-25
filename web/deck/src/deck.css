@@ -3659,3 +3659,67 @@
 
 /* screen care: while the night layer is up it takes the tap, so the first touch lifts the dim and presses nothing */
 .pd-dim.pd-dim--tap { pointer-events: auto; cursor: pointer; touch-action: none; -ms-touch-action: none; -webkit-tap-highlight-color: transparent; }
+
+/* ---------- plugin card renderer (card.tsx). Gaps are margins: Safari 12 has no flex gap. ---------- */
+.pd-card { position: relative; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; width: 100%; height: 100%; box-sizing: border-box; overflow: hidden; text-align: left; line-height: 1.25; }
+.pd-card__box { display: -webkit-flex; display: flex; min-width: 0; min-height: 0; -webkit-flex: 0 0 auto; flex: 0 0 auto; max-width: 100%; }
+.pd-card > .pd-card__box { -webkit-flex: 1 1 auto; flex: 1 1 auto; }
+.pd-card > * { margin: auto 0; }
+.pd-card > .pd-card__box { margin: 0; }
+.pd-card__row { -webkit-flex-direction: row; flex-direction: row; -webkit-align-items: center; align-items: center; }
+.pd-card__col { -webkit-flex-direction: column; flex-direction: column; -webkit-align-items: stretch; align-items: stretch; }
+.pd-card__box.pd-card__al-center { -webkit-justify-content: center; justify-content: center; }
+.pd-card__box.pd-card__al-end { -webkit-justify-content: flex-end; justify-content: flex-end; }
+.pd-card__box.pd-card__al-between { -webkit-justify-content: space-between; justify-content: space-between; }
+.pd-card__col.pd-card__al-center { -webkit-align-items: center; align-items: center; text-align: center; }
+.pd-card__col.pd-card__al-end { -webkit-align-items: flex-end; align-items: flex-end; text-align: right; }
+/* these keep the full width in a centred or right-aligned column */
+.pd-card__col > .pd-card__box, .pd-card__col > .pd-card__prog, .pd-card__col > .pd-card__spark, .pd-card__col > .pd-card__img { -webkit-align-self: stretch; align-self: stretch; }
+.pd-card__row > .pd-card__box { -webkit-flex: 0 1 auto; flex: 0 1 auto; }
+.pd-card__box.pd-card__grow, .pd-card__row > .pd-card__box.pd-card__grow { -webkit-flex: 1 1 0%; flex: 1 1 0%; }
+.pd-card__row[data-gap="4px"] > * + * { margin-left: 4px; }
+.pd-card__row[data-gap="8px"] > * + * { margin-left: 8px; }
+.pd-card__row[data-gap="12px"] > * + * { margin-left: 12px; }
+.pd-card__col[data-gap="4px"] > * + * { margin-top: 4px; }
+.pd-card__col[data-gap="8px"] > * + * { margin-top: 8px; }
+.pd-card__col[data-gap="12px"] > * + * { margin-top: 12px; }
+.pd-card__spacer { -webkit-flex: 1 1 0%; flex: 1 1 0%; }
+.pd-card__text { display: block; min-width: 0; max-width: 100%; -webkit-flex: 0 0 auto; flex: 0 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pd-card__row > .pd-card__text { -webkit-flex: 0 1 auto; flex: 0 1 auto; }
+.pd-card__text--s { font-size: 0.82em; }
+.pd-card__text--m { font-size: 1em; }
+.pd-card__text--l { font-size: 1.3em; }
+.pd-card__b { font-weight: 700; }
+.pd-card__num { display: block; overflow: hidden; max-width: 100%; -webkit-flex: 0 0 auto; flex: 0 0 auto; font-weight: 600; line-height: 1.1; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pd-card__num--m { font-size: 1.5em; }
+.pd-card__num--l { font-size: 2.1em; }
+.pd-card__num--xl { font-size: 3em; }
+.pd-card__nv { display: inline-block; }
+.pd-card__nv i { font-style: normal; font-weight: 500; font-size: 0.45em; margin-left: 2px; opacity: 0.7; }
+.pd-card__pill { position: relative; display: inline-block; max-width: 100%; -webkit-flex: 0 1 auto; flex: 0 1 auto; -webkit-align-self: flex-start; align-self: flex-start; box-sizing: border-box; padding: 0.25em 0.7em; border-radius: 999px; border: 1px solid currentColor; font-size: 0.75em; font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pd-card__row > .pd-card__pill { -webkit-align-self: center; align-self: center; }
+.pd-card__al-center > .pd-card__pill { -webkit-align-self: center; align-self: center; }
+.pd-card__al-end > .pd-card__pill { -webkit-align-self: flex-end; align-self: flex-end; }
+.pd-card__prog { display: block; -webkit-flex: 0 0 auto; flex: 0 0 auto; height: 0.5em; min-height: 4px; border-radius: 999px; background: var(--pd-border-strong); overflow: hidden; }
+.pd-card__prog > i { display: block; height: 100%; border-radius: 999px; }
+.pd-card__row > .pd-card__prog { -webkit-flex: 1 1 0%; flex: 1 1 0%; min-width: 2em; }
+.pd-card__spark { position: relative; display: block; -webkit-flex: 1 1 0%; flex: 1 1 0%; min-height: 1.2em; min-width: 3em; }
+.pd-card__row > .pd-card__spark { height: 2.2em; }
+.pd-card__spark svg { position: absolute; left: 0; top: 0; }
+.pd-card__icon, .pd-card__bi { display: inline-block; -webkit-flex: 0 0 auto; flex: 0 0 auto; line-height: 1; text-align: center; }
+.pd-card__icon > * { width: 1.6em !important; height: 1.6em !important; font-size: 1em !important; display: block; }
+.pd-card__icon > .pd-ic-txt { font-size: 1.3em !important; line-height: 1.25em !important; }
+.pd-card__cut { display: none !important; }
+.pd-card__icon > * > svg { width: 100%; height: 100%; }
+.pd-card__bi > * { width: 1.25em !important; height: 1.25em !important; font-size: 1.1em !important; display: block; }
+.pd-card__bi > * > svg { width: 100%; height: 100%; }
+.pd-card__img { display: block; -webkit-flex: 1 1 0%; flex: 1 1 0%; min-height: 2.5em; min-width: 2.5em; border-radius: calc(var(--pd-radius) * 0.5); background-position: center; background-repeat: no-repeat; }
+.pd-card__row > .pd-card__img { -webkit-align-self: stretch; align-self: stretch; }
+.pd-card .pd-card__btn { display: -webkit-inline-flex; display: inline-flex; -webkit-flex: 0 1 auto; flex: 0 1 auto; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; min-width: 0; max-width: 100%; min-height: 28px; height: 2.5em; margin: 0; padding: 0 0.75em; box-sizing: border-box; font: inherit; font-size: 0.9em; font-weight: 600; color: inherit; background: var(--pd-surface-2); border: 1px solid var(--pd-border-strong); border-radius: calc(var(--pd-radius) * 0.6); cursor: pointer; -webkit-appearance: none; appearance: none; -webkit-tap-highlight-color: transparent; transition: transform var(--pd-dur-fast) var(--pd-ease-out), opacity var(--pd-dur-fast) var(--pd-ease-out); }
+.pd-card .pd-card__btn--icon { padding: 0; width: 2.5em; min-width: 28px; -webkit-flex: 0 0 auto; flex: 0 0 auto; }
+.pd-card__row.pd-card__grow > .pd-card__btn:not(.pd-card__btn--icon), .pd-card .pd-card__col > .pd-card__row > .pd-card__btn:not(.pd-card__btn--icon) { -webkit-flex: 1 1 auto; flex: 1 1 auto; }
+.pd-card .pd-card__btn--active { color: var(--pd-bg) !important; }
+.pd-card .pd-card__btn:active, .pd-card__btn--busy { transform: scale(0.95); opacity: 0.7; }
+.pd-card__bl { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pd-card__bi + .pd-card__bl { margin-left: 0.4em; }
+

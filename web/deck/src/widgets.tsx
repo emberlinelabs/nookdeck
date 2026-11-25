@@ -104,6 +104,7 @@ export interface WidgetProps {
   pushed?: PushedValue
   plug?: PluginSlot | undefined
   plugStyle?: string
+  onCard?: (action: string, args: { [k: string]: string | number | boolean } | undefined) => Promise<unknown>
   label?: string
   notes?: Notice[]
   hassEnt?: HassEntity
@@ -127,7 +128,7 @@ export function Widget(props: WidgetProps) {
   if ((props.kind === 'weather' || props.kind === 'quota') && props.plug && 'error' in props.plug) return <PluginTile entry={props.plug} tw={props.tw} th={props.th} showLabel={props.showLabel} color={props.color} textColor={props.textColor} assets={props.assets} label={props.label} />
   if (props.kind === 'weather') return <WeatherTile opts={props.weather} data={props.wxData} tw={props.tw} th={props.th} cw={props.cw} ch={props.ch} scale={props.scale} showLabel={props.showLabel} textColor={props.textColor} assets={props.assets} />
   if (props.kind === 'value' && props.push) return <ValueTile cfg={props.push} val={props.pushed} tw={props.tw} th={props.th} scale={props.scale} showLabel={props.showLabel} color={props.color} textColor={props.textColor} />
-  if (props.kind === 'plugin') return <PluginTile style={props.plugStyle} entry={props.plug} tw={props.tw} th={props.th} showLabel={props.showLabel} color={props.color} textColor={props.textColor} assets={props.assets} label={props.label} />
+  if (props.kind === 'plugin') return <PluginTile onCard={props.onCard} style={props.plugStyle} entry={props.plug} tw={props.tw} th={props.th} showLabel={props.showLabel} color={props.color} textColor={props.textColor} assets={props.assets} label={props.label} />
   if (props.kind === 'notifications') return <NotificationsTile notes={props.notes || []} tw={props.tw} th={props.th} showLabel={props.showLabel} textColor={props.textColor} />
   if (props.kind === 'nowplaying') return <NowPlayingTile media={props.media} last={props.last} stats={props.stats} tw={props.tw} th={props.th} scale={props.scale} showLabel={props.showLabel} textColor={props.textColor} onMedia={props.onMedia} onVolume={props.onVolume} />
   if (props.kind === 'quota') return <QuotaWidget {...(props as AiWidgetProps)} />
