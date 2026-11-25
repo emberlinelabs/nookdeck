@@ -28,6 +28,7 @@ export function rendererLabel(r: string, short = false): string {
     case "chart": return t("Chart");
     case "image": return t("Image");
     case "status": return t("Status light");
+    case "card": return t("Card");
     case "custom:quota": return short ? t("AI usage") : t("AI usage tile");
     case "custom:weather": return short ? t("Weather") : t("Weather tile");
     default: return t("Custom tile");

@@ -324,6 +324,7 @@ export async function startServer(opts: StartOptions = {}) {
     fetch: opts.pluginDeps?.fetch ?? fetch,
     shell: opts.pluginDeps?.shell ?? realShell,
     onItems: (items) => broadcast({ type: "plugin", items }),
+    log: (id, line) => pluginHosts.note(id, line),
   });
   pluginRuntime.setLayout(layout);
   const findAction = (pageId: string, itemId: string) => {
@@ -1524,6 +1525,16 @@ export async function startServer(opts: StartOptions = {}) {
             const plan = planControl(entityId, hass.getState(entityId), msg.op, msg.value, { valueUnit: tempUnitOf(msg.unit), deviceUnit: hass.systemTempUnit?.(), related: hass.related?.(entityId) });
             if ("error" in plan) throw new Error(plan.error);
             await execute({ type: "hass", service: plan.service, entityId: plan.entityId ?? entityId, ...(plan.data ? { data: plan.data } : {}) });
+            send(ws, { type: "result", reqId, ok: true });
+          } catch (err: any) {
+            send(ws, { type: "result", reqId, ok: false, error: err?.message ?? String(err) });
+          }
+          return;
+        }
+        if (msg?.type === "plugin-card-action") {
+          rules.pressed();
+          try {
+            await pluginRuntime.cardAction(msg.tile, msg.action, msg.args, (steps) => execute({ type: "macro", steps }, 0, ws));
             send(ws, { type: "result", reqId, ok: true });
           } catch (err: any) {
             send(ws, { type: "result", reqId, ok: false, error: err?.message ?? String(err) });

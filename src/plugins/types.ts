@@ -2,13 +2,14 @@
  * Plugin system, P1 (agent side): manifests, stored state, and what the deck receives.
  * Spec: Knowns doc specs/plugin-system. Contracts other code builds on (keep exactly):
  *   WS      {type:"plugin", items:{[tileId]: {render,data} | {error}}}
+ *   WS up   {type:"plugin-card-action", tile, action, args?, reqId} -> {type:"result", reqId, ok, error?}   (a card button)
  *   REST    GET /api/plugins, POST /api/plugins {source}, DELETE /api/plugins/:id, POST /api/plugins/:id/grant {permissions},
  *           POST /api/plugins/:id/enabled {enabled}, PUT /api/plugins/:id/settings
  *   Layout  widget {kind:"widget", widget:"plugin", plugin:{id,widget,settings}}, action {type:"plugin", plugin, action, settings}
  */
 import type { Layout, MacroStep, Theme } from "../config";
 
-export const RENDERERS = ["stat", "gauge", "text", "list", "chart", "image", "status"] as const;
+export const RENDERERS = ["stat", "gauge", "text", "list", "chart", "image", "status", "card"] as const;
 export type Renderer = (typeof RENDERERS)[number];
 /** A renderer only core plugins may use: the deck draws its own tile (custom:weather, custom:quota). parseManifest never produces one. */
 export type CustomRenderer = `custom:${string}`;

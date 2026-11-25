@@ -3,6 +3,7 @@
  * the host-limited HTTP client and the command runner. Network and shell go through `deps`, so tests use fakes.
  */
 import { hostMatches, EVERY_DEFAULT } from "./manifest";
+import { validateCard } from "./card";
 import type { ActionDef, Permissions, Renderer, SettingField, Settings, SettingValue, TileItem, WidgetDef } from "./types";
 
 export interface SourceDeps {
@@ -63,6 +64,7 @@ const STATES = ["ok", "warn", "error", "off"];
 
 /** Checks and trims `data` for a renderer (the same limits the deck assumes). Returns the clean data, or an error message. */
 export function cleanRender(render: Renderer, data: unknown): { data: unknown } | { error: string } {
+  if (render === "card") return validateCard(data); // strict: unknown parts and fields are an error, not trimmed
   const d = (data !== null && typeof data === "object" && !Array.isArray(data) ? data : {}) as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   switch (render) {

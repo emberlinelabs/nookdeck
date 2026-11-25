@@ -5,6 +5,7 @@
 import { pathToFileURL } from "node:url";
 import { lockDown } from "./guards";
 import * as api from "./api";
+import { CARD_LIMITS, card, validateCard } from "./card";
 import {
   CALL_TIMEOUT_MS, EVERY_DEFAULT_S, EVERY_MIN_S, PluginPermissionError, RPC_ERR,
   type ActionHandler, type FetchResult, type InitParams, type InitResult, type PluginContext, type PluginFetchInit, type PluginModule,
@@ -19,7 +20,7 @@ export const SDK_NAME = "@nookdeck/plugin";
  * import fails (the child runs with --no-install, see process.ts hostEnv) and the error is reworded at load: a plugin is one folder.
  */
 function registerSdk(): void {
-  const sdk = { ...api, definePlugin: (m: unknown) => m };
+  const sdk = { ...api, card, validateCard, CARD_LIMITS, definePlugin: (m: unknown) => m };
   Bun.plugin({
     name: "nookdeck-sdk",
     setup(b) {

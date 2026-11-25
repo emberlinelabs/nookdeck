@@ -15,7 +15,8 @@ describe("plugin display styles: one table", () => {
     expect(MANAGE).toBe(PLUGIN_STYLES);
   });
   test("every renderer has styles and the agent accepts every one", () => {
-    for (const r of RENDERERS) expect(PLUGIN_STYLES[r]?.length).toBeGreaterThan(1);
+    // a card lays itself out (spec release 0.5 D2): it has no display styles
+    for (const r of RENDERERS) if (r !== "card") expect(PLUGIN_STYLES[r]?.length).toBeGreaterThan(1);
     for (const s of Object.values(PLUGIN_STYLES).flat()) expect(ALL_STYLES).toContain(s);
   });
   test("pickStyle: choice, then suggestion, then the first style", () => {

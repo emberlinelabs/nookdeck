@@ -11,6 +11,8 @@
  * so permissions (D5) are enforced in the agent, not in the child that could be tampered with.
  */
 import type { Permissions, Renderer, SettingValue, Settings } from "./types";
+/** The `card` renderer's data (`{ root: CardNode }`); build it with `card.col(...)` etc. */
+export type { CardData, CardNode, CardTone, CardGap, CardAlign, CardArgs, CardChildren } from "./card";
 
 export type { Permissions, Renderer, SettingValue, Settings };
 

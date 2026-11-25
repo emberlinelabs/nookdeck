@@ -228,7 +228,8 @@
             "list",
             "chart",
             "image",
-            "status"
+            "status",
+            "card"
           ]
         },
         "sizes": {

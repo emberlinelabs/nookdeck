@@ -109,6 +109,9 @@ export class PluginHosts {
 
   logs(id: string, lines = 50): string[] { return this.log(id).tail(lines); }
 
+  /** An agent line in a plugin's log. */
+  note(id: string, line: string): void { this.log(id).append(line); }
+
   async restart(id: string): Promise<void> {
     const s = this.slots.get(id);
     if (s) { await s.proc.restart(); this.slots.delete(id); }

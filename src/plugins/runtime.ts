@@ -8,7 +8,7 @@ import { covers } from "./manifest";
 import { cleanRender } from "./sources";
 import type { PluginHosts } from "./hosts";
 import { layoutPluginTiles, type CoreHost } from "./core";
-import { actionSteps, evaluateWidget, resolveSettings, runHttpAction, widgetEvery, type SourceDeps } from "./sources";
+import { actionSteps, coerce, evaluateWidget, resolveSettings, runHttpAction, widgetEvery, type SourceDeps } from "./sources";
 import type { PluginStore } from "./store";
 import { ERR_DISABLED, ERR_MISSING, ERR_NOT_GRANTED, type Renderer, type TileItem, type TileItems } from "./types";
 
@@ -21,9 +21,19 @@ export interface RuntimeDeps extends SourceDeps {
   core?: CoreHost;
   /** Runs the code plugins (their own processes); a widget with an `agent` source is served by it. */
   hosts?: PluginHosts;
+  /** A line for a plugin's own log (refused card buttons). */
+  log?: (plugin: string, line: string) => void;
 }
 
-interface Tile { ref: PluginRef; timer?: ReturnType<typeof setTimeout>; gen: number }
+interface Tile { ref: PluginRef; timer?: ReturnType<typeof setTimeout>; gen: number; /** the buttons of the card shown now and of the one before it (a tap may be on its way while the card changes) */ buttons?: string[][] }
+
+type Args = Record<string, string | number | boolean>;
+const buttonKey = (action: string, args: Args | undefined): string => JSON.stringify([action, Object.keys(args ?? {}).sort().map((k) => [k, args![k]])]);
+function cardButtons(node: any, out: string[] = []): string[] {
+  if (node?.t === "button") out.push(buttonKey(node.action, node.args));
+  if (Array.isArray(node?.children)) for (const c of node.children) cardButtons(c, out);
+  return out;
+}
 
 const same = (a: TileItem | undefined, b: TileItem): boolean => !!a && JSON.stringify(a) === JSON.stringify(b);
 
@@ -116,6 +126,8 @@ export class PluginRuntime {
       if (st) item = { ...item, style: st };
     }
     if (same(this.items[id], item)) return;
+    const tile = this.tiles.get(id);
+    if (tile) tile.buttons = "render" in item && item.render === "card" ? [cardButtons((item.data as any)?.root), tile.buttons?.[0] ?? []] : undefined;
     this.items[id] = item;
     out[id] = item;
   }
@@ -146,6 +158,48 @@ export class PluginRuntime {
     if (Object.keys(changed).length) this.deps.onItems(changed);
     if (this.active) tile.timer = setTimeout(() => void this.refresh(id, gen), (core ? core.every(tile.ref.id, tile.ref.widget) : "agent" in widget.source && this.deps.hosts ? this.deps.hosts.every(tile.ref.id, tile.ref.widget) : widgetEvery(widget)) * 1000 * (this.deps.scale ?? 1));
     (tile.timer as any)?.unref?.();
+  }
+
+  /**
+   * A tap on a button of a card tile (D2). Only the plugin that owns the tile, only an action its manifest declares, only a
+   * button the agent itself sent to that tile (so a phone cannot make up its own arguments), and `args` only as that action's
+   * own settings: unknown keys are dropped, a value that does not fit its field is refused. Then it runs like any plugin button,
+   * and the plugin's tiles are refreshed at once so the card shows the new state.
+   */
+  async cardAction(tileId: unknown, action: unknown, args: unknown, runSteps: (steps: MacroStep[]) => Promise<void>): Promise<void> {
+    const tile = typeof tileId === "string" ? this.tiles.get(tileId) : undefined;
+    if (!tile || typeof action !== "string" || (args !== undefined && (args === null || typeof args !== "object" || Array.isArray(args)))) throw new Error("this button is not on the layout");
+    const plugin = tile.ref.id;
+    const refuse = (message: string, why: string): never => {
+      this.deps.log?.(plugin, `[agent] refused a card button on tile "${String(tileId).slice(0, 40)}": ${why}`);
+      throw new Error(message);
+    };
+    const e = this.store.entry(plugin);
+    if (!e) throw new Error(ERR_MISSING);
+    const def = e.manifest.actions.find((x) => x.id === action);
+    if (!def) return refuse("this plugin has no such action", `the manifest declares no action "${action.slice(0, 48)}"`);
+    const sent = (args ?? {}) as Args;
+    if (!tile.buttons?.some((list) => list.includes(buttonKey(action, sent)))) return refuse("this button is no longer on the card", `no button of the card runs "${action}" with these args`);
+    const settings: Args = {};
+    for (const f of def.settings) {
+      if (!Object.prototype.hasOwnProperty.call(sent, f.key) || f.type === "secret") continue; // a secret only comes from the plugin's settings
+      const v = coerce(f, sent[f.key]);
+      if (v === undefined) return refuse(`invalid value for "${f.label}"`, `args.${f.key} of "${action}" is not a valid ${f.type}`);
+      settings[f.key] = v;
+    }
+    await this.runAction({ plugin, action, settings }, runSteps);
+    this.refreshPlugin(plugin);
+  }
+
+  /** Asks every tile of a plugin for fresh data now. */
+  private refreshPlugin(plugin: string): void {
+    if (!this.active || this.stopped) return;
+    for (const [id, t] of this.tiles) {
+      if (t.ref.id !== plugin || this.store.runnable(plugin) !== "ok") continue;
+      clearTimeout(t.timer);
+      t.gen = ++this.gen;
+      void this.refresh(id, t.gen);
+    }
   }
 
   /**
