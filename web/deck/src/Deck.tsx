@@ -1857,7 +1857,7 @@ export function Deck(props: DeckProps) {
   }
   const holdEnd = () => clearTimeout(holdT.current)
   const dotCls = st.status === 'online' ? 'pd-dot pd-dot--live' : st.status === 'connecting' ? 'pd-dot pd-dot--warn' : st.status === 'offline' ? 'pd-dot pd-dot--bad' : 'pd-dot'
-  const statusText = st.status === 'pair' ? t('not paired') : st.status === 'online' ? t('connected') : st.status === 'connecting' ? t('connecting') : t('disconnected')
+  const statusText = st.status === 'pair' ? t('not paired') : st.status === 'online' ? t('connected') : st.status === 'connecting' ? t('connecting') : t('disconnected') + (st.closeCode ? ' (' + st.closeCode + ')' : '')
   const cur = pages[pageIdx]
   const canClose = !props.standalone && !preview && !!props.onClose
   const showFs = !preview && fsSupported() && st.status !== 'pair'

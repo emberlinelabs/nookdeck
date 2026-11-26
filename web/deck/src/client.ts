@@ -26,6 +26,8 @@ export interface ClientState {
   notice: string
   /** a reload is under way: the deck shows a veil */
   reloading?: boolean
+  /** close code of the last dropped socket (shown next to "disconnected", so a screenshot tells why) */
+  closeCode?: number
   /** agent platform from hello: darwin | win32 | linux */
   platform?: string
   /** Home Assistant entities used by the layout (merged from full + partial updates) */
@@ -146,6 +148,8 @@ const toNotice = (o: any): Notice => ({
 export class DeckClient {
   private lastSeen: Media | null = null
   private helloAssets: Layout['assets'] | undefined
+  /** icon parts that arrive before a big layout ({type:'assets'}); attached to the next {type:'layout', assetParts} */
+  private partAssets: { [k: string]: any } = {}
   private macSounds: { [id: string]: { at: number; durMs?: number } } = {}
   readonly soundboard = new Soundboard(() => this.syncSounds(), () => this.token)
   private syncSounds() {
@@ -234,10 +238,11 @@ export class DeckClient {
       return
     }
     this.ws = ws
+    this.partAssets = {}
     this.set({ status: 'connecting' })
     ws.onopen = () => {
       this.retry = 0
-      this.set({ status: 'online' })
+      this.set({ status: 'online', closeCode: undefined })
       clearInterval(this.pingTimer)
       this.pingTimer = window.setInterval(() => this.send({ type: 'ping' }), 20000)
     }
@@ -257,6 +262,7 @@ export class DeckClient {
       this.failPending(t('Disconnected'))
       if (this.state.perms.length) this.set({ perms: [] })
       if (this.state.questions && this.state.questions.length) this.set({ questions: [] })
+      if (ev.code !== this.state.closeCode) this.set({ closeCode: ev.code })
       if (ev.code === 4401) {
         // had a token: it was revoked (say so); had none: the cookie did not authenticate, just ask for the PIN
         this.unpair(this.token ? t('This device is no longer paired. Enter the PIN again.') : '')
@@ -385,12 +391,17 @@ export class DeckClient {
         this.syncSounds()
         break
       }
+      case 'assets':
+        if (msg.assets && typeof msg.assets === 'object') Object.assign(this.partAssets, msg.assets)
+        break
       case 'layout': {
         // The agent sends the icon assets (app icons, uploaded images, catalog and LobeHub icons) NEXT to the layout:
         // {type:'layout', layout, assets}. The renderer reads layout.assets, so attach them here.
         const layout = msg.layout as Layout
         if (layout && msg.assets && typeof msg.assets === 'object') layout.assets = msg.assets as Layout['assets']
+        else if (layout && msg.assetParts) layout.assets = this.partAssets as Layout['assets']
         else if (layout && this.helloAssets) layout.assets = this.helloAssets
+        if (msg.assetParts) this.partAssets = {}
         this.set({ layout: layout })
         break
       }

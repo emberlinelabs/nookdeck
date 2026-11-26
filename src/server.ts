@@ -70,6 +70,7 @@ import { zipFiles } from "./plugins/cli";
 import { ERR_DISABLED, ERR_MISSING, ERR_NOT_GRANTED } from "./plugins/types";
 import type { SourceDeps } from "./plugins/sources";
 import { forbiddenPage, pickLanguage, wantsPage } from "./forbidden-page";
+import { layoutFrames, unusualClose } from "./ws-frames";
 
 export type { Stats };
 
@@ -240,7 +241,9 @@ export async function startServer(opts: StartOptions = {}) {
     return base;
   };
   let layoutAssets: Record<string, any> = await icons.layoutAssets(layout).catch(() => ({}));
-  const layoutMsg = () => ({ type: "layout", layout, assets: layoutAssets });
+  /** The layout and its icons as WebSocket messages (big icon maps go in parts first: see ws-frames.ts). */
+  const sendLayout = (ws: ServerWebSocket<WsData>) => { try { for (const f of layoutFrames(layout, layoutAssets)) ws.send(f); } catch {} };
+  const broadcastLayout = () => { const frames = layoutFrames(layout, layoutAssets); for (const ws of sockets) { try { for (const f of frames) ws.send(f); } catch {} } };
   let catalogGz: Uint8Array | undefined;
   const sounds = opts.sounds ?? new SoundLibrary();
   const player = new SoundPlayer({ spawn: opts.soundSpawn, onChange: (ids) => broadcast({ type: "sounds-playing", ids }) });
@@ -714,7 +717,7 @@ export async function startServer(opts: StartOptions = {}) {
         if (req.method === "DELETE") {
           if (!(await icons.deleteUpload(id))) return json({ error: "not found" }, 404);
           layoutAssets = await layoutAssetsAll(layout);
-          broadcast(layoutMsg()); // a layout still using it falls back to its text
+          broadcastLayout(); // a layout still using it falls back to its text
           return json({ ok: true });
         }
         return json({ error: "method not allowed" }, 405);
@@ -814,7 +817,7 @@ export async function startServer(opts: StartOptions = {}) {
         syncHass();
         pluginRuntime.setLayout(layout);
         layoutAssets = await layoutAssetsAll(layout);
-        broadcast(layoutMsg());
+        broadcastLayout();
         return json({ ok: true, layout });
       }
 
@@ -833,7 +836,7 @@ export async function startServer(opts: StartOptions = {}) {
           pluginRuntime.setLayout(layout);
           await history.push(next).catch((e) => console.error("layout history", e));
           layoutAssets = await layoutAssetsAll(layout);
-          broadcast(layoutMsg());
+          broadcastLayout();
           void pushWeather();
           rules.tick();
           return json({ ok: true });
@@ -1045,7 +1048,7 @@ export async function startServer(opts: StartOptions = {}) {
             setLanguage(layout.theme?.language);
             await history.push(next).catch((e) => console.error("layout history", e));
             layoutAssets = await layoutAssetsAll(layout);
-            broadcast(layoutMsg());
+            broadcastLayout();
             return json({ ok: true, theme: layout.theme, previous, source: r.source });
           }
           if (tid && sub === "fork" && req.method === "POST") {
@@ -1448,8 +1451,9 @@ export async function startServer(opts: StartOptions = {}) {
       return json({ error: "not found" }, 404);
     }),
     websocket: {
-      // the layout message carries every icon (~200 KB of JSON); deflate shrinks it a lot on Wi-Fi to an old phone
-      perMessageDeflate: true,
+      // off: Bun never compressed our frames anyway (send() without the compress flag), and negotiating the extension only exposes
+      // Safari's permessage-deflate bugs (WebKit 228296, 326651) to old iPhones
+      perMessageDeflate: false,
       async open(ws) {
         if (!ws.data.deviceId) {
           ws.close(4401, "invalid token");
@@ -1469,7 +1473,7 @@ export async function startServer(opts: StartOptions = {}) {
         } catch (e) { console.error("lastSeen", e); }
         sockets.add(ws);
         send(ws, { type: "hello", deviceId: ws.data.deviceId, build: DECK_BUILD, pages: layout.pages.map((p) => ({ id: p.id, name: p.name })) });
-        send(ws, layoutMsg());
+        sendLayout(ws);
         send(ws, mediaMsg(tracker.current ?? null));
         send(ws, { type: "ai", ai: hub.snapshot() });
         for (const request of broker.list()) send(ws, { type: "permission", request });
@@ -1587,8 +1591,9 @@ export async function startServer(opts: StartOptions = {}) {
           send(ws, { type: "result", reqId, ok: false, error: err?.message ?? String(err) });
         }
       },
-      close(ws) {
+      close(ws, code, reason) {
         sockets.delete(ws);
+        if (unusualClose(code)) console.error(`websocket closed by device ${ws.data.deviceId ?? "?"}: ${code}${reason ? " " + reason : ""}`);
         if (sockets.size === 0 && mediaTimer) {
           stopMediaLoop();
         }
