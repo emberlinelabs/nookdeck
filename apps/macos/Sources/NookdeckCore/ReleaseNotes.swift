@@ -26,12 +26,22 @@ public enum ReleaseNotes {
                 flush()
                 cur = h
                 lines = []
+            } else if isOtherH2(raw) {
+                // "## Install", "## Files" (a GitHub release body): not part of the notes
+                flush()
+                cur = nil
+                lines = []
             } else if cur != nil {
                 lines.append(raw)
             }
         }
         flush()
         return out
+    }
+
+    static func isOtherH2(_ line: String) -> Bool {
+        let s = line.trimmingCharacters(in: .whitespaces)
+        return (s.hasPrefix("## ") || s == "##") && heading(line) == nil
     }
 
     /// "## Nookdeck 0.6.0: Linux, and updates" -> ("0.6.0", "Linux, and updates"). Nil for any other line.
@@ -54,6 +64,24 @@ public enum ReleaseNotes {
         let all = sections(body)
             .filter { !$0.version.contains("-") && Version.compare($0.version, current) > 0 && (upTo == nil || Version.compare($0.version, upTo!) <= 0) }
             .sorted { Version.compare($0.version, $1.version) > 0 }
+        return (Array(all.prefix(limit)), all.count > limit)
+    }
+
+    /// The same from GitHub `releases?per_page=10`, where each release body holds only its own section: published
+    /// releases (no drafts, no prereleases) with current < tag <= `upTo`, newest first, at most `limit`, each read
+    /// with `sections` (the one matching its tag; the first section if none matches). Nil when the JSON is not a list.
+    public static func fromReleases(json: Data, current: String, upTo: String, limit: Int = 3) -> (shown: [Section], more: Bool)? {
+        guard let list = (try? JSONSerialization.jsonObject(with: json)) as? [[String: Any]] else { return nil }
+        var byVersion: [String: Section] = [:]
+        for r in list {
+            guard (r["draft"] as? Bool) != true, (r["prerelease"] as? Bool) != true, let tag = r["tag_name"] as? String else { continue }
+            let v = Version.bare(tag)
+            guard !v.contains("-"), Version.compare(v, current) > 0, Version.compare(v, upTo) <= 0, byVersion[v] == nil else { continue }
+            let secs = sections((r["body"] as? String) ?? "")
+            guard let s = secs.first(where: { Version.compare($0.version, v) == 0 }) ?? secs.first else { continue }
+            byVersion[v] = Section(version: v, title: s.title, markdown: s.markdown)
+        }
+        let all = byVersion.values.sorted { Version.compare($0.version, $1.version) > 0 }
         return (Array(all.prefix(limit)), all.count > limit)
     }
 }

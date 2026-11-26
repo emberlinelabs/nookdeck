@@ -29,8 +29,8 @@ type PairServer struct {
 	OnUpdateChoice func(version, choice string)
 	// OnOpenURL opens an https link of the update window (release notes, the release page) in the default browser.
 	OnOpenURL func(url string)
-	// Notes returns the latest release's body for "What's new" (default FetchReleaseNotes; tests set a fake).
-	Notes    func(ctx context.Context) (string, error)
+	// Notes lists the releases for "What's new" (default FetchReleases; tests set a fake).
+	Notes    func(ctx context.Context) ([]Release, error)
 	upMu     sync.Mutex
 	update   *UpdateDialog // waiting for an answer
 	shown    *UpdateDialog // the last one shown (notes and progress outlive the answer)
@@ -129,14 +129,14 @@ func (p *PairServer) releaseNotes(ctx context.Context, d UpdateDialog) (*notesRe
 	p.upMu.Unlock()
 	fetch := p.Notes
 	if fetch == nil {
-		fetch = func(ctx context.Context) (string, error) { return FetchReleaseNotes(ctx, &http.Client{Timeout: 10 * time.Second}) }
+		fetch = func(ctx context.Context) ([]Release, error) { return FetchReleases(ctx, &http.Client{Timeout: 10 * time.Second}) }
 	}
-	body, err := fetch(ctx)
+	rs, err := fetch(ctx)
 	if err != nil {
 		return nil, err
 	}
-	secs, more := NotesSince(body, d.Current, d.Version, 3)
-	n := &notesReply{Sections: secs, More: more, Page: ReleasePage(d.Version)}
+	secs, more, page := NotesFromReleases(rs, d.Current, d.Version, 3)
+	n := &notesReply{Sections: secs, More: more, Page: page}
 	if n.Sections == nil {
 		n.Sections = []NoteSection{}
 	}

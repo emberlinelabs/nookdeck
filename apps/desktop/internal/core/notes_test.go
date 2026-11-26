@@ -91,27 +91,94 @@ func TestRenderNotesEscapes(t *testing.T) {
 	}
 }
 
-func TestFetchReleaseNotes(t *testing.T) {
+// The releases list as GitHub returns it after the split: each body holds its own section, then Install and Files. Out of order on
+// purpose, with a draft, a prerelease, a body made before the split (every version in it) and one with no heading at all.
+func splitReleases() []Release {
+	own := func(head, rest string) string { return head + "\n\nUpgrading: run the install command again.\n\n" + rest + "\n\n## Install\n\ncurl x | sh\n\n## Files\n\n- a.exe\n" }
+	return []Release{
+		{Tag: "v0.6.0", HTMLURL: "https://github.com/howznguyen/nookdeck/releases/tag/v0.6.0", Body: own("## Nookdeck 0.6.0: Linux, and updates in one click", "### New\n\n- **Linux (experimental).**")},
+		{Tag: "v0.6.2", Draft: true, Body: own("## Nookdeck 0.6.2", "- draft")},
+		{Tag: "v0.6.1", HTMLURL: "https://github.com/howznguyen/nookdeck/releases/tag/v0.6.1", Body: own("## Nookdeck 0.6.1", "### Fixed\n\n- **Windows: high CPU** ([#15](https://github.com/howznguyen/nookdeck/issues/15)).")},
+		{Tag: "v0.7.0-beta.1", Prerelease: true, Body: own("## Nookdeck 0.7.0", "- beta")},
+		{Tag: "v0.5.3", HTMLURL: "https://github.com/howznguyen/nookdeck/releases/tag/v0.5.3", Body: notesBody}, // before the split: 0.6.1, 0.6.0 and 0.5.3 in one body
+		{Tag: "v0.5.2", Body: "Plain text, no heading.\n\n- one fix\n\n## Install\n\ncurl x | sh\n"},
+	}
+}
+
+func TestNotesFromReleases(t *testing.T) {
+	rs := splitReleases()
+	vers := func(secs []NoteSection) string {
+		var v []string
+		for _, s := range secs {
+			v = append(v, s.Version)
+		}
+		return strings.Join(v, ",")
+	}
+	// the owner's PC: 0.5.3, offered 0.6.0 (GitHub already has 0.6.1): only 0.6.0, its page
+	secs, more, page := NotesFromReleases(rs, "0.5.3", "0.6.0", 3)
+	if vers(secs) != "0.6.0" || more || page != "https://github.com/howznguyen/nookdeck/releases/tag/v0.6.0" || secs[0].Title != "Linux, and updates in one click" {
+		t.Fatalf("0.5.3 -> 0.6.0: %s more=%v %s", vers(secs), more, page)
+	}
+	if h := secs[0].HTML; strings.Contains(h, "Upgrading") || strings.Contains(h, "curl") || strings.Contains(h, "a.exe") || !strings.Contains(h, "<strong>Linux (experimental).</strong>") {
+		t.Errorf("own section only: %s", h)
+	}
+	// newest first whatever the list order; no drafts, no prereleases; a pre-split body gives only its own version
+	secs, more, _ = NotesFromReleases(rs, "0.5.1", "0.7.0", 3)
+	if vers(secs) != "0.6.1,0.6.0,0.5.3" || !more { // 0.5.2 is in range too
+		t.Errorf("0.5.1 -> 0.7.0: %s more=%v", vers(secs), more)
+	}
+	if strings.Contains(secs[2].HTML, "high CPU") || !strings.Contains(secs[2].HTML, "Something.") {
+		t.Errorf("0.5.3 from its pre-split body: %s", secs[2].HTML)
+	}
+	// max, then more; a body with no heading is shown whole up to Install
+	secs, more, page = NotesFromReleases(rs, "0.5.1", "0.6.1", 2)
+	if vers(secs) != "0.6.1,0.6.0" || !more || page != "https://github.com/howznguyen/nookdeck/releases/tag/v0.6.1" {
+		t.Errorf("max 2: %s more=%v %s", vers(secs), more, page)
+	}
+	secs, _, page = NotesFromReleases(rs, "0.5.1", "0.5.2", 3)
+	if vers(secs) != "0.5.2" || !strings.Contains(secs[0].HTML, "<li>one fix</li>") || strings.Contains(secs[0].HTML, "curl") {
+		t.Errorf("no heading: %+v", secs)
+	}
+	if page != "https://github.com/howznguyen/nookdeck/releases/tag/v0.5.2" {
+		t.Errorf("no html_url: the page is built from the version: %s", page)
+	}
+	// up to date, or nothing listed
+	if secs, more, _ := NotesFromReleases(rs, "0.6.1", "0.6.1", 3); len(secs) != 0 || more {
+		t.Error("up to date")
+	}
+	if secs, _, _ := NotesFromReleases(nil, "0.1.0", "0.6.1", 3); len(secs) != 0 {
+		t.Error("empty list")
+	}
+}
+
+func TestFetchReleases(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/repos/"+Repo+"/releases/latest" || r.Header.Get("user-agent") == "" {
-			http.NotFound(w, r)
+		if r.Header.Get("user-agent") == "" || r.Header.Get("accept") != "application/vnd.github+json" {
+			http.Error(w, "headers", 400)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]string{"tag_name": "v0.6.1", "body": notesBody})
+		switch {
+		case r.URL.Path == "/repos/"+Repo+"/releases" && r.URL.Query().Get("per_page") == "10":
+			json.NewEncoder(w).Encode(splitReleases())
+		case r.URL.Path == "/repos/"+Repo+"/releases/latest":
+			json.NewEncoder(w).Encode(splitReleases()[2])
+		default:
+			http.NotFound(w, r)
+		}
 	}))
 	defer ts.Close()
 	old := APIBase
 	APIBase = ts.URL
 	defer func() { APIBase = old }()
-	b, err := FetchReleaseNotes(context.Background(), ts.Client())
-	if err != nil || b != notesBody {
-		t.Fatalf("%v %.40q", err, b)
+	rs, err := FetchReleases(context.Background(), ts.Client())
+	if err != nil || len(rs) != 6 || rs[1].Tag != "v0.6.2" || !rs[1].Draft || !rs[3].Prerelease || rs[0].HTMLURL == "" {
+		t.Fatalf("list %v %+v", err, rs)
 	}
-	if r, err := FetchLatestRelease(context.Background(), ts.Client()); err != nil || r.Tag != "v0.6.1" || r.Body != notesBody {
+	if r, err := FetchLatestRelease(context.Background(), ts.Client()); err != nil || r.Tag != "v0.6.1" {
 		t.Errorf("latest release %v %q", err, r.Tag)
 	}
 	APIBase = ts.URL + "/nope"
-	if _, err := FetchReleaseNotes(context.Background(), ts.Client()); err == nil {
+	if _, err := FetchReleases(context.Background(), ts.Client()); err == nil {
 		t.Error("a 404 is an error")
 	}
 }
@@ -124,12 +191,12 @@ func TestUpdateWindowNotesAndProgress(t *testing.T) {
 	defer ps.Close()
 	calls := 0
 	fail := true
-	ps.Notes = func(context.Context) (string, error) {
+	ps.Notes = func(context.Context) ([]Release, error) {
 		calls++
 		if fail {
-			return "", errors.New("offline")
+			return nil, errors.New("offline")
 		}
-		return notesBody, nil
+		return splitReleases(), nil
 	}
 	var mu sync.Mutex
 	var opened []string

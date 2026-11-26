@@ -175,7 +175,32 @@ final class AppModel: ObservableObject {
         r.setValue("application/vnd.github+json", forHTTPHeaderField: "accept")
         r.timeoutInterval = 8
         guard let (d, resp) = try? await URLSession.shared.data(for: r), (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
-        return AppRelease.newer(json: d, current: appVersion)
+        guard let rel = AppRelease.newer(json: d, current: appVersion) else { return nil }
+        if releaseNotes?.version != rel.version, let list = await releaseList() {
+            releaseNotes = (rel.version, list)
+        }
+        return rel
+    }
+
+    /// What is new for the window: a release body holds only its own version, so the notes come from the recent
+    /// releases list (asked only when there is a newer release). Without it, the offered release's own body.
+    private var releaseNotes: (version: String, list: Data)?
+
+    private func releaseList() async -> Data? {
+        let urlString = ProcessInfo.processInfo.environment["NOOKDECK_APP_RELEASES_LIST_URL"] ?? "https://api.github.com/repos/howznguyen/nookdeck/releases?per_page=10"
+        guard let url = URL(string: urlString) else { return nil }
+        var r = URLRequest(url: url)
+        r.setValue("application/vnd.github+json", forHTTPHeaderField: "accept")
+        r.timeoutInterval = 8
+        guard let (d, resp) = try? await URLSession.shared.data(for: r), (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return d
+    }
+
+    private func notes(for r: AppRelease) -> (shown: [ReleaseNotes.Section], more: Bool) {
+        if let n = releaseNotes, n.version == r.version, let fromList = ReleaseNotes.fromReleases(json: n.list, current: appVersion, upTo: r.version), !fromList.shown.isEmpty {
+            return fromList
+        }
+        return ReleaseNotes.newer(r.notes, current: appVersion, upTo: r.version)
     }
 
     static let skippedKey = "skippedAppUpdate"
@@ -201,7 +226,7 @@ final class AppModel: ObservableObject {
             return
         }
         let auto = SelfUpdater.canReplace()
-        let notes = ReleaseNotes.newer(r.notes, current: appVersion, upTo: r.version)
+        let notes = notes(for: r)
         let flow = UpdateFlow(release: r, current: appVersion, auto: auto,
                               manualNote: auto ? nil : t("update.alert.manualBody", ["current": appVersion, "path": SelfUpdater.bundlePath]),
                               notes: notes.shown, moreNotes: notes.more)

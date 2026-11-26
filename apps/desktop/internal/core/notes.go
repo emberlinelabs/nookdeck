@@ -9,49 +9,106 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 )
 
-// The "What's new" part of the update window. A release's body is the whole .github/release-notes.md: one "## Nookdeck X.Y.Z" or
-// "## Nookdeck X.Y.Z: title" section per version, newest first, then other "## " sections (Install, Files) that are not notes.
+// The "What's new" part of the update window. Each GitHub release's body holds its own version's section ("## Nookdeck X.Y.Z" or
+// "## Nookdeck X.Y.Z: title", from .github/release-notes.md via scripts/release-body.sh), then other "## " sections (Install, Files)
+// that are not notes. The window lists the releases and shows the ones the update brings.
 
 // APIBase is the GitHub API; tests point it at a local server.
 var APIBase = "https://api.github.com"
 
-// Release is GitHub's latest release: its tag ("v0.6.1") and body (the release notes).
+// Release is a GitHub release: its tag ("v0.6.1"), body (the release notes) and page.
 type Release struct {
-	Tag  string `json:"tag_name"`
-	Body string `json:"body"`
+	Tag        string `json:"tag_name"`
+	Body       string `json:"body"`
+	HTMLURL    string `json:"html_url"`
+	Draft      bool   `json:"draft"`
+	Prerelease bool   `json:"prerelease"`
 }
 
-// FetchReleaseNotes returns the body of the latest release.
-func FetchReleaseNotes(ctx context.Context, c *http.Client) (string, error) {
-	r, err := FetchLatestRelease(ctx, c)
-	return r.Body, err
+// FetchReleases lists the 10 newest releases (GitHub lists drafts only to the owner; prereleases are dropped by NotesFromReleases).
+func FetchReleases(ctx context.Context, c *http.Client) ([]Release, error) {
+	var rs []Release
+	err := getGitHub(ctx, c, "/repos/"+Repo+"/releases?per_page=10", 4<<20, &rs)
+	return rs, err
+}
+
+// NotesFromReleases is "What's new" for an update from current to offered: the releases (no drafts, no prereleases) whose version
+// is in (current, offered], newest first, at most max; more is true when others are in range. Each release's own section is shown
+// (a body without one is shown whole, up to its Install / Files). page is the offered release's page.
+func NotesFromReleases(rs []Release, current, offered string, max int) (secs []NoteSection, more bool, page string) {
+	page = ReleasePage(offered)
+	type rel struct {
+		v [3]int
+		r Release
+	}
+	var in []rel
+	for _, r := range rs {
+		v, ok := ParseVersion(r.Tag)
+		if !ok || r.Draft || r.Prerelease || !Newer(r.Tag, current) || Newer(r.Tag, offered) {
+			continue
+		}
+		if !Newer(r.Tag, offered) && !Newer(offered, r.Tag) && SafeLink(r.HTMLURL) {
+			page = r.HTMLURL
+		}
+		in = append(in, rel{v, r})
+	}
+	sort.SliceStable(in, func(i, j int) bool { return Newer(in[i].r.Tag, in[j].r.Tag) })
+	for _, x := range in {
+		if len(secs) == max {
+			return secs, true, page
+		}
+		ver := strconv.Itoa(x.v[0]) + "." + strconv.Itoa(x.v[1]) + "." + strconv.Itoa(x.v[2])
+		if s, ok := ownSection(x.r.Body, current, ver); ok {
+			secs = append(secs, s)
+		} else if s, ok := ownSection("## Nookdeck "+ver+"\n"+x.r.Body, current, ver); ok {
+			secs = append(secs, s)
+		}
+	}
+	return secs, false, page
+}
+
+// ownSection finds version's section in a release body (bodies made before the split hold every version: the right one is taken).
+func ownSection(body, current, version string) (NoteSection, bool) {
+	all, _ := NotesSince(body, current, version, 1000)
+	for _, s := range all {
+		if s.Version == version {
+			return s, true
+		}
+	}
+	return NoteSection{}, false
+}
+
+func getGitHub(ctx context.Context, c *http.Client, path string, limit int64, out any) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", strings.TrimRight(APIBase, "/")+path, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("accept", "application/vnd.github+json")
+	req.Header.Set("user-agent", "nookdeck-tray")
+	res, err := c.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return fmt.Errorf("api.github.com answered %d", res.StatusCode)
+	}
+	return json.NewDecoder(io.LimitReader(res.Body, limit)).Decode(out)
 }
 
 // NeedsRecheck: GitHub already has a newer release than the version the agent offers (its update check is cached for a day), so
 // the tray asks the agent to check again before it shows the window; the title and the notes then name the same version.
 func NeedsRecheck(offered, latestTag string) bool { return Newer(latestTag, offered) }
 
-// FetchLatestRelease returns the tag and body of the latest release.
+// FetchLatestRelease returns the latest release (its tag is what the tray compares with the agent's offer).
 func FetchLatestRelease(ctx context.Context, c *http.Client) (Release, error) {
 	var r Release
-	req, err := http.NewRequestWithContext(ctx, "GET", strings.TrimRight(APIBase, "/")+"/repos/"+Repo+"/releases/latest", nil)
-	if err != nil {
-		return r, err
-	}
-	req.Header.Set("accept", "application/vnd.github+json")
-	req.Header.Set("user-agent", "nookdeck-tray")
-	res, err := c.Do(req)
-	if err != nil {
-		return r, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		return r, fmt.Errorf("api.github.com answered %d", res.StatusCode)
-	}
-	err = json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&r)
+	err := getGitHub(ctx, c, "/repos/"+Repo+"/releases/latest", 1<<20, &r)
 	return r, err
 }
 

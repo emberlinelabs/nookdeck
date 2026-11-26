@@ -422,8 +422,6 @@ func showUpdate(u core.Update, user bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	if rel, err := core.FetchLatestRelease(ctx, &http.Client{Timeout: 10 * time.Second}); err == nil {
-		body := rel.Body
-		p.Notes = func(context.Context) (string, error) { return body, nil } // one GitHub call for the window
 		if core.NeedsRecheck(*u.Latest, rel.Tag) {
 			u2, err := client().Update(ctx, true)
 			if err == nil && u2.Error == "" && u2.Available && u2.Latest != nil && core.Newer(*u2.Latest, *u.Latest) {
@@ -440,8 +438,6 @@ func showUpdate(u core.Update, user bool) {
 				logf("update: re-check kept %s (GitHub %s): %v", *u.Latest, rel.Tag, err)
 			}
 		}
-	} else {
-		p.Notes = nil // the window fetches them itself
 	}
 	if p.WindowOpen(*u.Latest) {
 		logf("update %s: its window is already open", *u.Latest)

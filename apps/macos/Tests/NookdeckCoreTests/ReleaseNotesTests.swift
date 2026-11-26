@@ -92,4 +92,38 @@ final class ReleaseNotesTests: XCTestCase {
         XCTAssertEqual(r?.notes, "## Nookdeck 0.6.1\n\n- fix")
         XCTAssertEqual(r?.page?.absoluteString, "https://github.com/howznguyen/nookdeck/releases/tag/v0.6.1")
     }
+
+    func testNotesFromTheReleasesList() {
+        func rel(_ tag: String, _ body: String, draft: Bool = false, pre: Bool = false) -> [String: Any] {
+            ["tag_name": tag, "draft": draft, "prerelease": pre, "body": body, "html_url": "https://github.com/howznguyen/nookdeck/releases/tag/\(tag)"]
+        }
+        let install = "\n\n## Install\n\n- run the command\n\n## Files\n\n- Nookdeck.dmg"
+        let list: [[String: Any]] = [
+            rel("v0.7.0", "## Nookdeck 0.7.0: pages\n\nUpgrading: again.\n\n- wrap-around pages" + install),
+            rel("v0.7.0-beta.1", "## Nookdeck 0.7.0-beta.1\n\n- beta", pre: true),
+            rel("v0.6.2", "## Nookdeck 0.6.2\n\n- draft fix", draft: true),
+            rel("v0.6.1", "## Nookdeck 0.6.1\n\n### Fixed\n\n- **Windows** CPU" + install),
+            rel("v0.6.0", "## Nookdeck 0.6.0: Linux\n\n- Linux" + install),
+            rel("v0.5.3", "## Nookdeck 0.5.3\n\n- iOS 15"),
+        ]
+        let json = try! JSONSerialization.data(withJSONObject: list)
+
+        // current 0.6.0, offered 0.6.1: only 0.6.1 (not the newer 0.7.0, not 0.6.0 itself)
+        let a = ReleaseNotes.fromReleases(json: json, current: "0.6.0", upTo: "0.6.1")!
+        XCTAssertEqual(a.shown.map(\.version), ["0.6.1"])
+        XCTAssertFalse(a.more)
+        XCTAssertTrue(a.shown[0].markdown.hasPrefix("### Fixed"))
+        XCTAssertFalse(a.shown[0].markdown.contains("Install"), "the Install and Files parts are not notes")
+
+        // current 0.5.2, offered 0.7.0: three newest published ones, more for 0.5.3; drafts and prereleases left out
+        let b = ReleaseNotes.fromReleases(json: json, current: "0.5.2", upTo: "0.7.0")!
+        XCTAssertEqual(b.shown.map(\.version), ["0.7.0", "0.6.1", "0.6.0"])
+        XCTAssertEqual(b.shown[0].title, "pages")
+        XCTAssertFalse(b.shown[0].markdown.contains("Upgrading"))
+        XCTAssertTrue(b.more)
+        XCTAssertFalse(ReleaseNotes.fromReleases(json: json, current: "0.5.3", upTo: "0.7.0")!.more)
+
+        XCTAssertEqual(ReleaseNotes.fromReleases(json: json, current: "0.7.0", upTo: "0.7.0")!.shown, [])
+        XCTAssertNil(ReleaseNotes.fromReleases(json: Data("{\"message\":\"rate limited\"}".utf8), current: "0.6.0", upTo: "0.6.1"))
+    }
 }
