@@ -13,7 +13,7 @@
   <img alt="macOS, Windows and Linux" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-0b0d10">
 </p>
 
-<p align="center"><b>English</b> · <a href="README.vi.md">Tiếng Việt</a> · <a href="README.zh.md">中文</a></p>
+<p align="center"><b>English</b> · <a href="README.vi.md">Tiếng Việt</a> · <a href="README.zh.md">中文</a> · <a href="README.fr.md">Français</a> · <a href="README.pt.md">Português</a></p>
 
 <p align="center">
   <a href="https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck.dmg"><b>Download for Mac</b></a> ·
@@ -47,12 +47,12 @@ account, no cloud.
 | **Everyday** | Now Playing with artwork and Resume, 6 clock styles and world clocks, weather (hourly and daily, °C or °F), a soundboard, notifications |
 | **Home Assistant** | Lights with colour, colour temperature, scenes and effects; climate (mode, fan, swing), fans, covers, vacuums, locks, sensors and camera stills (optional) |
 | **Automation** | Webhooks that push values and notifications, rules that react to activity on the computer |
-| **Make it yours** | Drag-and-drop grid (8×4, 8×3, 5×3…) with a preview for every screen size, 4 tile styles (Soft, Solid, Outline, iOS), any colour per tile, 5,000+ icons, English, Vietnamese or Simplified Chinese |
+| **Make it yours** | Drag-and-drop grid (8×4, 8×3, 5×3…) with a preview for every screen size, 4 tile styles (Soft, Solid, Outline, iOS), any colour per tile, 5,000+ icons, English, Vietnamese, Simplified Chinese, French or Brazilian Portuguese |
 | **Plugins** | Add tiles and buttons from the [plugin Store](https://nookdeck.app/plugins) ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)), or build your own in TypeScript: see the [plugin guide](docs/plugins.md) |
 | **Themes** | 15 theme packs (Catppuccin, Tokyo Night, Cyberpunk, Sketchbook, Pixel…) with light and dark variants, an Auto mode that follows the phone, fonts and backgrounds; [preview them live](https://nookdeck.app/themes) or make your own |
 
 The layout is a fixed grid of square tiles built in a drag-and-drop management page at `http://localhost:7420/manage/`.
-An MCP server lets an AI assistant arrange the layout for you. Runs on macOS, and on Windows 10/11 (experimental).
+An MCP server lets an AI assistant arrange the layout for you. Runs on macOS, and on Windows 10/11 and Linux (experimental).
 
 ## Screenshots
 

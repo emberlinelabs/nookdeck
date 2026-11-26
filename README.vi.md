@@ -13,7 +13,7 @@
   <img alt="macOS, Windows và Linux" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-0b0d10">
 </p>
 
-<p align="center"><a href="README.md">English</a> · <b>Tiếng Việt</b> · <a href="README.zh.md">中文</a></p>
+<p align="center"><a href="README.md">English</a> · <b>Tiếng Việt</b> · <a href="README.zh.md">中文</a> · <a href="README.fr.md">Français</a> · <a href="README.pt.md">Português</a></p>
 
 <p align="center">
   <a href="https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck.dmg"><b>Tải cho Mac</b></a> ·
@@ -47,12 +47,12 @@ tài khoản, không dùng đám mây.
 | **Hằng ngày** | Đang phát kèm ảnh bìa và nút phát tiếp, 6 kiểu đồng hồ và giờ thế giới, thời tiết (theo giờ, theo ngày, °C hoặc °F), soundboard, thông báo |
 | **Home Assistant** | Đèn có màu, nhiệt độ màu, cảnh và hiệu ứng; điều hòa (chế độ, quạt, đảo gió), quạt, rèm, robot hút bụi, khóa, cảm biến và ảnh từ camera (tùy chọn) |
 | **Tự động hóa** | Webhook đẩy giá trị và thông báo, rule phản ứng theo hoạt động trên máy |
-| **Tùy biến** | Lưới kéo thả (8×4, 8×3, 5×3…) có xem trước theo từng cỡ màn hình, 4 kiểu ô (Soft, Solid, Outline, iOS), màu riêng cho từng ô, hơn 5.000 icon, tiếng Anh, tiếng Việt và tiếng Trung |
+| **Tùy biến** | Lưới kéo thả (8×4, 8×3, 5×3…) có xem trước theo từng cỡ màn hình, 4 kiểu ô (Soft, Solid, Outline, iOS), màu riêng cho từng ô, hơn 5.000 icon, tiếng Anh, tiếng Việt, tiếng Trung giản thể, tiếng Pháp và tiếng Bồ Đào Nha (Brazil) |
 | **Plugin** | Thêm ô và nút từ [Cửa hàng plugin](https://nookdeck.app/plugins) ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)), hoặc tự viết bằng TypeScript: xem [hướng dẫn plugin](docs/plugins.md) |
 | **Giao diện** | 15 bộ giao diện (Catppuccin, Tokyo Night, Cyberpunk, Sketchbook, Pixel…) có bản sáng và tối, chế độ Tự động theo điện thoại, font và hình nền; [xem trước trực tiếp](https://nookdeck.app/vi/themes) hoặc tự làm |
 
 Layout là lưới ô vuông cố định, sắp xếp bằng kéo thả ở trang quản lý `http://localhost:7420/manage/`. Có MCP server để
-trợ lý AI sắp xếp layout giúp bạn. Chạy trên macOS, và Windows 10/11 (thử nghiệm).
+trợ lý AI sắp xếp layout giúp bạn. Chạy trên macOS, và Windows 10/11, Linux (thử nghiệm).
 
 ## Ảnh chụp
 
@@ -241,8 +241,10 @@ bun run build          # build web và dist/nookdeck
 ./dist/nookdeck       # in ra địa chỉ cho điện thoại và mã PIN ghép đôi
 ```
 
+Trên Windows, `bun run build:win` tạo ra `dist/nookdeck-windows-x64.exe`.
+
 Mở địa chỉ đó trên điện thoại (cùng Wi-Fi), nhập PIN, rồi thêm trang vào màn hình chính để chạy toàn màn hình. Trang
-quản lý ở `http://localhost:7420/manage/` trên Mac. Ngôn ngữ đổi trong **Quản lý › Giao diện** (mặc định tiếng Anh).
+quản lý ở `http://localhost:7420/manage/` trên Mac.
 
 Lần đầu một ô gửi phím tắt, macOS sẽ hỏi quyền **Trợ năng (Accessibility)**.
 
@@ -320,6 +322,16 @@ Các tool: `get_layout`, `add_page`, `add_item`, `update_item`, `move_item`, `re
 - Agent lắng nghe trong mạng LAN. Điện thoại phải ghép đôi bằng PIN 6 số; token thiết bị lưu trong cookie.
 - API quản lý chỉ trả lời trên `localhost`, chặn request từ trang khác và DNS rebinding.
 - Ô có thể chạy lệnh shell do bạn cấu hình. Chỉ ghép đôi thiết bị bạn tin tưởng.
+
+## Phát triển
+
+```sh
+bun run dev     # chạy agent ở chế độ watch
+bun run test    # unit test
+```
+
+Cấu trúc: `src/` là agent (Bun + TypeScript), `web/deck` là giao diện trên điện thoại (Preact, Safari 12+), `web/manage` là trang quản lý
+(React), `web/shared` là phần code dùng chung cho cả hai.
 
 ## Đóng góp
 

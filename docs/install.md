@@ -102,7 +102,7 @@ Click the icon. The menu has:
 - **Help**: check permissions, show the logs folder, the documentation and the website.
 - **Quit**: closes the app only. Your phone keeps working.
 
-The menu follows your system language (English, Tiếng Việt, 中文).
+The menu follows your system language (English, Tiếng Việt, 中文, Français, Português).
 
 ## Already installed with the one-line install?
 

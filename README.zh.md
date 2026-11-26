@@ -13,7 +13,7 @@
   <img alt="macOS、Windows 和 Linux" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-0b0d10">
 </p>
 
-<p align="center"><a href="README.md">English</a> · <a href="README.vi.md">Tiếng Việt</a> · <b>中文</b></p>
+<p align="center"><a href="README.md">English</a> · <a href="README.vi.md">Tiếng Việt</a> · <b>中文</b> · <a href="README.fr.md">Français</a> · <a href="README.pt.md">Português</a></p>
 
 <p align="center">
   <a href="https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck.dmg"><b>下载 Mac 版</b></a> ·
@@ -46,12 +46,12 @@ Nookdeck 是电脑上的一个小型 agent，通过 Wi-Fi 提供触控面板：�
 | **日常** | 带封面和继续播放的正在播放、6 种时钟样式和世界时钟、天气（逐小时和逐日，°C 或 °F）、音效板、通知 |
 | **Home Assistant** | 支持颜色、色温、场景和效果的灯；空调（模式、风速、摆风）、风扇、窗帘、扫地机器人、门锁、传感器和摄像头静态画面（可选） |
 | **自动化** | 推送数值和通知的 Webhook，以及根据电脑上的活动触发的规则 |
-| **个性化** | 可拖放的网格（8×4、8×3、5×3…），可按每种屏幕尺寸预览，4 种磁贴样式（Soft、Solid、Outline、iOS），每个磁贴可设任意颜色，5,000+ 图标，English、Vietnamese 和 Chinese |
+| **个性化** | 可拖放的网格（8×4、8×3、5×3…），可按每种屏幕尺寸预览，4 种磁贴样式（Soft、Solid、Outline、iOS），每个磁贴可设任意颜色，5,000+ 图标，界面语言有英语、越南语、简体中文、法语和巴西葡萄牙语 |
 | **插件** | 从[插件商店](https://nookdeck.app/plugins)（[nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)）添加磁贴和按钮，或用 TypeScript 自己开发：参阅[插件指南](docs/plugins.md) |
 | **主题** | 15 套主题（Catppuccin、Tokyo Night、Cyberpunk、Sketchbook、Pixel…），有浅色和深色版本、跟随手机的自动模式、字体和背景；可[在线预览](https://nookdeck.app/zh/themes)，也可以自己制作 |
 
 布局是由方形磁贴组成的固定网格，在 `http://localhost:7420/manage/` 的拖放式管理页面中编排。MCP 服务器可以让 AI 助手帮你排布局。
-支持 macOS，以及 Windows 10/11（实验性）。
+支持 macOS，以及 Windows 10/11 和 Linux（实验性）。
 
 ## 截图
 
@@ -207,9 +207,9 @@ Linux 上需要注意：
 
 ## 插件
 
-- **商店:** 在管理页面打开 **Plugins** → **Discover**,或访问 [nookdeck.app/plugins](https://nookdeck.app/plugins) 并点击 **Open in Nookdeck**。列表中的插件都经过审核,并按文件固定版本([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins))。
-- **从 GitHub 安装:** 在 **Plugins** → **Install from a link** 粘贴仓库或文件夹链接。未收录的插件标记为 Unreviewed。
-- **自己开发:** 简单的磁贴和按钮只需一个 `nookdeck.json`,也可以用 `@nookdeck/plugin` SDK 写 TypeScript。用 `nookdeck plugin new` 开始,参阅[插件指南](docs/plugins.md),然后向 [nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins) 提交 pull request 即可收录。
+- **商店：** 在管理页面打开 **Plugins** → **Discover**，或访问 [nookdeck.app/plugins](https://nookdeck.app/plugins) 并点击 **Open in Nookdeck**。列表中的插件都经过审核，并按文件固定版本（[nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)）。
+- **从 GitHub 安装：** 在 **Plugins** → **Install from a link** 粘贴仓库或文件夹链接。未收录的插件标记为 Unreviewed。
+- **自己开发：** 简单的磁贴和按钮只需一个 `nookdeck.json`，也可以用 `@nookdeck/plugin` SDK 写 TypeScript。用 `nookdeck plugin new` 开始，参阅[插件指南](docs/plugins.md)，然后向 [nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins) 提交 pull request 即可收录。
 
 ## 主题
 
