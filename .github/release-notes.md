@@ -1,3 +1,33 @@
+## Nookdeck 0.7.0: On Air, OBS and five languages
+
+Upgrading: use **Install and restart** in the app, run the install command below again, or `nookdeck update`.
+
+### New
+
+- **On Air.** A tile that turns red while you are live, recording or in a call, with what turned it on and for how long. It lights up from:
+  - the microphone or the camera being used by any app (Zoom, Meet, Teams, Discord...);
+  - an On Air button on the phone;
+  - `POST /api/onair` with your webhook key and an optional label and timeout, for Streamlabs, vMix, scripts or Home Assistant;
+  - OBS streaming or recording, through the OBS plugin.
+
+  Any spare phone can also become a full-screen **ON AIR** sign by the door (Screen & alarms).
+- **Mic and Camera buttons.** Mic mutes the computer's microphone for every app and shows when it is muted. Camera turns the camera off and on in Zoom, Google Meet or Teams with the app's own shortcut, bringing the meeting window forward first.
+- **OBS Studio plugin** in the Store: scenes, record, stream, mute, sources, virtual camera and replay buffer, each showing OBS's live state, and usable in macros ("Go live": scene, wait, stream, unmute). It connects to OBS's own WebSocket server (Tools > WebSocket Server Settings).
+- **More Store plugins:** a water reminder (glasses, a daily goal, reminders on the phone) and stocks (your own free Twelve Data key). Pomodoro can play a sound and notify you when a phase ends.
+- **Screenshot button that works everywhere.** It opens the system screenshot tool, or your own app: Snapzy, CleanShot X or Shottr on the Mac, ShareX or Greenshot on Windows, or any shortcut or command. Installed apps are picked automatically.
+- **French and Brazilian Portuguese** for the app, the phone, the menu bar and tray apps, `nookdeck doctor` and nookdeck.app.
+- **Updates show what's new.** The update window lists the changes since your version, then shows the download, the check and the restart.
+- **Several Claude accounts and Codex profiles** in the AI quota; each tile picks one. A signed-out account says "Sign in again" instead of showing old numbers.
+- Swipe around from the last screen back to the first, hide the page dots, put the phone to sleep when a button locks the computer, and long song titles shrink to fit.
+- The weather has a default city on the Weather page, and the phone preview on the manage page matches the size of your connected phone.
+- **For plugin authors:** WebSockets to the hosts a plugin declares, settings whose choices come from the plugin, notifications to the phone, and On Air. See [docs/plugins.md](https://github.com/howznguyen/nookdeck/blob/main/docs/plugins.md).
+
+### Fixed
+
+- Windows and Linux: **Lock computer** sent the macOS shortcut (on Windows it opened Quick Assist). It now locks the computer.
+- The Screenshot button did nothing on Windows and on Macs where another app owns the screenshot shortcuts.
+- Each GitHub release now shows only its own notes.
+
 ## Nookdeck 0.6.1
 
 Upgrading: run the install command below again, or `nookdeck update`, or use **Install and restart** in the app.
