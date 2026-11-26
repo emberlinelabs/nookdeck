@@ -20,6 +20,14 @@ func main() {
 	openLog()
 	lang = uiLanguage()
 	for _, a := range os.Args[1:] {
+		switch a {
+		case "--quiet":
+			quietSetup = true
+		case "--updated":
+			updatedRun = true
+		}
+	}
+	for _, a := range os.Args[1:] {
 		if a == "--setup" { // run by the installer: install or adopt the agent, then offer the firewall rule; no tray
 			os.Exit(setupOnce(false))
 		}
@@ -125,7 +133,15 @@ func updateNow() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	dest := filepath.Join(os.TempDir(), core.InstallerName)
-	if err := core.DownloadInstaller(ctx, &http.Client{Timeout: 10 * time.Minute}, *u.Latest, dest, updateProgress(*u.Latest)); err != nil {
+	dl, stop := downloadContext(ctx)
+	err := core.DownloadInstaller(dl, &http.Client{Timeout: 10 * time.Minute}, *u.Latest, dest, updateProgress(*u.Latest))
+	stop()
+	if err != nil {
+		if cancelled(dl, ctx) {
+			os.Remove(dest)
+			logf("update %s: download cancelled", *u.Latest)
+			return
+		}
 		updateFailed(*u.Latest, err.Error())
 		return
 	}
@@ -133,7 +149,10 @@ func updateNow() {
 	updateState(core.UpdateState{Stage: "installing", Version: *u.Latest})
 	time.Sleep(800 * time.Millisecond) // one poll of the window, so "Installing" is on screen
 	logf("running %s for %s", dest, *u.Latest)
-	if err := hidden0(dest, "/SILENT", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS", "/NOCANCEL"); err != nil {
+	// very silent: no wizard and no progress window (this window already says "Installing"), message boxes answered by their
+	// default, never a reboot. The installer stops this tray itself (CloseApplications=no, PrepareToInstall), runs --setup --quiet
+	// (the agent: copied and restarted) and starts the tray again with --updated (installer/nookdeck.iss [Run]).
+	if err := hidden0(dest, core.SetupUpdateArgs...); err != nil {
 		updateFailed(*u.Latest, err.Error())
 		return
 	}

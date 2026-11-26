@@ -4,7 +4,7 @@
  * tool. The OS is passed in (only src/platform looks at which OS this is).
  */
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { posix } from "node:path";
 import type { Action } from "./config";
 import { SCREENSHOT_APPS, screenshotToolsFor, type ScreenshotChoice, type ScreenshotTool } from "../web/shared/screenshot";
 
@@ -16,7 +16,7 @@ export function screenshotAppPaths(tool: ScreenshotTool, os: string, env: Env, h
   if (os === "darwin") {
     const app = tool === "snapzy" ? "Snapzy.app" : tool === "cleanshot" ? "CleanShot X.app" : tool === "shottr" ? "Shottr.app" : "";
     if (!app) return [];
-    return [join("/Applications", app), join("/Applications/Setapp", app), join(home, "Applications", app)];
+    return [posix.join("/Applications", app), posix.join("/Applications/Setapp", app), posix.join(home, "Applications", app)]; // macOS paths, built the same on any OS
   }
   if (os === "win32") {
     const pf = [env.ProgramFiles, env["ProgramFiles(x86)"]];

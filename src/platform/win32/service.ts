@@ -28,18 +28,43 @@ const q = (s: string) => `"${s.replace(/"/g, '""')}"`; // a VBScript string lite
 /** One argument for cmd.exe: quoted when it has spaces or cmd metacharacters. */
 const cmdArg = (s: string) => (/[\s&|<>^()%!"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
 
-/** The VBScript that starts the agent hidden: sets the env, then `cmd /s /c ""exe" args >> out.log 2>&1"`. */
+/**
+ * The VBScript that starts the agent hidden: sets the env, then `conhost.exe --headless cmd /s /c ""exe" args >> out.log 2>> err.log"`.
+ * cmd (a console program) needs a console. Started bare, Windows 11 may hand that console to the default terminal app (Windows
+ * Terminal), which ignores the hidden window style: an empty "cmd.exe" window that kills the agent when closed. conhost.exe
+ * --headless hosts the console itself, with no window, so the default terminal is never asked (Windows 10 1809 and later).
+ */
 export function buildLauncher(o: { program: string[]; env?: Record<string, string>; logDir: string; port?: number }): string {
   const args = [...o.program];
   if (o.port !== undefined && o.port !== 7420) args.push("--port", String(o.port));
   const line = `${args.map(cmdArg).join(" ")} >> ${cmdArg(join(o.logDir, "agent.out.log"))} 2>> ${cmdArg(join(o.logDir, "agent.err.log"))}`;
   const lines = ["' Starts Nookdeck without a console window. Written by `nookdeck service install`.", 'Set sh = CreateObject("WScript.Shell")'];
   for (const [k, v] of Object.entries({ NOOKDECK_SERVICE: "1", ...(o.env ?? {}) })) lines.push(`sh.Environment("Process")(${q(k)}) = ${q(v)}`);
-  lines.push(`sh.Run ${q(`cmd /s /c "${line}"`)}, 0, False`);
+  lines.push(`sh.Run ${q(`conhost.exe --headless cmd /s /c "${line}"`)}, 0, False`);
   return lines.join("\r\n") + "\r\n";
 }
 
 export const launcherPath = (dir: string) => join(dir, "launch.vbs");
+
+/**
+ * A launcher written before 0.7.0 runs cmd bare (a Windows Terminal window on Windows 11): the same text with cmd under a headless
+ * conhost, everything else (env, program, port, logs) kept. null when there is nothing to change.
+ */
+export function upgradeLauncher(text: string): string | null {
+  if (text.includes("conhost.exe --headless cmd /s /c ")) return null;
+  const next = text.replace(/^(sh\.Run ")cmd \/s \/c /m, "$1conhost.exe --headless cmd /s /c ");
+  return next === text ? null : next;
+}
+
+/** Upgrades launch.vbs in place before it is run (an update only restarts the service, it does not install it again). */
+async function freshLauncher(c: Pick<WinServiceCtx, "dir" | "log">): Promise<void> {
+  const file = launcherPath(c.dir);
+  const text = await readFile(file, "utf8").catch(() => null);
+  const next = text === null ? null : upgradeLauncher(text);
+  if (next === null) return;
+  await writeFile(file, next);
+  c.log("Launcher updated: the agent now starts without a console window.");
+}
 
 /** The task definition: at logon of this user, no admin, runs on battery, never times out, restarts after a crash. */
 export function buildTaskXml(o: { user: string; launcher: string }): string {
@@ -122,6 +147,7 @@ export async function winStopService(c: WinServiceCtx): Promise<void> {
 /** Starts the agent now (the task, or the Run-key launcher). */
 export async function winStartService(c: WinServiceCtx): Promise<void> {
   if (!(await stat(launcherPath(c.dir)).then(() => true, () => false))) throw new Error("The service is not installed. Run `nookdeck service install`.");
+  await freshLauncher(c);
   const r = await c.run(schtasksRun());
   if (r.code !== 0) await c.run(["wscript.exe", "//B", "//Nologo", launcherPath(c.dir)]);
   c.log("Service started.");
@@ -148,6 +174,7 @@ export async function winUninstall(c: WinServiceCtx): Promise<{ removed: boolean
 export async function winRestart(c: WinServiceCtx): Promise<void> {
   if (!(await stat(launcherPath(c.dir)).then(() => true, () => false))) throw new Error("The service is not installed. Run `nookdeck service install`.");
   await winStop(c);
+  await freshLauncher(c);
   const r = await c.run(schtasksRun());
   if (r.code !== 0) await c.run(["wscript.exe", "//B", "//Nologo", launcherPath(c.dir)]); // the Run-key variant
   c.log("Service restarted.");

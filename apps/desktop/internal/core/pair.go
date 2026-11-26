@@ -35,6 +35,8 @@ type PairServer struct {
 	update   *UpdateDialog // waiting for an answer
 	shown    *UpdateDialog // the last one shown (notes and progress outlive the answer)
 	state    UpdateState
+	cancelDL context.CancelFunc // set while the update's download (or its check) can be cancelled
+	answered *UpdateDialog      // the window's dialog after its answer: Cancel brings the question back
 	notesFor string
 	notes    *notesReply
 	alive    map[string]time.Time // version -> last heartbeat of an open update window
@@ -99,6 +101,21 @@ func (s UpdateState) Active() bool {
 }
 
 // SetUpdateState is what the update window shows while it installs (polled by the page).
+// DownloadContext is the context of an update's download: the window's Cancel cancels it. stop() ends that (call it when the
+// download is over, before installing: an install cannot be cancelled).
+func (p *PairServer) DownloadContext(parent context.Context) (ctx context.Context, stop func()) {
+	ctx, cancel := context.WithCancel(parent)
+	p.upMu.Lock()
+	p.cancelDL = cancel
+	p.upMu.Unlock()
+	return ctx, func() {
+		p.upMu.Lock()
+		p.cancelDL = nil
+		p.upMu.Unlock()
+		cancel()
+	}
+}
+
 func (p *PairServer) SetUpdateState(s UpdateState) {
 	p.upMu.Lock()
 	p.state = s
@@ -275,6 +292,24 @@ func (p *PairServer) Handler() http.Handler {
 		}
 		w.WriteHeader(204)
 	})
+	// Cancel while downloading: the download stops (the tray removes its file) and the window asks again
+	mux.HandleFunc(prefix+"update/cancel", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "POST", 405)
+			return
+		}
+		p.upMu.Lock()
+		cancel := p.cancelDL
+		if cancel == nil || (p.state.Stage != "downloading" && p.state.Stage != "checking") {
+			p.upMu.Unlock()
+			http.Error(w, "nothing to cancel", 409)
+			return
+		}
+		p.cancelDL, p.state, p.update = nil, UpdateState{}, p.answered
+		p.upMu.Unlock()
+		cancel()
+		w.WriteHeader(204)
+	})
 	mux.HandleFunc(prefix+"update/choice", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Choice string `json:"choice"`
@@ -289,7 +324,7 @@ func (p *PairServer) Handler() http.Handler {
 			return
 		}
 		p.upMu.Lock()
-		p.update = nil // one answer per window
+		p.update, p.answered = nil, d // one answer per window
 		p.upMu.Unlock()
 		if p.OnUpdateChoice != nil {
 			go p.OnUpdateChoice(d.Version, body.Choice)

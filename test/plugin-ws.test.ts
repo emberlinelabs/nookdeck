@@ -2,7 +2,7 @@
 // ws origins, select settings with optionsFrom + ctx.settings.options, and ctx.onair.set behind the onair permission.
 import "./_fetch";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -19,6 +19,16 @@ async function until(f: () => boolean | Promise<boolean>, ms = 15_000) {
   const end = Date.now() + ms;
   while (Date.now() < end) { if (await f()) return; await sleep(10); }
   throw new Error("timed out waiting: " + f.toString().slice(0, 120));
+}
+/** expect(p).rejects, with the plugin log in the message: a host that ends (as on the Windows runner) says why. */
+async function rejectsWith(p: Promise<unknown>, m: RegExp | string, logFile: string) {
+  const e: any = await p.then(() => null, (x) => x ?? new Error("rejected"));
+  if (!e) throw new Error(`expected a rejection matching ${m}`);
+  const msg = String(e?.message ?? e);
+  if (typeof m === "string" ? msg.includes(m) : m.test(msg)) return;
+  let log = "(no log)";
+  try { log = readFileSync(logFile, "utf8").slice(-4000); } catch { /* none yet */ }
+  throw new Error(`"${msg}" does not match ${m}\nplugin log:\n${log}`);
 }
 const servers: Array<{ stop(force?: boolean): void }> = [];
 const hosts: Array<InstanceType<typeof PluginHosts>> = [];
@@ -228,12 +238,13 @@ async function setup(dir: string, id: string, over: Record<string, unknown> = {}
   const h = new PluginHosts(store, {
     fetch: fetch, shell: async () => ({ code: 0, stdout: "" }), keys: { hotkey: async () => {}, type: async () => {} },
     logDir: join(d, "logs"), dataDir: join(d, "data"),
-    timing: { pingIntervalMs: 150, pingTimeoutMs: 2000, callTimeoutMs: 20_000, backoffMs: [60, 120], restartMax: 3 },
+    // the REST test's ping timing: it runs the same throwing provider and passes on the Windows runner
+    timing: { pingIntervalMs: 500, pingTimeoutMs: 10_000, callTimeoutMs: 20_000, backoffMs: [60, 120], restartMax: 3 },
     onair: { set: (pid: string, kind: string, on: boolean, since?: number) => onair.push(["set", pid, kind, on, since]), clear: (pid: string) => onair.push(["clear", pid]) },
     ...over,
   } as any);
   hosts.push(h);
-  return { store, h, onair };
+  return { store, h, onair, logFile: join(d, "logs", `${id}.log`) };
 }
 
 describe("through a real plugin host", () => {
@@ -250,14 +261,14 @@ describe("through a real plugin host", () => {
       });
       ctx.widgets.provide("w", async () => ({ render: "text", data: { body: JSON.stringify({ got, closed }) } }));
     `, { permissions: { network: [a.origin] } });
-    const { h } = await setup(dir, "dev.t.ws");
+    const { h, logFile } = await setup(dir, "dev.t.ws");
     await h.action("dev.t.ws", "a", { do: "open" });
     await h.action("dev.t.ws", "a", { do: "send", text: "one" });
     await h.action("dev.t.ws", "a", { do: "send", text: "two" });
     const state = async () => JSON.parse(String((await h.widget("dev.t.ws", "w", {})).data && ((await h.widget("dev.t.ws", "w", {})).data as any).body));
     await until(async () => (await state()).got.length === 3);
     expect((await state()).got).toEqual(["hello", "echo:one", "echo:two"]); // "hello" came before onMessage was set
-    await expect(h.action("dev.t.ws", "a", { do: "bad" })).rejects.toThrow(/localhost:1 is not in this plugin's allowed hosts|permission denied: network/);
+    await rejectsWith(h.action("dev.t.ws", "a", { do: "bad" }), /localhost:1 is not in this plugin's allowed hosts|permission denied: network/, logFile);
     await h.action("dev.t.ws", "a", { do: "close" });
     await until(async () => (await state()).closed === 1000);
     await expect(h.action("dev.t.ws", "a", { do: "send", text: "late" })).rejects.toThrow(/closed/);
@@ -305,11 +316,11 @@ describe("through a real plugin host", () => {
       ctx.settings.options("scenes", async (s) => ["Main", "Main", 3, "", "Intro " + (s.suffix ?? ""), ...Array.from({ length: 300 }, (_, i) => "s" + i)]);
       ctx.settings.options("broken", () => { throw new Error("OBS is not connected"); });
     `, { settings: [{ key: "scene", type: "select", optionsFrom: "scenes" }, { key: "x", type: "select", optionsFrom: "broken" }] });
-    const { h } = await setup(dir, "dev.t.opts");
+    const { h, logFile } = await setup(dir, "dev.t.opts");
     const list = await h.options("dev.t.opts", "scenes", { suffix: "A" });
     expect(list.slice(0, 3)).toEqual(["Main", "Intro A", "s0"]);
     expect(list.length).toBe(200);
-    await expect(h.options("dev.t.opts", "broken", {})).rejects.toThrow("OBS is not connected");
+    await rejectsWith(h.options("dev.t.opts", "broken", {}), "OBS is not connected", logFile);
     await expect(h.options("dev.t.opts", "nope", {})).rejects.toThrow(/no options provider/);
   });
 });

@@ -69,6 +69,11 @@ func TestVersionsAndLauncher(t *testing.T) {
 	if got := ProgramFromLauncher(`sh.Run "cmd /s /c ""C:\Nook\bin\nookdeck.exe"" >> x"`); got != `C:\Nook\bin\nookdeck.exe` {
 		t.Errorf("program %q", got)
 	}
+	// the launcher from 0.7.0 on: cmd's console is hosted by a headless conhost (no Windows Terminal window)
+	headless := `sh.Run "conhost.exe --headless cmd /s /c ""C:\Users\a b\AppData\Local\Nookdeck\bin\nookdeck.exe"" --port 7422 >> x.log 2>> y.log", 0, False`
+	if got := ProgramFromLauncher(headless); got != `C:\Users\a b\AppData\Local\Nookdeck\bin\nookdeck.exe` || PortFromLauncher(headless) != 7422 {
+		t.Errorf("headless launcher: %q %d", got, PortFromLauncher(headless))
+	}
 }
 
 // fakeSys is a Windows machine in memory.

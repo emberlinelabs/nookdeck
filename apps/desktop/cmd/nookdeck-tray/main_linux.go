@@ -226,7 +226,14 @@ func updateNow() {
 	}
 	defer os.RemoveAll(dir)
 	file := filepath.Join(dir, name)
-	if err := core.DownloadAsset(ctx, &http.Client{Timeout: 10 * time.Minute}, latest, name, file, updateProgress(latest)); err != nil {
+	dl, stop := downloadContext(ctx)
+	err = core.DownloadAsset(dl, &http.Client{Timeout: 10 * time.Minute}, latest, name, file, updateProgress(latest))
+	stop()
+	if err != nil {
+		if cancelled(dl, ctx) { // the folder (and the file) is removed on return
+			logf("update %s: download cancelled", latest)
+			return
+		}
 		updateFailed(latest, err.Error())
 		return
 	}

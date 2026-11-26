@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { AccountStore, expandDir, MAX_ACCOUNTS } from "../src/ai/accounts";
 import { claudeKeychainService, fetchClaudeQuota } from "../src/ai/claude";
 import { multiAccount } from "../src/ai/index";
@@ -19,12 +19,14 @@ const USAGE = { five_hour: { utilization: 42, resets_at: "2026-11-27T10:00:00Z" 
 const creds = (o: Record<string, unknown>) => JSON.stringify({ claudeAiOauth: { accessToken: "tok-secret-123", subscriptionType: "max", ...o } });
 
 describe("AccountStore", () => {
-  const defaults = { claude: () => "/home/u/.claude", codex: () => "/home/u/.codex" };
+  // folders as the OS writes them ("/home/u/.claude" here, "D:\\home\\u\\.claude" on a Windows checkout)
+  const R = (p: string) => resolve(p);
+  const defaults = { claude: () => R("/home/u/.claude"), codex: () => R("/home/u/.codex") };
   test("the default account is always first; add, rename, remove; saved 0600 without tokens", async () => {
     const file = join(tmp("pd-acc-s-"), "ai-accounts.json");
     const work = tmp("pd-acc-w-");
     const s = new AccountStore(defaults, file);
-    expect(s.list("claude")).toEqual([{ id: "default", name: "Claude", dir: "/home/u/.claude", isDefault: true }]);
+    expect(s.list("claude")).toEqual([{ id: "default", name: "Claude", dir: R("/home/u/.claude"), isDefault: true }]);
     const a = await s.add("claude", "  Work   account ", work);
     expect(a).toMatchObject({ name: "Work account", dir: work, isDefault: false });
     expect(a.id).toMatch(/^a-[0-9a-f]{8}$/);
@@ -32,7 +34,7 @@ describe("AccountStore", () => {
     await s.rename("claude", a.id, "Job");
     expect(s.list("claude").map((x) => x.name)).toEqual(["Personal", "Job"]);
     expect(s.list("codex").map((x) => x.name)).toEqual(["Codex"]);
-    expect(statSync(file).mode & 0o777).toBe(0o600);
+    if (process.platform !== "win32") expect(statSync(file).mode & 0o777).toBe(0o600); // POSIX modes only (Windows: the user profile ACL)
     const again = new AccountStore(defaults, file);
     await again.load();
     expect(again.list("claude")).toEqual(s.list("claude"));
@@ -41,7 +43,7 @@ describe("AccountStore", () => {
     expect(readFileSync(file, "utf8")).not.toMatch(/token|secret/i);
   });
   test("refuses: missing folder, duplicates, the default folder, empty / long names, removing the default, too many", async () => {
-    const s = new AccountStore(defaults, null as any, async (p) => p !== "/nope");
+    const s = new AccountStore(defaults, null as any, async (p) => p !== R("/nope"));
     (s as any).save = async () => {};
     await expect(s.add("claude", "x", "/nope")).rejects.toThrow(/does not exist/);
     await expect(s.add("claude", "x", "/home/u/.claude")).rejects.toThrow(/already in the list/);
@@ -69,9 +71,11 @@ describe("AccountStore", () => {
     expect(s.list("claude").length).toBe(1);
   });
   test("~ paths are expanded", () => {
-    expect(expandDir("~/.claude-work", "/Users/me")).toBe("/Users/me/.claude-work");
+    expect(expandDir("~/.claude-work", "/Users/me")).toBe(join("/Users/me", ".claude-work"));
+    expect(expandDir("~\\.claude-work", "/Users/me")).toBe(join("/Users/me", ".claude-work"));
     expect(expandDir("~", "/Users/me")).toBe("/Users/me");
-    expect(expandDir("/abs/x/../y", "/Users/me")).toBe("/abs/y");
+    expect(expandDir("/abs/x/../y", "/Users/me")).toBe(resolve("/abs/y"));
+    expect(expandDir("work", "/Users/me")).toBe(resolve("/Users/me", "work"));
   });
 });
 
@@ -85,7 +89,7 @@ describe("Claude per folder", () => {
     const asked: string[] = [];
     const net = async (_u: string, init: RequestInit) => { asked.push((init.headers as any).Authorization); return Response.json(USAGE); };
     const q = await fetchClaudeQuota({ dir: "/w", readFile: async (p) => { asked.push(p); return creds({ accessToken: "tok-work" }); }, fetch: net as any, now: () => 1000, blocked: new Map() });
-    expect(asked).toEqual(["/w/.credentials.json", "Bearer tok-work"]);
+    expect(asked).toEqual([join("/w", ".credentials.json"), "Bearer tok-work"]);
     expect(q.windows.length).toBe(2);
     const kc: string[] = [];
     const q2 = await fetchClaudeQuota({ dir: "/w2", readFile: async () => { throw new Error("ENOENT"); }, platform: "darwin", readKeychain: async () => { kc.push("kc"); return creds({}); }, fetch: net as any, now: () => 1000, blocked: new Map() });

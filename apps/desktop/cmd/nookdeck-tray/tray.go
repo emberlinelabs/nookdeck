@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"fmt"
 	"os"
@@ -46,18 +47,26 @@ func openLog() {
 
 // setupOnce installs or adopts the agent (A2), then runs the system's own follow-up (Windows: the firewall rule). It returns the
 // exit code for --setup.
+// quietSetup: `--setup --quiet`, run by a silent install (the tray's own update): no message box at all, the log only.
+// updatedRun: `--updated`, the tray started by that install: the firewall rule is not offered on this start (it was offered at the
+// first install; pairing offers it again when it is still missing).
+var quietSetup, updatedRun bool
+
 func setupOnce(tray bool) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	res := core.EnsureAgent(ctx, paths(), bundledAgent(), ops())
 	logf("setup: %s exe=%s port=%d version=%q err=%v", res.Action, res.Exe, res.Port, strings.TrimSpace(res.Version), res.Err)
 	if res.Err != nil {
-		if !tray {
+		if !tray && !quietSetup {
 			messageBox(core.T(lang, "app.name"), core.T(lang, "error.setupFailed", "error", res.Err.Error()), false)
 		}
 		return 1
 	}
-	afterSetup(ctx, res.Exe)
+	// the firewall rule: on a first install, and on a normal tray start; never during or right after an update
+	if !quietSetup && !updatedRun && (tray || res.Action == core.ActionInstalled) {
+		afterSetup(ctx, res.Exe)
+	}
 	state.mu.Lock()
 	state.exe, state.port = res.Exe, res.Port
 	state.mu.Unlock()
@@ -473,6 +482,22 @@ func updateState(s core.UpdateState) {
 	if p != nil {
 		p.SetUpdateState(s)
 	}
+}
+
+// downloadContext is an update's download context: the update window's Cancel cancels it (see PairServer.DownloadContext).
+func downloadContext(parent context.Context) (context.Context, func()) {
+	pairMu.Lock()
+	p := pair
+	pairMu.Unlock()
+	if p == nil {
+		return context.WithCancel(parent)
+	}
+	return p.DownloadContext(parent)
+}
+
+// cancelled: the download stopped because the person pressed Cancel (not a timeout); the window is already back to its question.
+func cancelled(dl, parent context.Context) bool {
+	return errors.Is(dl.Err(), context.Canceled) && parent.Err() == nil
 }
 
 // updateProgress feeds the download progress to the update window.

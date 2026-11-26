@@ -72,9 +72,10 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 ; install or adopt the agent (its own window-less log: %LOCALAPPDATA%\Nookdeck\tray.log), then start the tray
-Filename: "{app}\Nookdeck.exe"; Parameters: "--setup"; StatusMsg: "Setting up the Nookdeck agent..."; Flags: runhidden waituntilterminated
+; silent (the tray's update runs Setup /VERYSILENT): --quiet shows no message box; the restarted tray gets --updated (no firewall question)
+Filename: "{app}\Nookdeck.exe"; Parameters: "--setup{code:QuietArg}"; StatusMsg: "Setting up the Nookdeck agent..."; Flags: runhidden waituntilterminated
 Filename: "{app}\Nookdeck.exe"; Description: "Open Nookdeck"; Flags: postinstall nowait skipifsilent
-Filename: "{app}\Nookdeck.exe"; Flags: nowait; Check: WizardSilent
+Filename: "{app}\Nookdeck.exe"; Parameters: "--updated"; Flags: nowait; Check: WizardSilent
 
 [Code]
 var
@@ -86,6 +87,11 @@ begin
 end;
 
 // stops a running tray app (its exe is locked while it runs). The agent keeps running: its own copy lives in %LOCALAPPDATA%\Nookdeck\bin and --setup adopts or replaces it.
+function QuietArg(Param: String): String;
+begin
+  if WizardSilent then Result := ' --quiet' else Result := '';
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Code: Integer;

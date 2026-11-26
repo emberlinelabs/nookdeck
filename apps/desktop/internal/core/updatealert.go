@@ -82,6 +82,10 @@ func UpdatePage(lang string, d UpdateDialog) string {
 	for _, k := range []string{"notes.more", "tray.downloading", "tray.size", "tray.sizeUnknown", "tray.checking", "tray.installing", "tray.installingPassword", "tray.done", "tray.failed", "tray.cancelled", "tray.close", "tray.gone"} {
 		tx[k] = T(lang, "update."+k, "version", d.Version)
 	}
+	// the progress view shares the macOS app's words (update.progress.*)
+	for _, k := range []string{"progress.heading", "progress.downloading", "progress.checking", "progress.installing", "progress.cancel"} {
+		tx[k] = T(lang, "update."+k, "version", d.Version)
+	}
 	tx["current"] = T(lang, "update.alert.current", "current", d.Current)
 	if d.Manual {
 		tx["manual"] = T(lang, "update.alert.manualBody", "current", d.Current, "path", d.Path)
@@ -97,8 +101,8 @@ func UpdatePage(lang string, d UpdateDialog) string {
 const updateHTML = `<!doctype html><html lang="__LANG__"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Nookdeck</title>
 <style>
-:root{color-scheme:light dark;--bg:#ffffff;--fg:#1c1c1f;--mut:#6e6e78;--soft:#f1f1f4;--line:#e4e4ea;--acc:#2563eb;--acc-fg:#fff;--bad:#c42b1c;--thumb:rgba(0,0,0,.28)}
-@media(prefers-color-scheme:dark){:root{--bg:#1f1f23;--fg:#f2f2f5;--mut:#a0a0ab;--soft:#2c2c32;--line:#34343b;--acc:#4c8dff;--bad:#ff8a80;--thumb:rgba(255,255,255,.3)}}
+:root{color-scheme:light dark;--bg:#ffffff;--fg:#1c1c1f;--mut:#6e6e78;--soft:#f1f1f4;--line:#e4e4ea;--line2:#c9c9d1;--acc:#2563eb;--acc-fg:#fff;--bad:#c42b1c;--thumb:rgba(0,0,0,.28)}
+@media(prefers-color-scheme:dark){:root{--bg:#1f1f23;--fg:#f2f2f5;--mut:#a0a0ab;--soft:#2c2c32;--line:#34343b;--line2:#55555e;--acc:#4c8dff;--bad:#ff8a80;--thumb:rgba(255,255,255,.3)}}
 *{box-sizing:border-box}html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 "Segoe UI Variable Text","Segoe UI",system-ui,"Cantarell","Ubuntu",sans-serif;padding:22px 24px 18px;display:flex;flex-direction:column;gap:16px;-webkit-font-smoothing:antialiased}
 header{display:flex;gap:14px;align-items:center}header img{width:48px;height:48px;flex:none}
@@ -113,11 +117,18 @@ h1{font-size:17px;font-weight:600;line-height:1.3;margin:0}.mut{color:var(--mut)
 #notes p{margin:4px 0}#notes a{color:var(--acc);text-decoration:none}#notes a:hover{text-decoration:underline}
 #notes code{font:12.5px "Cascadia Mono",Consolas,ui-monospace,"DejaVu Sans Mono",monospace;background:var(--soft);border-radius:4px;padding:1px 4px}
 #more{display:none;margin-top:8px}#more a{color:var(--acc);text-decoration:none}
-#prog{display:none;flex-direction:column;justify-content:center;gap:8px;flex:1;padding:0 8px 24px}
-#st{font-weight:600}
+#prog{display:none;flex-direction:column;gap:10px;padding-left:62px}
+#steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+#steps li{display:flex;gap:10px;align-items:flex-start}#steps .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+#steps .lb{color:var(--mut)}#steps .run .lb{color:var(--fg);font-weight:600}#steps .done .lb{color:var(--fg)}#steps .bad .lb{color:var(--bad);font-weight:600}
+.mk{position:relative;flex:none;width:16px;height:16px;margin-top:2.5px;border-radius:50%;border:1.5px solid var(--line2)}
+.run .mk{border-color:var(--soft);border-top-color:var(--acc);animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.done .mk{background:var(--acc);border-color:var(--acc)}.done .mk::after{content:"";position:absolute;left:4.5px;top:1.5px;width:3.5px;height:7.5px;border:solid var(--acc-fg);border-width:0 1.75px 1.75px 0;transform:rotate(45deg)}
+.bad .mk{background:var(--bad);border-color:var(--bad)}.bad .mk::before,.bad .mk::after{content:"";position:absolute;left:6.25px;top:2.5px;width:1.75px;height:8px;background:#fff;transform:rotate(45deg)}.bad .mk::before{transform:rotate(-45deg)}
+#sz{font-size:13px}#ind{font-size:13px}
 .bar{height:6px;border-radius:3px;background:var(--soft);overflow:hidden}.bar i{display:block;height:100%;width:0;background:var(--acc);border-radius:3px;transition:width .25s}
 .bar.busy i{width:30%;animation:slide 1.3s ease-in-out infinite}@keyframes slide{0%{margin-left:-30%}100%{margin-left:100%}}
-#err{color:var(--bad)}#st:empty,#sz:empty,#err:empty{display:none}
+#err{color:var(--bad);font-size:13px}#sz:empty,#err:empty,#ind:empty{display:none}
 footer{margin-top:auto;display:flex;gap:8px;align-items:center}
 button{font:inherit;color:inherit;border-radius:6px;padding:6px 16px;min-height:32px;cursor:pointer;background:var(--soft);border:1px solid var(--line)}
 button:hover{filter:brightness(.97)}@media(prefers-color-scheme:dark){button:hover{filter:brightness(1.15)}}
@@ -129,15 +140,21 @@ button:disabled{opacity:.6;cursor:default}button:focus-visible{outline:2px solid
 <header><img src="update/icon.png" alt=""><div><h1 id="t"></h1><p class="mut" id="b"></p></div></header>
 <p class="mut" id="manual"></p>
 <div id="notes"><div id="scroll"><div id="secs"></div><p id="more"><a href="#" id="morel"></a></p></div></div>
-<div id="prog"><p id="st"></p><div class="bar" id="bar"><i id="fill"></i></div><p class="mut" id="sz"></p><p id="err"></p></div>
+<div id="prog"><ol id="steps">
+<li id="s0"><span class="mk"></span><div class="tx"><span class="lb" id="l0"></span><div class="bar" id="bar"><i id="fill"></i></div><p class="mut" id="sz"></p></div></li>
+<li id="s1"><span class="mk"></span><div class="tx"><span class="lb" id="l1"></span></div></li>
+<li id="s2"><span class="mk"></span><div class="tx"><span class="lb" id="l2"></span><p class="mut" id="ind"></p></div></li>
+</ol><p id="err"></p></div>
 <footer id="ask"><button class="text" id="skip"></button><span class="sp"></span><button id="later"></button><button class="main" id="main"></button></footer>
+<footer id="crow" style="display:none"><span class="sp"></span><button id="cancel"></button></footer>
 <footer id="erow" style="display:none"><span class="sp"></span><button id="close"></button><button class="main" id="dl"></button></footer>
 <script>
 const TX=__TX__;const $=i=>document.getElementById(i);
 const fill=(s,v)=>s.replace(/\{(\w+)\}/g,(m,k)=>k in v?v[k]:m);
 $("t").textContent=TX.title;document.title=TX.title;$("b").textContent=TX.current;$("manual").textContent=TX.manual||"";
 $("skip").textContent=TX.skip;$("later").textContent=TX.later;$("main").textContent=TX.main;
-$("close").textContent=TX["tray.close"];$("dl").textContent=TX.dl;$("morel").textContent=TX["notes.more"];
+$("close").textContent=TX["tray.close"];$("cancel").textContent=TX["progress.cancel"];
+$("l0").textContent=TX["progress.downloading"];$("l1").textContent=TX["progress.checking"];$("l2").textContent=TX["progress.installing"];$("dl").textContent=TX.dl;$("morel").textContent=TX["notes.more"];
 function open(u){fetch("update/open",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({url:u})}).catch(()=>{});}
 $("notes").addEventListener("click",e=>{const a=e.target.closest("a");if(!a)return;e.preventDefault();open(a.id==="morel"?TX.page:a.href);});
 $("dl").onclick=()=>{open(TX.page);window.close();};$("close").onclick=()=>window.close();
@@ -145,16 +162,26 @@ const sc=$("scroll");let mv=0;function fade(){$("notes").classList.toggle("fade"
 async function notes(){try{const r=await fetch("update/notes");if(!r.ok)return;const n=await r.json();if(!n.sections.length)return;
 const box=$("secs");box.textContent="";
 for(const s of n.sections){const t=document.createElement("h2");t.textContent="Nookdeck "+s.version+(s.title?": "+s.title:"");box.appendChild(t);const d=document.createElement("div");d.innerHTML=s.html;box.appendChild(d);}
-$("more").style.display=n.more?"block":"none";$("notes").style.display="block";fade();}catch(e){}}
+$("more").style.display=n.more?"block":"none";hadNotes=true;if($("prog").style.display!=="flex"){$("notes").style.display="block";fade();}}catch(e){}}
 const mb=n=>(n/1048576).toFixed(1);let timer=0;
+// the progress view: three steps (download, check, install and restart), each waiting, running, done or failed
+let at=0,hadNotes=false;
 function show(s){$("ask").style.display="none";$("notes").style.display="none";$("manual").style.display="none";$("prog").style.display="flex";
-const bar=$("bar"),err=$("err");err.textContent="";$("erow").style.display="none";$("sz").textContent="";bar.style.display="block";bar.className="bar";
-if(s.stage==="downloading"){$("st").textContent=TX["tray.downloading"];if(s.total>0){$("fill").style.width=Math.min(100,100*s.done/s.total)+"%";$("sz").textContent=fill(TX["tray.size"],{done:mb(s.done),total:mb(s.total)});}else{bar.className="bar busy";$("sz").textContent=fill(TX["tray.sizeUnknown"],{done:mb(s.done||0)});}}
-else if(s.stage==="checking"){$("st").textContent=TX["tray.checking"];$("fill").style.width="100%";}
-else if(s.stage==="installing"){$("st").textContent=TX[s.password?"tray.installingPassword":"tray.installing"];bar.className="bar busy";}
-else if(s.stage==="done"){$("st").textContent=TX["tray.done"];$("fill").style.width="100%";}
-else if(s.stage==="error"){$("st").textContent="";bar.style.display="none";err.textContent=s.error==="cancelled"?TX["tray.cancelled"]:fill(TX["tray.failed"],{error:s.error||"?"});$("erow").style.display="flex";clearInterval(timer);}
-else{$("st").textContent=TX["tray.downloading"];bar.className="bar busy";}}
+$("t").textContent=TX["progress.heading"];
+const bad=s.stage==="error";
+if(s.stage==="checking")at=1;else if(s.stage==="installing")at=2;else if(s.stage==="done")at=3;else if(!bad)at=0;
+for(let i=0;i<3;i++)$("s"+i).className=i<at?"done":i===at?(bad?"bad":"run"):"";
+const bar=$("bar");bar.style.display=at===0&&!bad?"block":"none";bar.className="bar";$("sz").textContent="";
+if(at===0&&!bad){if(s.total>0){$("fill").style.width=Math.min(100,100*s.done/s.total)+"%";$("sz").textContent=fill(TX["tray.size"],{done:mb(s.done),total:mb(s.total)});}
+else{bar.className="bar busy";if(s.done>0)$("sz").textContent=fill(TX["tray.sizeUnknown"],{done:mb(s.done)});}}
+$("ind").textContent=at===3?TX["tray.done"]:at===2&&s.password?TX["tray.installingPassword"]:"";
+$("err").textContent=bad?(s.error==="cancelled"?TX["tray.cancelled"]:fill(TX["tray.failed"],{error:s.error||"?"})):"";
+$("crow").style.display=at<=1&&!bad?"flex":"none";$("erow").style.display=bad?"flex":"none";if(bad)clearInterval(timer);}
+// Cancel: the tray stops the download and removes its file; the window asks again
+$("cancel").onclick=async()=>{$("cancel").disabled=true;let ok=false;try{ok=(await fetch("update/cancel",{method:"POST"})).ok;}catch(e){}
+$("cancel").disabled=false;if(!ok)return;clearInterval(timer);at=0;$("prog").style.display="none";$("crow").style.display="none";
+$("t").textContent=TX.title;$("manual").style.display="";$("notes").style.display=hadNotes?"block":"none";
+document.querySelectorAll("#ask button").forEach(b=>b.disabled=false);$("ask").style.display="flex";$("main").focus();fade();};
 async function poll(){try{const r=await fetch("update/progress");if(r.ok)show(await r.json());}catch(e){}} // the tray quits while it installs: the last state stays
 function watch(){show({stage:""});poll();timer=setInterval(poll,400);}
 async function pick(c){document.querySelectorAll("#ask button").forEach(b=>b.disabled=true);let ok=false;try{const r=await fetch("update/choice",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({choice:c})});ok=r.ok;}catch(e){}

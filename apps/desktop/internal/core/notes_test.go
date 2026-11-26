@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -94,7 +95,9 @@ func TestRenderNotesEscapes(t *testing.T) {
 // The releases list as GitHub returns it after the split: each body holds its own section, then Install and Files. Out of order on
 // purpose, with a draft, a prerelease, a body made before the split (every version in it) and one with no heading at all.
 func splitReleases() []Release {
-	own := func(head, rest string) string { return head + "\n\nUpgrading: run the install command again.\n\n" + rest + "\n\n## Install\n\ncurl x | sh\n\n## Files\n\n- a.exe\n" }
+	own := func(head, rest string) string {
+		return head + "\n\nUpgrading: run the install command again.\n\n" + rest + "\n\n## Install\n\ncurl x | sh\n\n## Files\n\n- a.exe\n"
+	}
 	return []Release{
 		{Tag: "v0.6.0", HTMLURL: "https://github.com/howznguyen/nookdeck/releases/tag/v0.6.0", Body: own("## Nookdeck 0.6.0: Linux, and updates in one click", "### New\n\n- **Linux (experimental).**")},
 		{Tag: "v0.6.2", Draft: true, Body: own("## Nookdeck 0.6.2", "- draft")},
@@ -314,7 +317,7 @@ func TestUpdateWindowNotesAndProgress(t *testing.T) {
 func TestUpdatePageProgressStrings(t *testing.T) {
 	for _, l := range []string{"en", "vi", "zh", "fr", "pt"} {
 		p := UpdatePage(l, UpdateDialog{Version: "0.6.1", Current: "0.6.0"})
-		for _, k := range []string{"update.notes.title", "update.tray.installing", "update.tray.size", "update.tray.gone", "__TX__", "__LANG__"} {
+		for _, k := range []string{"update.notes.title", "update.tray.installing", "update.tray.size", "update.tray.gone", "update.progress.heading", "update.progress.downloading", "update.progress.checking", "update.progress.installing", "update.progress.cancel", "__TX__", "__LANG__"} {
 			if strings.Contains(p, k) {
 				t.Errorf("%s: %q left (missing string)", l, k)
 			}
@@ -323,7 +326,95 @@ func TestUpdatePageProgressStrings(t *testing.T) {
 			t.Errorf("%s: release page", l)
 		}
 	}
-	if p := UpdatePage("en", UpdateDialog{Version: "0.6.1"}); !strings.Contains(p, "Downloading Nookdeck 0.6.1") || !strings.Contains(p, "{done} of {total} MB") {
-		t.Error("en progress texts")
+	p := UpdatePage("en", UpdateDialog{Version: "0.6.1"})
+	for _, want := range []string{"{done} of {total} MB", `"progress.heading":"Installing Nookdeck 0.6.1"`, `"progress.downloading":"Downloading"`, `"progress.checking":"Checking"`, `"progress.installing":"Installing and restarting"`, `"progress.cancel":"Cancel"`} {
+		if !strings.Contains(p, want) {
+			t.Errorf("en progress texts: no %s", want)
+		}
+	}
+}
+
+// Cancel while downloading: the download's context is cancelled, the window's question comes back (Install works again); an
+// install, or nothing running, cannot be cancelled.
+func TestUpdateCancel(t *testing.T) {
+	ps, err := StartPairServer(fakeAgent(t), "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ps.Close()
+	var mu sync.Mutex
+	var choices []string
+	ps.OnUpdateChoice = func(v, c string) { mu.Lock(); choices = append(choices, c); mu.Unlock() }
+	post := func(path, body string) int {
+		res, err := http.Post(ps.URL()+path, "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res.StatusCode
+	}
+	ps.ShowUpdate(UpdateDialog{Version: "0.6.1", Current: "0.6.0"})
+	if post("update/cancel", "") != 409 {
+		t.Error("nothing to cancel yet")
+	}
+	if post("update/choice", `{"choice":"install"}`) != 204 {
+		t.Fatal("install")
+	}
+	dl, stop := ps.DownloadContext(context.Background())
+	defer stop()
+	ps.SetUpdateState(UpdateState{Stage: "downloading", Version: "0.6.1", Done: 1, Total: 10})
+	if res, err := http.Get(ps.URL() + "update/cancel"); err != nil || res.StatusCode != 405 {
+		t.Error("cancel is a POST")
+	}
+	if post("update/cancel", "") != 204 {
+		t.Fatal("cancel")
+	}
+	if !errors.Is(dl.Err(), context.Canceled) {
+		t.Error("the download goes on")
+	}
+	ps.upMu.Lock()
+	active := ps.state.Active()
+	ps.upMu.Unlock()
+	if active {
+		t.Error("the progress stays")
+	}
+	if post("update/choice", `{"choice":"install"}`) != 204 {
+		t.Error("the question is not back")
+	}
+	// an install cannot be cancelled
+	_, stop2 := ps.DownloadContext(context.Background())
+	stop2()
+	ps.SetUpdateState(UpdateState{Stage: "installing", Version: "0.6.1"})
+	if post("update/cancel", "") != 409 {
+		t.Error("an install was cancelled")
+	}
+	time.Sleep(50 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if strings.Join(choices, ",") != "install,install" {
+		t.Errorf("choices %v", choices)
+	}
+}
+
+// The tray's own update is very silent end to end: nothing but the update window shows (owner request for 0.7.0).
+func TestSilentUpdateInstaller(t *testing.T) {
+	if strings.Join(SetupUpdateArgs, " ") != "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL" {
+		t.Errorf("switches %v", SetupUpdateArgs)
+	}
+	b, err := os.ReadFile("../../installer/nookdeck.iss")
+	if err != nil {
+		t.Fatal(err)
+	}
+	iss := strings.ReplaceAll(string(b), "\r\n", "\n")
+	for _, want := range []string{
+		"CloseApplications=no", // the tray is stopped by PrepareToInstall, no Restart Manager dialog
+		`Parameters: "--setup{code:QuietArg}"; StatusMsg: "Setting up the Nookdeck agent..."; Flags: runhidden waituntilterminated`,
+		"if WizardSilent then Result := ' --quiet' else Result := '';",
+		`Filename: "{app}\Nookdeck.exe"; Parameters: "--updated"; Flags: nowait; Check: WizardSilent`, // the tray comes back
+		"Flags: postinstall nowait skipifsilent",
+	} {
+		if !strings.Contains(iss, want) {
+			t.Errorf("nookdeck.iss lacks %q", want)
+		}
 	}
 }

@@ -122,3 +122,8 @@ func DownloadAsset(ctx context.Context, c *http.Client, version, name, dest stri
 	}
 	return nil
 }
+
+// SetupUpdateArgs are Nookdeck-Setup.exe's switches when the tray updates itself: no wizard or progress window (the update window
+// already says "Installing"), message boxes answered by their default, never a reboot, no Cancel. installer/nookdeck.iss then runs
+// --setup --quiet and starts the tray with --updated.
+var SetupUpdateArgs = []string{"/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOCANCEL"}

@@ -352,7 +352,8 @@ describe("win32 service (Task Scheduler)", () => {
     expect(vbs).toContain('sh.Environment("Process")("NOOKDECK_SERVICE") = "1"');
     expect(vbs).toContain('sh.Environment("Process")("NOOKDECK_HOME") = "D:\\data ""x"""');
     expect(vbs).toContain(', 0, False'); // window style 0 = hidden, do not wait
-    expect(vbs).toContain('cmd /s /c ""');
+    // conhost hosts cmd's console headless: no default-terminal handoff (Windows Terminal ignores the hidden style)
+    expect(vbs).toContain('sh.Run "conhost.exe --headless cmd /s /c ""');
     expect(vbs).toContain('""C:\\Program Files\\Nookdeck\\nookdeck.exe"" --port 7500');
     expect(vbs).toContain('agent.out.log');
     expect(WS.buildLauncher({ program: prog, logDir: "L" })).not.toContain("--port");
@@ -419,6 +420,30 @@ describe("win32 service (Task Scheduler)", () => {
     const b = ctx();
     await WS.winInstall(b.c);
     expect(b.calls.some((c) => c[0] === "powershell.exe" && c[c.length - 1]!.includes("Stop-Process"))).toBe(true);
+  });
+
+  test("a launcher from before 0.7.0 is upgraded to the headless conhost: on its own, and at restart and start", async () => {
+    const old = [
+      "' Starts Nookdeck without a console window. Written by `nookdeck service install`.",
+      'Set sh = CreateObject("WScript.Shell")',
+      'sh.Environment("Process")("NOOKDECK_SERVICE") = "1"',
+      'sh.Environment("Process")("NOOKDECK_HOME") = "D:\\data"',
+      'sh.Run "cmd /s /c ""C:\\Users\\Admin\\AppData\\Local\\Nookdeck\\bin\\nookdeck.exe --port 7421 >> C:\\L\\agent.out.log 2>> C:\\L\\agent.err.log""", 0, False',
+    ].join("\r\n") + "\r\n";
+    const up = WS.upgradeLauncher(old)!;
+    expect(up).toBe(old.replace('sh.Run "cmd /s /c ', 'sh.Run "conhost.exe --headless cmd /s /c '));
+    expect(WS.upgradeLauncher(up)).toBeNull(); // already new
+    expect(WS.upgradeLauncher(WS.buildLauncher({ program: prog, logDir: "L" }))).toBeNull();
+    expect(WS.upgradeLauncher("something else")).toBeNull();
+
+    for (const run of [WS.winRestart, WS.winStartService]) {
+      const a = ctx();
+      await WS.winInstall(a.c);
+      writeFileSync(WS.launcherPath(a.dir), old);
+      await run(a.c);
+      expect(readFileSync(WS.launcherPath(a.dir), "utf8")).toBe(up);
+      expect(a.log).toContain("Launcher updated: the agent now starts without a console window.");
+    }
   });
 
   test("status, restart, uninstall", async () => {
