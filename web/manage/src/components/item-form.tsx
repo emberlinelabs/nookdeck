@@ -22,8 +22,7 @@ import {
   ACTION_ICON, ACTION_SHORT, MEDIA_LABEL, PROVIDER_LABEL, VOLUME_LABEL, WIDGET_LABEL, defaultAction, tileName,
 } from "@/lib/layout";
 import { cn } from "@/lib/utils";
-import { t, useLanguage } from "@/lib/i18n";
-import { VI } from "@/i18n/vi";
+import { t, translationsOf, useLanguage } from "@/lib/i18n";
 import { EntityPicker } from "@/components/entity-picker";
 import { baseUrls, curlPush, useWebhook } from "@/lib/webhook";
 import { api } from "@/api";
@@ -181,7 +180,7 @@ export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onD
             onPickApp={(app) => {
               const patch: Record<string, unknown> = { action: { type: "open", target: `bundle:${app.bundleId}` } };
               if (!item.icon) patch.icon = `app:${app.bundleId}`;
-              if (!item.label.trim() || item.label === "New button" || item.label === VI["New button"]) patch.label = app.name;
+              if (!item.label.trim() || item.label === "New button" || translationsOf("New button").includes(item.label)) patch.label = app.name;
               set(patch);
             }}
           />

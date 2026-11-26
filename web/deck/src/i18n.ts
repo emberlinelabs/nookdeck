@@ -1,23 +1,31 @@
 import { VI } from './i18n-vi'
 import { ZH } from './i18n-zh'
+import { FR } from './i18n-fr'
+import { PT } from './i18n-pt'
 
 /**
- * Tiny dictionary i18n. English is the default; Vietnamese and Chinese come from layout.theme.language
- * ('en' | 'vi' | 'zh', missing = 'en').
- * The English text is the key: t('Cancel') returns the Vietnamese/Chinese entry when that language is on and the
+ * Tiny dictionary i18n. English is the default; Vietnamese, Chinese, French and Brazilian Portuguese come from
+ * layout.theme.language ('en' | 'vi' | 'zh' | 'fr' | 'pt', missing = 'en').
+ * The English text is the key: t('Cancel') returns the translated entry when that language is on and the
  * text itself otherwise.
  * Placeholders are {0}, {1}...: t('{0} min ago', 5). Module level constants must hold English text and be passed through t() at use time.
  */
 
-export type Lang = 'en' | 'vi' | 'zh'
+export type Lang = 'en' | 'vi' | 'zh' | 'fr' | 'pt'
 const KEY = 'pd.lang'
-const DICTS: { [lang: string]: { [en: string]: string } } = { vi: VI, zh: ZH }
+const DICTS: { [lang: string]: { [en: string]: string } } = { vi: VI, zh: ZH, fr: FR, pt: PT }
+const LANGS: Lang[] = ['en', 'vi', 'zh', 'fr', 'pt']
+const isLang = (v: unknown): v is Lang => LANGS.indexOf(v as Lang) >= 0
+/** First two letters of a device language (fr-CA, pt-PT and pt-BR all count); English otherwise. */
+export function fromDevice(tag: string): Lang {
+  const p = (tag || '').toLowerCase().slice(0, 2)
+  return isLang(p) ? p : 'en'
+}
 
 /** Used until a layout arrives (the pairing screen) and whenever a layout carries no language: the device's own language. */
 const FALLBACK: Lang = (() => {
   try {
-    const n = (window.navigator.language || '').toLowerCase()
-    return n.startsWith('zh') ? 'zh' : n.startsWith('vi') ? 'vi' : 'en'
+    return fromDevice(window.navigator.language || '')
   } catch (e) {
     return 'en'
   }
@@ -26,7 +34,7 @@ const FALLBACK: Lang = (() => {
 let cur: Lang = 'en'
 try {
   const s = window.localStorage.getItem(KEY)
-  cur = s === 'vi' || s === 'zh' || s === 'en' ? s : FALLBACK
+  cur = isLang(s) ? s : FALLBACK
 } catch (e) {
   /* storage is optional */
 }
@@ -35,7 +43,7 @@ export const getLang = (): Lang => cur
 
 /** Called by the deck whenever the layout (or its theme) changes; remembered so the pairing screen uses the same language. */
 export function setLang(l: unknown) {
-  const next: Lang = l === 'vi' ? 'vi' : l === 'zh' ? 'zh' : l === 'en' ? 'en' : FALLBACK
+  const next: Lang = isLang(l) ? l : FALLBACK
   if (next === cur) return
   cur = next
   try {
@@ -56,4 +64,4 @@ export function t(en: string, a?: string | number, b?: string | number, c?: stri
 }
 
 /** BCP 47 tag for Intl and toLocaleString. */
-export const locale = (): string => (cur === 'vi' ? 'vi-VN' : cur === 'zh' ? 'zh-CN' : 'en-US')
+export const locale = (): string => (cur === 'vi' ? 'vi-VN' : cur === 'zh' ? 'zh-CN' : cur === 'fr' ? 'fr-FR' : cur === 'pt' ? 'pt-BR' : 'en-US')

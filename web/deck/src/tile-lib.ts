@@ -21,7 +21,7 @@ export interface TileMessage {
   /** a built-in theme pack's id, or a Theme object */
   theme?: string | { [k: string]: unknown }
   mode?: 'light' | 'dark'
-  lang?: 'en' | 'vi' | 'zh'
+  lang?: 'en' | 'vi' | 'zh' | 'fr' | 'pt'
 }
 
 const KEYS = ['type', 'render', 'data', 'style', 'w', 'h', 'theme', 'mode', 'lang']
@@ -36,7 +36,7 @@ export function asTileMessage(m: unknown): TileMessage | null {
   if (m.style !== undefined && typeof m.style !== 'string') return null
   if (m.theme !== undefined && typeof m.theme !== 'string' && !isObj(m.theme)) return null
   if (m.mode !== undefined && m.mode !== 'light' && m.mode !== 'dark') return null
-  if (m.lang !== undefined && m.lang !== 'en' && m.lang !== 'vi' && m.lang !== 'zh') return null
+  if (m.lang !== undefined && m.lang !== 'en' && m.lang !== 'vi' && m.lang !== 'zh' && m.lang !== 'fr' && m.lang !== 'pt') return null
   return m as unknown as TileMessage
 }
 

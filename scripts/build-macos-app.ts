@@ -53,7 +53,7 @@ export function infoPlist(version: string, build: string): string {
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleIdentifier</key><string>${APP_ID}</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-  <key>CFBundleLocalizations</key><array><string>en</string><string>vi</string><string>zh-Hans</string></array>
+  <key>CFBundleLocalizations</key><array><string>en</string><string>vi</string><string>zh-Hans</string><string>fr</string><string>pt-BR</string><string>pt-PT</string></array>
   <key>CFBundleName</key><string>Nookdeck</string>
   <key>CFBundleDisplayName</key><string>Nookdeck</string>
   <key>CFBundlePackageType</key><string>APPL</string>

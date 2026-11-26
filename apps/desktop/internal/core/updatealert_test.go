@@ -57,7 +57,7 @@ func TestUpdatePage(t *testing.T) {
 	if !strings.Contains(m, "Open the download page") || !strings.Contains(m, `"choice":"download"`) || strings.Contains(m, "Install and restart") || strings.Contains(m, "/opt/<x>") {
 		t.Errorf("manual page: %.300s", m)
 	}
-	for _, l := range []string{"vi", "zh"} {
+	for _, l := range []string{"vi", "zh", "fr", "pt"} {
 		if UpdatePage(l, d) == p {
 			t.Errorf("%s not translated", l)
 		}

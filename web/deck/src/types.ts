@@ -176,7 +176,7 @@ export interface Theme extends Look {
   fonts?: { family: string; file: string; weight?: number }[]
   mode?: 'dark' | 'light' | 'auto'
   /** UI language of the overlays; missing = 'en' */
-  language?: 'en' | 'vi' | 'zh'
+  language?: 'en' | 'vi' | 'zh' | 'fr' | 'pt'
   accent?: string
   background?: string
   tile?: string

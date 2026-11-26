@@ -46,7 +46,31 @@ const NPVI: { [en: string]: string } = {
   '{0} d': '{0} ngày',
   Play: 'Phát',
 }
-const tn = (en: string, a?: string | number): string => (getLang() === 'vi' && NPVI[en] ? NPVI[en].split('{0}').join(String(a)) : t(en, a))
+const NPFR: { [en: string]: string } = {
+  'Last played': 'Dernière écoute',
+  'Spotify · Music': 'Spotify · Music',
+  'Spotify · Media player': 'Spotify · Lecteur',
+  now: "à l'instant",
+  '{0} min': '{0} min',
+  '{0} h': '{0} h',
+  '{0} d': '{0} j',
+  Play: 'Lire',
+}
+const NPPT: { [en: string]: string } = {
+  'Last played': 'Tocada por último',
+  'Spotify · Music': 'Spotify · Music',
+  'Spotify · Media player': 'Spotify · Player',
+  now: 'agora',
+  '{0} min': '{0} min',
+  '{0} h': '{0} h',
+  '{0} d': '{0} d',
+  Play: 'Tocar',
+}
+const NP_EXTRA: { [lang: string]: { [en: string]: string } } = { vi: NPVI, fr: NPFR, pt: NPPT }
+const tn = (en: string, a?: string | number): string => {
+  const d = NP_EXTRA[getLang()]
+  return d && d[en] ? d[en].split('{0}').join(String(a)) : t(en, a)
+}
 
 /** Labels of the player in Simplified Chinese (resolveLabels matches by field name, not by English text). */
 const ZH_LABELS: Partial<NowPlayingLabels> = {
@@ -61,6 +85,33 @@ const ZH_LABELS: Partial<NowPlayingLabels> = {
   position: '进度',
   volume: '音量',
 }
+const FR_LABELS: Partial<NowPlayingLabels> = {
+  nowPlaying: 'En cours de lecture',
+  nothingPlaying: 'Aucune lecture en cours',
+  play: 'Lire',
+  pause: 'Pause',
+  previous: 'Précédent',
+  next: 'Suivant',
+  mute: 'Couper le son',
+  unmute: 'Rétablir le son',
+  position: 'Position',
+  volume: 'Volume',
+  positionText: (p, d) => p + ' sur ' + d,
+}
+const PT_LABELS: Partial<NowPlayingLabels> = {
+  nowPlaying: 'Tocando agora',
+  nothingPlaying: 'Nada tocando',
+  play: 'Tocar',
+  pause: 'Pausar',
+  previous: 'Anterior',
+  next: 'Próxima',
+  mute: 'Silenciar',
+  unmute: 'Ativar som',
+  position: 'Posição',
+  volume: 'Volume',
+  positionText: (p, d) => p + ' de ' + d,
+}
+const LABELS: { [lang: string]: Partial<NowPlayingLabels> } = { vi: VI, zh: ZH_LABELS, fr: FR_LABELS, pt: PT_LABELS }
 /** Short age for the "Last played" chip: "11 min", "3 h", "2 d". */
 export function agoShort(at: number, now: number): string {
   const min = Math.max(0, Math.floor((now - at) / 60000))
@@ -185,7 +236,7 @@ const layer = (opacity: number, x: number, scale?: number) => {
 export const NP_HIT = { ghost: 44, play: 52, playRow: 48, slider: 44, thumb: 22 }
 
 export function NowPlayingTile(props: NowPlayingTileProps) {
-  const L = getLang() === 'vi' ? resolveLabels(DEFAULT_LABELS, VI) : getLang() === 'zh' ? resolveLabels(DEFAULT_LABELS, ZH_LABELS) : DEFAULT_LABELS
+  const L = LABELS[getLang()] ? resolveLabels(DEFAULT_LABELS, LABELS[getLang()]) : DEFAULT_LABELS
   const m = props.media
   const track: Track | null = m && (m.title || m.artist) ? { title: m.title || '-', artist: m.artist || '', album: m.album, cover: m.artwork } : null
   const total = Math.max(0, (m && m.duration) || 0)

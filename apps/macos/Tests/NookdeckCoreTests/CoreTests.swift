@@ -132,13 +132,18 @@ final class StringsTests: XCTestCase {
     func testPick() {
         XCTAssertEqual(Strings.pick(["vi-VN", "en"]), .vi)
         XCTAssertEqual(Strings.pick(["zh-Hans-CN"]), .zh)
-        XCTAssertEqual(Strings.pick(["fr-FR", "en-US"]), .en)
-        XCTAssertEqual(Strings.pick(["fr-FR"]), .en)
+        XCTAssertEqual(Strings.pick(["fr-FR", "en-US"]), .fr)
+        XCTAssertEqual(Strings.pick(["fr-CA"]), .fr)
+        XCTAssertEqual(Strings.pick(["pt-BR", "en"]), .pt)
+        XCTAssertEqual(Strings.pick(["pt-PT"]), .pt)
+        XCTAssertEqual(Strings.pick(["de-DE", "fr-FR"]), .fr)
+        XCTAssertEqual(Strings.pick(["de-DE", "en-US"]), .en)
+        XCTAssertEqual(Strings.pick(["de-DE"]), .en)
     }
     func testEveryKeyExistsInEveryLanguage() throws {
         let s = try Self.shared()
         XCTAssertGreaterThan(s.keys.count, 60)
-        for k in s.keys { for l in [Strings.Lang.vi, .zh] { XCTAssertTrue(s.has(k, l), "\(k) missing in \(l)") } }
+        for k in s.keys { for l in [Strings.Lang.vi, .zh, .fr, .pt] { XCTAssertTrue(s.has(k, l), "\(k) missing in \(l)") } }
     }
     func testKeysTheAppUsesExist() throws {
         let s = try Self.shared()
@@ -155,6 +160,12 @@ final class StringsTests: XCTestCase {
         XCTAssertEqual(s.phones(1, .en), "1 phone connected")
         XCTAssertEqual(s.phones(3, .en), "3 phones connected")
         XCTAssertTrue(s.phones(3, .vi).contains("3"))
+        XCTAssertEqual(s.phones(0, .fr), "Aucun téléphone connecté")
+        XCTAssertEqual(s.phones(1, .fr), "1 téléphone connecté")
+        XCTAssertEqual(s.phones(3, .fr), "3 téléphones connectés")
+        XCTAssertEqual(s.phones(1, .pt), "1 celular conectado")
+        XCTAssertEqual(s.phones(3, .pt), "3 celulares conectados")
+        XCTAssertEqual(s.text("menu.version", .pt, ["version": "0.4.0"]), "Versão 0.4.0")
         XCTAssertEqual(s.text("menu.version", .en, ["version": "0.4.0"]), "Version 0.4.0")
         XCTAssertEqual(s.text("no.such.key", .vi), "no.such.key")
         let o = Strings(json: Data(#"{"en":{"a":"x"},"vi":{"b":"y"},"xx":{"a":"b"},"zh":{"a":5}}"#.utf8))

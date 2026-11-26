@@ -4,14 +4,14 @@ import { api } from "@/api";
 import { Button } from "@/components/ui/knowns/button";
 import { Card, CardContent } from "@/components/ui/knowns/card";
 import { aboutLine, osName } from "@/lib/about";
-import { getLanguage, t, useLanguage } from "@/lib/i18n";
+import { localeTag, t, useLanguage } from "@/lib/i18n";
 import { GITHUB_URL, KOFI_URL } from "@/lib/support";
 import type { About, UpdateInfo } from "@/types";
 
 function fmtDate(iso?: string): string | undefined {
   if (!iso) return undefined;
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(getLanguage() === "vi" ? "vi-VN" : getLanguage() === "zh" ? "zh-CN" : "en-US", { year: "numeric", month: "short", day: "numeric" });
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(localeTag(), { year: "numeric", month: "short", day: "numeric" });
 }
 
 export function AboutCard({ about }: { about: About | null }) {

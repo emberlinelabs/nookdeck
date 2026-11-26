@@ -141,3 +141,107 @@ export function timeWordsZh(hour: number, minute: number): TimeWords {
   if (m < 10) return { text: base + '零' + numberWordsZh(m) + '分', part }
   return { text: base + numberWordsZh(m) + '分', part }
 }
+
+const FR_UNITS = ['zéro', 'une', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf']
+
+/** 0-59 in French (feminine, as minutes and hours are): 1 -> "une", 21 -> "vingt et une", 25 -> "vingt-cinq". */
+export function numberWordsFr(n: number): string {
+  n = Math.max(0, Math.min(59, Math.floor(n)))
+  if (n < 20) return FR_UNITS[n]
+  const tens = ['', '', 'vingt', 'trente', 'quarante', 'cinquante'][Math.floor(n / 10)]
+  const u = n % 10
+  return u === 0 ? tens : u === 1 ? tens + ' et une' : tens + '-' + FR_UNITS[u]
+}
+
+/** The hour as said with its noun: "une heure", "dix heures", 12 -> "midi", 0 -> "minuit". */
+export function hourWordsFr(h: number): string {
+  const x = ((Math.floor(h) % 24) + 24) % 24
+  if (x === 0) return 'minuit'
+  if (x === 12) return 'midi'
+  const t = x % 12
+  return FR_UNITS[t] + (t === 1 ? ' heure' : ' heures')
+}
+
+export function dayPartFr(h: number): 'nuit' | 'matin' | 'après-midi' | 'soir' {
+  const x = ((Math.floor(h) % 24) + 24) % 24
+  if (x < 5) return 'nuit'
+  if (x < 12) return 'matin'
+  if (x < 18) return 'après-midi'
+  return 'soir'
+}
+
+/** French spoken time: "dix heures", "dix heures cinq", "dix heures et quart", "dix heures et demie", "onze heures moins vingt",
+ * "onze heures moins le quart", "midi et demi". */
+export function timeWordsFr(hour: number, minute: number): TimeWords {
+  const h = ((Math.floor(hour) % 24) + 24) % 24
+  const m = Math.max(0, Math.min(59, Math.floor(minute)))
+  if (m > 30) {
+    const next = (h + 1) % 24
+    const left = 60 - m
+    return { text: hourWordsFr(next) + ' moins ' + (left === 15 ? 'le quart' : numberWordsFr(left)), part: dayPartFr(next) }
+  }
+  const base = hourWordsFr(h)
+  const part = dayPartFr(h)
+  if (m === 0) return { text: base, part }
+  if (m === 15) return { text: base + ' et quart', part }
+  // "demie" agrees with "heure(s)"; midi and minuit are masculine
+  if (m === 30) return { text: base + (h % 12 === 0 ? ' et demi' : ' et demie'), part }
+  return { text: base + ' ' + numberWordsFr(m), part }
+}
+
+const PT_UNITS = ['zero', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove', 'dez', 'onze', 'doze', 'treze', 'catorze', 'quinze', 'dezesseis', 'dezessete', 'dezoito', 'dezenove']
+const PT_HOURS = ['', 'uma', 'duas', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove', 'dez', 'onze']
+
+/** 0-59 in Brazilian Portuguese (minutes are masculine): 1 -> "um", 25 -> "vinte e cinco". */
+export function numberWordsPt(n: number): string {
+  n = Math.max(0, Math.min(59, Math.floor(n)))
+  if (n < 20) return PT_UNITS[n]
+  const tens = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta'][Math.floor(n / 10)]
+  return n % 10 === 0 ? tens : tens + ' e ' + PT_UNITS[n % 10]
+}
+
+/** The hour without its noun (feminine): 1 -> "uma", 2 -> "duas", 12 -> "meio-dia", 0 -> "meia-noite". */
+export function hourWordsPt(h: number): string {
+  const x = ((Math.floor(h) % 24) + 24) % 24
+  if (x === 0) return 'meia-noite'
+  if (x === 12) return 'meio-dia'
+  return PT_HOURS[x % 12]
+}
+
+export function dayPartPt(h: number): 'madrugada' | 'manhã' | 'tarde' | 'noite' {
+  const x = ((Math.floor(h) % 24) + 24) % 24
+  if (x < 5) return 'madrugada'
+  if (x < 12) return 'manhã'
+  if (x < 18) return 'tarde'
+  return 'noite'
+}
+
+/** "para a uma", "para o meio-dia", "para as onze". */
+const ptTo = (h: number) => {
+  const x = ((h % 24) + 24) % 24
+  return (x === 0 ? 'para a ' : x === 12 ? 'para o ' : x % 12 === 1 ? 'para a ' : 'para as ') + hourWordsPt(x)
+}
+
+/** Brazilian spoken time: "dez horas", "uma hora", "dez e cinco", "dez e quinze", "dez e meia", "vinte para as onze", "meio-dia e meia". */
+export function timeWordsPt(hour: number, minute: number): TimeWords {
+  const h = ((Math.floor(hour) % 24) + 24) % 24
+  const m = Math.max(0, Math.min(59, Math.floor(minute)))
+  if (m > 30) {
+    const next = (h + 1) % 24
+    return { text: numberWordsPt(60 - m) + ' ' + ptTo(next), part: dayPartPt(next) }
+  }
+  const base = hourWordsPt(h)
+  const part = dayPartPt(h)
+  if (m === 0) return { text: h % 12 === 0 ? base : base + (h % 12 === 1 ? ' hora' : ' horas'), part }
+  if (m === 30) return { text: base + ' e meia', part }
+  return { text: base + ' e ' + numberWordsPt(m), part }
+}
+
+/** The spoken time in the deck's language (English for any other value). */
+export function timeWordsIn(lang: string, hour: number, minute: number): TimeWords {
+  if (lang === 'vi') return timeWords(hour, minute)
+  if (lang === 'zh') return timeWordsZh(hour, minute)
+  if (lang === 'fr') return timeWordsFr(hour, minute)
+  if (lang === 'pt') return timeWordsPt(hour, minute)
+  return timeWordsEn(hour, minute)
+}

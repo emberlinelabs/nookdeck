@@ -210,7 +210,7 @@ func TestTrayPage(t *testing.T) {
 	if strings.Contains(TrayPage("en", "</script><b>", "x"), "</script><b>") {
 		t.Error("escape")
 	}
-	for _, l := range []string{"vi", "zh"} {
+	for _, l := range []string{"vi", "zh", "fr", "pt"} {
 		if TrayPage(l, "c", "m") == TrayPage("en", "c", "m") {
 			t.Errorf("%s not translated", l)
 		}

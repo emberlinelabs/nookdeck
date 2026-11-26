@@ -29,10 +29,41 @@ describe("t()", () => {
     expect(wmo(0).text).toBe("Trời quang");
     expect(windowLabel(300)).toBe("5 giờ");
     expect(classifyRisk("Bash", { command: "sudo ls" }).reason).toBe("dùng sudo");
-    I.setLanguage("fr");
+    I.setLanguage("de");
     expect(I.getLanguage()).toBe("en");
     expect(wmo(0).text).toBe("Clear sky");
     expect(windowLabel(300)).toBe("5 hours");
+  });
+  test("French and Portuguese (Brazilian) are extra languages too", () => {
+    I.setLanguage("fr");
+    expect(I.getLanguage()).toBe("fr");
+    expect(I.t("button {id} not found", { id: "p/x" })).toBe("bouton p/x introuvable");
+    expect(wmo(0).text).toBe("Ciel dégagé");
+    I.setLanguage("pt");
+    expect(I.getLanguage()).toBe("pt");
+    expect(I.t("button {id} not found", { id: "p/x" })).toBe("botão p/x não encontrado");
+    expect(windowLabel(300)).toBe("5 horas");
+    I.setLanguage("en");
+  });
+  test("a locale picks the language: fr*, pt* (pt-BR and pt-PT), vi*, zh*, else English", () => {
+    for (const [loc, want] of [["fr_FR.UTF-8", "fr"], ["fr-CA", "fr"], ["pt_BR.UTF-8", "pt"], ["pt-PT", "pt"], ["pt", "pt"], ["vi_VN", "vi"], ["zh_CN.UTF-8", "zh"], ["en_US.UTF-8", "en"], ["de_DE", "en"], ["C.UTF-8", "en"], ["POSIX", "en"], ["", "en"], [undefined, "en"], ["french", "en"]] as const) {
+      expect([loc, I.languageOfLocale(loc)]).toEqual([loc, want]);
+    }
+    expect(I.localeLanguage({ LC_ALL: "", LC_MESSAGES: "pt_BR.UTF-8", LANG: "fr_FR.UTF-8" })).toBe("pt");
+    expect(I.localeLanguage({ LC_ALL: "fr_FR.UTF-8", LANG: "vi_VN" })).toBe("fr");
+    expect(I.localeLanguage({ LANG: "fr_FR.UTF-8" })).toBe("fr");
+    expect(I.localeLanguage({})).toBe("en");
+  });
+  test("each extra table has every key of the others (no language misses a line)", () => {
+    const src = require("node:fs").readFileSync(join(import.meta.dir, "..", "src", "i18n.ts"), "utf8") as string;
+    const table = (name: string, next: string) => src.slice(src.indexOf(`const ${name}: Record`), src.indexOf(next));
+    const keys = (body: string) => new Set([...body.matchAll(/"((?:[^"\\]|\\.)+)":\s*"(?:[^"\\]|\\.)*"/g)].map((m) => m[1]!));
+    const t = { vi: keys(table("vi", "const zh: Record")), zh: keys(table("zh", "const fr: Record")), fr: keys(table("fr", "const pt: Record")), pt: keys(table("pt", "const DICTS")) };
+    const all = new Set(Object.values(t).flatMap((s) => [...s]));
+    expect(all.size).toBeGreaterThan(250);
+    for (const [lang, set] of Object.entries(t)) expect({ lang, missing: [...all].filter((k) => !set.has(k)) }).toEqual({ lang, missing: [] });
+    // no em dash in any translation
+    expect(src.slice(src.indexOf("const vi: Record"), src.indexOf("const DICTS"))).not.toContain("\u2014");
   });
   test("every Vietnamese entry keeps the placeholders of its English key", () => {
     const src = require("node:fs").readFileSync(join(import.meta.dir, "..", "src", "i18n.ts"), "utf8") as string;

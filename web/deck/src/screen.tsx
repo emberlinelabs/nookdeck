@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { t, getLang } from './i18n'
 import { Icon } from './icon'
-import { timeWords, timeWordsEn } from './clock-words'
+import { timeWordsIn } from './clock-words'
 import { NOSLEEP_MP4 } from './nosleep-video'
 import { audioState, playAlarm, previewSound, unlockAudio } from './alarm-sound'
 import { active, alarmsOn, headerMode, deviceId, dimLevel, inDimWindow, keepAwakeOn, liteOn, localScreen, markFired, myAlarms, nightDimOn, shiftOn, onLocalScreen, pad2, RING_MS, saveLocalScreen, standbyCfg, sunriseColor, upcoming, type Due } from './screen-logic'
@@ -16,9 +16,16 @@ const PV_ALARM: Alarm = { id: 'pv', time: '07:00', enabled: true, sound: 'chime'
 const DAYS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const DAYS_VI = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']
+const DAYS_FR = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.']
+const MONTHS_FR = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
+const DAYS_PT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
+const MONTHS_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+const shortDay = (d: Date) => (getLang() === 'vi' ? DAYS_VI : getLang() === 'fr' ? DAYS_FR : getLang() === 'pt' ? DAYS_PT : DAYS_EN)[d.getDay()]
 
 function dateText(d: Date): string {
   if (getLang() === 'vi') return DAYS_VI[d.getDay()] + ', ' + d.getDate() + '/' + (d.getMonth() + 1)
+  if (getLang() === 'fr') return DAYS_FR[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS_FR[d.getMonth()]
+  if (getLang() === 'pt') return DAYS_PT[d.getDay()] + ', ' + d.getDate() + ' de ' + MONTHS_PT[d.getMonth()]
   return DAYS_EN[d.getDay()] + ', ' + MONTHS_EN[d.getMonth()] + ' ' + d.getDate()
 }
 
@@ -47,7 +54,7 @@ function nextText(due: Due | undefined, now: number): string {
   if (!due) return ''
   const d = new Date(due.at)
   const sameDay = new Date(now).toDateString() === d.toDateString()
-  return t('Alarm') + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + (sameDay ? '' : ' · ' + (getLang() === 'vi' ? DAYS_VI[d.getDay()] : DAYS_EN[d.getDay()]))
+  return t('Alarm') + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + (sameDay ? '' : ' · ' + shortDay(d))
 }
 
 export interface ScreenLayerProps {
@@ -259,7 +266,7 @@ export function ScreenLayer(props: ScreenLayerProps) {
   const nx = showNext ? nextText(upcoming(mine, now)[0], now) : ''
   const mm = d.getMinutes()
   const drift = { transform: 'translate(' + ((mm % 5) - 2) + 'px,' + ((Math.floor(mm / 5) % 5) - 2) + 'px)', WebkitTransform: 'translate(' + ((mm % 5) - 2) + 'px,' + ((Math.floor(mm / 5) % 5) - 2) + 'px)' }
-  const words = getLang() === 'vi' ? timeWords(d.getHours(), mm) : timeWordsEn(d.getHours(), mm)
+  const words = getLang() === 'zh' ? timeWordsIn('en', d.getHours(), mm) : timeWordsIn(getLang(), d.getHours(), mm)
 
   const al = cur ? cur.alarm : null
   const lite = liteOn(s)

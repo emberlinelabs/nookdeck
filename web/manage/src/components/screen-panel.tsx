@@ -23,7 +23,12 @@ const newId = () => `al-${Math.random().toString(36).slice(2, 8)}`;
 /** Monday first; the stored value is 0=Sun..6=Sat. */
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 const DAYS_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const DAYS_VI = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+const DAYS: { [lang: string]: string[] } = {
+  vi: ["CN", "T2", "T3", "T4", "T5", "T6", "T7"],
+  zh: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
+  fr: ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"],
+  pt: ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"],
+};
 const SOUNDS: { value: AlarmSoundId; label: string }[] = [
   { value: "chime", label: "Chime" }, { value: "birds", label: "Birds" }, { value: "soft", label: "Gentle" }, { value: "none", label: "Silent" },
 ];
@@ -80,7 +85,7 @@ function AlarmCard({ alarm, devices, onChange, onDelete }: { alarm: Alarm; devic
     for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
     onChange(next as unknown as Alarm);
   };
-  const names = getLanguage() === "vi" ? DAYS_VI : DAYS_EN;
+  const names = DAYS[getLanguage()] ?? DAYS_EN;
   const days = alarm.days ?? [];
   const chosen = alarm.devices ?? [];
   const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);

@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/knowns/select";
 import { Spinner } from "@/components/ui/knowns/spinner";
 import { ApiError, api } from "@/api";
 import { QrCode } from "@/components/qr";
-import { getLanguage, t, useLanguage } from "@/lib/i18n";
+import { getLanguage, localeTag, t, useLanguage } from "@/lib/i18n";
 import type { DeviceInfo, PairAddress, PairAddressKind, Pairing } from "@/types";
 
 const ADDRESS_KEY = "nookdeck.pairAddress";
@@ -32,7 +32,7 @@ function readSaved(): string | null {
 function when(iso?: string | number): string {
   if (!iso) return t("never");
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleString(getLanguage() === "vi" ? "vi-VN" : getLanguage() === "zh" ? "zh-CN" : undefined);
+  return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleString(getLanguage() === "en" ? undefined : localeTag());
 }
 
 export function DevicesPanel() {

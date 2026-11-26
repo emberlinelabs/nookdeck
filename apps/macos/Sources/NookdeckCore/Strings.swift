@@ -1,21 +1,23 @@
 import Foundation
 
-/// en / vi / zh copy from apps/shared/strings.json ({_meta, en, vi, zh}; flat keys like menu.pair; {name} placeholders;
+/// en / vi / zh / fr / pt copy from apps/shared/strings.json ({_meta, en, vi, zh, fr, pt}; pt is Brazilian Portuguese; flat keys like menu.pair; {name} placeholders;
 /// plurals menu.phones.none / .one / .other). The build copies the file into the app's Resources; a missing key falls back
 /// to English, then to the key itself, so a gap shows up as text and never as a crash.
 public final class Strings {
-    public enum Lang: String, CaseIterable { case en, vi, zh }
+    public enum Lang: String, CaseIterable { case en, vi, zh, fr, pt }
 
     private var tables: [Lang: [String: String]] = [:]
 
     public init(json: Data? = nil) { if let json { load(json: json) } }
 
-    /// The language to use for a list of preferred languages (Locale.preferredLanguages): vi, zh-* or English.
+    /// The language to use for a list of preferred languages (Locale.preferredLanguages): vi, zh-*, fr-*, pt-* (pt-BR and pt-PT) or English.
     public static func pick(_ preferred: [String]) -> Lang {
         for p in preferred {
             let l = p.lowercased()
             if l.hasPrefix("vi") { return .vi }
             if l.hasPrefix("zh") { return .zh }
+            if l.hasPrefix("fr") { return .fr }
+            if l.hasPrefix("pt") { return .pt }
             if l.hasPrefix("en") { return .en }
         }
         return .en

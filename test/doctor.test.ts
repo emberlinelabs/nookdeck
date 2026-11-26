@@ -222,11 +222,13 @@ describe("text output and language", () => {
     const i18n = require("node:fs").readFileSync(join(import.meta.dir, "..", "src", "i18n.ts"), "utf8") as string;
     const keys = [...src.matchAll(/\bt\("((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]!).concat([...src.matchAll(/why: "([^"]+)"/g)].map((m) => m[1]!));
     expect(keys.length).toBeGreaterThan(50);
-    // each language table on its own: a key present in vi only must not hide a missing zh line
+    // each language table on its own: a key present in vi only must not hide a missing zh, fr or pt line
     const table = (name: string, next: string) => i18n.slice(i18n.indexOf(`const ${name}: Record`), i18n.indexOf(next));
-    const tables = { vi: table("vi", "const zh: Record"), zh: table("zh", "const DICTS") };
+    const tables = { vi: table("vi", "const zh: Record"), zh: table("zh", "const fr: Record"), fr: table("fr", "const pt: Record"), pt: table("pt", "const DICTS") };
     expect(tables.vi.length).toBeGreaterThan(1000);
     expect(tables.zh.length).toBeGreaterThan(1000);
+    expect(tables.fr.length).toBeGreaterThan(1000);
+    expect(tables.pt.length).toBeGreaterThan(1000);
     for (const [lang, body] of Object.entries(tables)) {
       const missing = keys.filter((k) => !body.includes(`"${k.replace(/"/g, '\\"')}":`));
       expect({ lang, missing }).toEqual({ lang, missing: [] });

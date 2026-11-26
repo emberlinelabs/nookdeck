@@ -11,7 +11,7 @@ import { Spinner } from "@/components/ui/knowns/spinner";
 import { AppList } from "@/components/app-picker";
 import { CatalogGlyph, Icon, ItemIcon, LobeGlyph } from "@/components/icon";
 import { useCatalog } from "@/lib/icon-data";
-import { getLanguage, t, useLanguage } from "@/lib/i18n";
+import { getLanguage, localeTag, t, useLanguage } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 const isIconName = (v: string): boolean => isIconNameGuard(v);
@@ -23,7 +23,7 @@ const EMOJI_GROUP_EN: Record<string, string> = {
   activities: "Activities", objects: "Objects", symbols: "Symbols & signs", flags: "Flags",
 };
 const cmp = (a: string, b: string) => a.localeCompare(b, getLanguage());
-const numLocale = () => (getLanguage() === "vi" ? "vi-VN" : getLanguage() === "zh" ? "zh-CN" : "en-US");
+const numLocale = () => localeTag();
 
 type Tab = "icon" | "brand" | "lobe" | "emoji" | "app" | "img";
 const TABS: { value: Tab; label: string }[] = [

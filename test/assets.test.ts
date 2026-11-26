@@ -119,6 +119,15 @@ test("forbidden page: language choice and escaping of the port", async () => {
   expect(pickLanguage(undefined, "vi-VN,vi;q=0.9,en;q=0.8")).toBe("vi");
   expect(pickLanguage(undefined, "en-US,en;q=0.9,vi;q=0.1")).toBe("en");
   expect(pickLanguage(undefined, null)).toBe("en");
+  expect(pickLanguage("fr", "en-US")).toBe("fr");
+  expect(pickLanguage("pt", null)).toBe("pt");
+  expect(pickLanguage("toString", null)).toBe("en");
+  expect(pickLanguage(undefined, "fr-FR,fr;q=0.9,en;q=0.8")).toBe("fr");
+  expect(pickLanguage(undefined, "pt-BR,pt;q=0.9")).toBe("pt");
+  expect(pickLanguage(undefined, "pt-PT")).toBe("pt");
+  expect(pickLanguage(undefined, "en-US,fr;q=0.5")).toBe("en");
+  expect(forbiddenPage(7420, "fr")).toContain('lang="fr"');
+  expect(forbiddenPage(7420, "pt")).toContain('lang="pt-BR"');
   expect(wantsPage("GET", "/manage/")).toBe(true);
   expect(wantsPage("GET", "/api/layout")).toBe(false);
   expect(wantsPage("POST", "/manage/")).toBe(false);

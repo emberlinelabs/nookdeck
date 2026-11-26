@@ -9,11 +9,12 @@ describe("the demo's tile page: the message", () => {
   test("only the exact shape is taken", () => {
     expect(asTileMessage(msg)).toEqual(msg as any);
     expect(asTileMessage({ ...msg, style: "big", theme: "dev.nookdeck.nookdeck", mode: "light", lang: "zh" })).not.toBeNull();
+    for (const lang of ["fr", "pt"]) expect(asTileMessage({ ...msg, lang })).not.toBeNull();
     expect(asTileMessage({ ...msg, theme: { accent: "#fff" }, style: undefined })).not.toBeNull();
     expect(asTileMessage({ ...msg, data: null })).not.toBeNull(); // judged by the validators: an error tile
     for (const bad of [null, "x", [], { ...msg, type: "nd-demo" }, { ...msg, render: 1 }, { type: "nookdeck-tile", render: "stat", w: 2, h: 2 },
       { ...msg, w: 0 }, { ...msg, h: 1.5 }, { ...msg, w: 25 }, { ...msg, w: "2" }, { ...msg, extra: 1 }, { ...msg, style: 1 }, { ...msg, theme: 5 }, { ...msg, theme: [] },
-      { ...msg, mode: "auto" }, { ...msg, lang: "fr" }]) expect(asTileMessage(bad)).toBeNull();
+      { ...msg, mode: "auto" }, { ...msg, lang: "de" }]) expect(asTileMessage(bad)).toBeNull();
   });
   test("data goes through the agent's checks, then the deck's", () => {
     expect(tileEntry("stat", { value: 12, junk: 1 })).toMatchObject({ render: "stat", data: { value: 12 } });

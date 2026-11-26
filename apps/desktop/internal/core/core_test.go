@@ -22,7 +22,7 @@ func TestLanguagesAreComplete(t *testing.T) {
 	if len(en) < 60 {
 		t.Fatalf("english has only %d keys", len(en))
 	}
-	for _, l := range []string{"vi", "zh"} {
+	for _, l := range []string{"vi", "zh", "fr", "pt"} {
 		have := map[string]bool{}
 		for _, k := range Keys(l) {
 			have[k] = true
@@ -33,8 +33,16 @@ func TestLanguagesAreComplete(t *testing.T) {
 			}
 		}
 	}
-	if Lang("vi-VN") != "vi" || Lang("zh-Hans-CN") != "zh" || Lang("en_US") != "en" || Lang("fr-FR") != "en" || Lang("") != "en" {
-		t.Error("Lang mapping")
+	for loc, want := range map[string]string{"vi-VN": "vi", "zh-Hans-CN": "zh", "en_US": "en", "fr-FR": "fr", "fr_CA.UTF-8": "fr", "pt-BR": "pt", "pt_BR.UTF-8": "pt", "pt-PT": "pt", "de-DE": "en", "": "en"} {
+		if got := Lang(loc); got != want {
+			t.Errorf("Lang(%q) = %q, want %q", loc, got, want)
+		}
+	}
+	if Phones("fr", 0) != "Aucun téléphone connecté" || Phones("fr", 1) != "1 téléphone connecté" || Phones("fr", 3) != "3 téléphones connectés" {
+		t.Error("fr plurals")
+	}
+	if Phones("pt", 1) != "1 celular conectado" || Phones("pt", 3) != "3 celulares conectados" || T("pt", "menu.version", "version", "1.2.3") != "Versão 1.2.3" {
+		t.Error("pt plurals")
 	}
 	if got := T("vi", "menu.version", "version", "1.2.3"); got != "Phiên bản 1.2.3" {
 		t.Errorf("vi version: %q", got)
@@ -327,7 +335,7 @@ func TestPairServer(t *testing.T) {
 }
 
 func TestPairPageEscapes(t *testing.T) {
-	for _, l := range []string{"en", "vi", "zh"} {
+	for _, l := range []string{"en", "vi", "zh", "fr", "pt"} {
 		if p := PairPage(l); strings.Contains(p, "__TX__") || strings.Contains(p, "__LANG__") || !strings.Contains(p, "pair.title") {
 			t.Errorf("%s: placeholders left", l)
 		}

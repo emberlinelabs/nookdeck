@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-// Every message the Linux platform code shows (through t()) has a Vietnamese and a Chinese line, checked per table so a key
+// Every message the Linux platform code shows (through t()) has a Vietnamese, Chinese, French and Portuguese line, checked per table so a key
 // present in one language cannot hide a missing line in the other (the same rule test/doctor.test.ts applies to doctor.ts).
-test("every t() key in src/platform/linux*.ts is in the vi and zh tables", () => {
+test("every t() key in src/platform/linux*.ts is in the vi, zh, fr and pt tables", () => {
   const dir = join(import.meta.dir, "..", "src", "platform");
   const files = readdirSync(dir).filter((f) => /^linux.*\.ts$/.test(f));
   expect(files.length).toBeGreaterThan(3);
@@ -16,7 +16,7 @@ test("every t() key in src/platform/linux*.ts is in the vi and zh tables", () =>
   expect(keys.size).toBeGreaterThan(5);
   const i18n = readFileSync(join(import.meta.dir, "..", "src", "i18n.ts"), "utf8");
   const table = (name: string, next: string) => i18n.slice(i18n.indexOf(`const ${name}: Record`), i18n.indexOf(next));
-  const tables = { vi: table("vi", "const zh: Record"), zh: table("zh", "const DICTS") };
+  const tables = { vi: table("vi", "const zh: Record"), zh: table("zh", "const fr: Record"), fr: table("fr", "const pt: Record"), pt: table("pt", "const DICTS") };
   for (const [lang, body] of Object.entries(tables)) {
     const missing = [...keys].filter((k) => !body.includes(`"${k}":`));
     expect({ lang, missing }).toEqual({ lang, missing: [] });

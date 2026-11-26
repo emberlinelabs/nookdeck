@@ -1,5 +1,5 @@
 import markSvg from "../docs/brand/nookdeck-mark.svg" with { type: "text" };
-import type { Language } from "./i18n";
+import { languageOfLocale, type Language } from "./i18n";
 
 const TEXT: Record<Language, { title: string; lead: string; open: string; back: string; lang: string }> = {
   en: {
@@ -23,13 +23,26 @@ const TEXT: Record<Language, { title: string; lead: string; open: string; back: 
     back: "返回手机控制面板",
     lang: "zh",
   },
+  fr: {
+    title: "La page de gestion ne s'ouvre que sur l'ordinateur",
+    lead: "Par sécurité, la page de gestion de Nookdeck ne s'ouvre que sur l'ordinateur où il tourne.",
+    open: "Ouvrez cette adresse sur cet ordinateur :",
+    back: "Retour au panneau du téléphone",
+    lang: "fr",
+  },
+  pt: {
+    title: "A página de gerenciamento só abre no computador",
+    lead: "Por segurança, a página de gerenciamento do Nookdeck só abre no computador em que ele está rodando.",
+    open: "Abra este endereço nesse computador:",
+    back: "Voltar ao painel do celular",
+    lang: "pt-BR",
+  },
 };
 
 /** The language of the page: the saved theme language when there is one, else the browser's Accept-Language. */
 export function pickLanguage(themeLanguage: unknown, acceptLanguage: string | null): Language {
-  if (themeLanguage === "vi" || themeLanguage === "en" || themeLanguage === "zh") return themeLanguage;
-  if (/^\s*zh(-|;|,|$)/i.test(acceptLanguage ?? "")) return "zh";
-  return /^\s*vi(-|;|,|$)/i.test(acceptLanguage ?? "") ? "vi" : "en"; // the first (preferred) language
+  if (typeof themeLanguage === "string" && Object.hasOwn(TEXT, themeLanguage)) return themeLanguage as Language;
+  return languageOfLocale((acceptLanguage ?? "").split(/[,;]/)[0]); // the first (preferred) language: fr-CA, pt-PT and pt-BR count too
 }
 
 /** A request for a page (not the JSON API) that the localhost guard refused. */

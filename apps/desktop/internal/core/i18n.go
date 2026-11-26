@@ -36,7 +36,7 @@ func load() {
 	}
 }
 
-// Lang maps a locale name (vi-VN, zh-Hans-CN, en_US, "") to one of en, vi, zh.
+// Lang maps a locale name (vi-VN, zh-Hans-CN, fr_FR.UTF-8, pt-BR, pt-PT, en_US, "") to one of en, vi, zh, fr, pt (pt is Brazilian Portuguese).
 func Lang(locale string) string {
 	l := strings.ToLower(locale)
 	switch {
@@ -44,6 +44,10 @@ func Lang(locale string) string {
 		return "vi"
 	case strings.HasPrefix(l, "zh"):
 		return "zh"
+	case strings.HasPrefix(l, "fr"):
+		return "fr"
+	case strings.HasPrefix(l, "pt"):
+		return "pt"
 	}
 	return "en"
 }
@@ -75,7 +79,7 @@ func Phones(lang string, n int) string {
 	return T(lang, "menu.phones.other", "count", strconv.Itoa(n))
 }
 
-// Keys lists the keys of a language (tests check that vi and zh are complete).
+// Keys lists the keys of a language (tests check that vi, zh, fr and pt are complete).
 func Keys(lang string) []string {
 	load()
 	out := make([]string, 0, len(table[lang]))

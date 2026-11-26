@@ -10,7 +10,7 @@ import { Dialog } from "@/components/ui/knowns/dialog";
 import { Spinner } from "@/components/ui/knowns/spinner";
 import { Switch } from "@/components/ui/knowns/switch";
 import { ApiError, api } from "@/api";
-import { getLanguage, t, useLanguage } from "@/lib/i18n";
+import { localeTag, t, useLanguage } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { AiProvider, Integration } from "@/types";
 
@@ -81,7 +81,7 @@ const SPECIAL: Partial<Record<AiProvider, { label: string; hint: string; title: 
 function when(iso?: string): string | undefined {
   if (!iso) return undefined;
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? undefined : d.toLocaleTimeString(getLanguage() === "vi" ? "vi-VN" : getLanguage() === "zh" ? "zh-CN" : "en-US", { hour: "2-digit", minute: "2-digit" });
+  return Number.isNaN(d.getTime()) ? undefined : d.toLocaleTimeString(localeTag(), { hour: "2-digit", minute: "2-digit" });
 }
 
 /** Read-only quota bars, one per window. Plain markup: no extra component needed. */

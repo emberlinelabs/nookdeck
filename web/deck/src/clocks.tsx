@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { getLang } from './i18n'
 import { t } from './i18n'
-import { timeWords, timeWordsEn, timeWordsZh } from './clock-words'
+import { timeWordsIn } from './clock-words'
 import { AnimatedNumber, reducedMotion } from './knowns'
 import { tint } from './theme'
 import type { ClockOptions } from './types'
 
 /**
  * Clock widget styles: digital (AnimatedNumber rolling digits), flip (split-flap cards), analog (SVG dial + hands),
- * minimal, word (Vietnamese words, see clock-words.ts) and world (local time + up to 4 IANA zones via Intl.DateTimeFormat).
+ * minimal, word (spoken time in the deck language, see clock-words.ts) and world (local time + up to 4 IANA zones via Intl.DateTimeFormat).
  * Safari 12: no ?. / ??, flex gap, clamp(); keyframes are -webkit- prefixed; the dial hands are HTML elements (CSS transforms on SVG are unreliable).
  */
 
@@ -27,6 +27,10 @@ export interface ClockProps {
 const WEEKDAY_VI = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']
 const WEEKDAY_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const WEEKDAY_ZH = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+const WEEKDAY_FR = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi']
+const MONTH_FR = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
+const WEEKDAY_PT = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado']
+const MONTH_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const MONTH_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const pad2 = (n: number) => (n < 10 ? '0' : '') + n
 const fit = (chars: number, avail: number, max: number, min: number) => Math.max(min, Math.min(max, Math.floor(avail / (Math.max(1, chars) * 0.62))))
@@ -85,6 +89,35 @@ const CITY: { [k: string]: string } = {
   Phnom_Penh: 'Phnom Penh',
 }
 
+/** French and Brazilian names where they differ from the English one. */
+const CITY_FR: { [k: string]: string } = {
+  Ho_Chi_Minh: 'Hô Chi Minh-Ville',
+  Saigon: 'Hô Chi Minh-Ville',
+  Hanoi: 'Hanoï',
+  London: 'Londres',
+  Moscow: 'Moscou',
+  Beijing: 'Pékin',
+  Seoul: 'Séoul',
+  Singapore: 'Singapour',
+  Dubai: 'Dubaï',
+  Kolkata: 'Calcutta',
+}
+const CITY_PT: { [k: string]: string } = {
+  Ho_Chi_Minh: 'Ho Chi Minh',
+  Saigon: 'Ho Chi Minh',
+  Hanoi: 'Hanói',
+  London: 'Londres',
+  Berlin: 'Berlim',
+  Moscow: 'Moscou',
+  Shanghai: 'Xangai',
+  Beijing: 'Pequim',
+  Tokyo: 'Tóquio',
+  Seoul: 'Seul',
+  Singapore: 'Singapura',
+  Kolkata: 'Calcutá',
+  New_York: 'Nova York',
+}
+
 const CITY_ZH: { [k: string]: string } = {
   Ho_Chi_Minh: '胡志明市',
   Saigon: '胡志明市',
@@ -113,7 +146,8 @@ const CITY_ZH: { [k: string]: string } = {
 export function cityName(tz: string): string {
   const last = tz.split('/').pop() || tz
   if (getLang() === 'zh') return CITY_ZH[last] || last.replace(/_/g, ' ')
-  return (getLang() === 'vi' && CITY[last]) || last.replace(/_/g, ' ')
+  const names = getLang() === 'vi' ? CITY : getLang() === 'fr' ? CITY_FR : getLang() === 'pt' ? CITY_PT : null
+  return (names && names[last]) || last.replace(/_/g, ' ')
 }
 
 const hour12Of = (h: number) => h % 12 || 12
@@ -122,7 +156,11 @@ const dateText = (p: Parts) =>
     ? p.mo + '月' + p.d + '日 ' + WEEKDAY_ZH[p.wd]
     : getLang() === 'vi'
       ? WEEKDAY_VI[p.wd] + ', ' + p.d + ' tháng ' + p.mo
-      : WEEKDAY_EN[p.wd] + ', ' + MONTH_EN[p.mo - 1] + ' ' + p.d
+      : getLang() === 'fr'
+        ? WEEKDAY_FR[p.wd] + ' ' + p.d + ' ' + MONTH_FR[p.mo - 1]
+        : getLang() === 'pt'
+          ? WEEKDAY_PT[p.wd] + ', ' + p.d + ' de ' + MONTH_PT[p.mo - 1]
+          : WEEKDAY_EN[p.wd] + ', ' + MONTH_EN[p.mo - 1] + ' ' + p.d
 
 function useNow() {
   const [now, setNow] = useState(() => new Date())
@@ -245,7 +283,7 @@ function Minimal(s: Sub) {
 
 /** word: "half past ten" / "mười giờ rưỡi" (rules in clock-words.ts). */
 function Words(s: Sub) {
-  const w = getLang() === 'zh' ? timeWordsZh(s.p.h, s.p.m) : getLang() === 'vi' ? timeWords(s.p.h, s.p.m) : timeWordsEn(s.p.h, s.p.m)
+  const w = timeWordsIn(getLang(), s.p.h, s.p.m)
   const cap = Math.round(s.th * 0.11)
   const showPart = s.th >= 90
   const areaW = s.tw - 28

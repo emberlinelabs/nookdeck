@@ -6,7 +6,7 @@ import { hookSecretPath, runHook } from "./permissions";
 import { runAskHook } from "./questions";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { t } from "./i18n";
+import { localeLanguage, setLanguage, t } from "./i18n";
 import { platform } from "./platform";
 import pkg from "../package.json" with { type: "json" };
 
@@ -175,6 +175,7 @@ if (argv[0] === "hooks") {
 // `nookdeck doctor [--port N] [--open <id>] [--request <id>] [--json]`: what the OS lets Nookdeck do. macOS ties permissions
 // to the process that asks, so the checks run inside the running agent (GET /api/doctor); only without an agent do they run here.
 if (argv[0] === "doctor") {
+  setLanguage(localeLanguage()); // headings and a report made here follow the terminal's locale; the agent's report comes in its layout language
   const d = await import("./doctor");
   const flag = (name: string) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
   const port = argv.includes("--port") || argv.some((a) => a.startsWith("--port=")) ? parsePort(argv) : Number(process.env.NOOKDECK_PORT) || 7420;
