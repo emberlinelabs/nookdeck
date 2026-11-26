@@ -177,3 +177,100 @@ final class QRTests: XCTestCase {
         XCTAssertNil(qrImage(""))
     }
 }
+
+final class SelfUpdateTests: XCTestCase {
+    func release(_ tag: String, assets: [String]) -> Data {
+        let a = assets.map { ["name": $0, "browser_download_url": "https://example.test/\(tag)/\($0)"] }
+        return try! JSONSerialization.data(withJSONObject: ["tag_name": tag, "assets": a])
+    }
+
+    func testNewerReleaseWithBothFiles() {
+        let r = AppRelease.newer(json: release("v0.5.3", assets: ["Nookdeck.dmg", "Nookdeck.dmg.sha256", "SHA256SUMS"]), current: "0.5.2")
+        XCTAssertEqual(r?.version, "0.5.3")
+        XCTAssertEqual(r?.dmg.absoluteString, "https://example.test/v0.5.3/Nookdeck.dmg")
+        XCTAssertEqual(r?.sha256.absoluteString, "https://example.test/v0.5.3/Nookdeck.dmg.sha256")
+    }
+
+    func testNoReleaseWhenSameOlderOrMissingFiles() {
+        XCTAssertNil(AppRelease.newer(json: release("v0.5.3", assets: ["Nookdeck.dmg", "Nookdeck.dmg.sha256"]), current: "0.5.3"))
+        XCTAssertNil(AppRelease.newer(json: release("v0.5.1", assets: ["Nookdeck.dmg", "Nookdeck.dmg.sha256"]), current: "0.5.3"))
+        XCTAssertNil(AppRelease.newer(json: release("v0.6.0", assets: ["Nookdeck.dmg"]), current: "0.5.3"))
+        XCTAssertNil(AppRelease.newer(json: Data("nope".utf8), current: "0.5.3"))
+    }
+
+    func testDigestLine() {
+        let h = String(repeating: "aB", count: 32)
+        XCTAssertEqual(SelfUpdate.expectedDigest("\(h)  Nookdeck.dmg\n"), h.lowercased())
+        XCTAssertNil(SelfUpdate.expectedDigest("abc  Nookdeck.dmg"))
+        XCTAssertNil(SelfUpdate.expectedDigest(""))
+        XCTAssertNil(SelfUpdate.expectedDigest(String(repeating: "z", count: 64)))
+    }
+
+    func testReplaceableOnlyFromARealAppOnDisk() {
+        XCTAssertTrue(SelfUpdate.replaceable(bundlePath: "/Applications/Nookdeck.app"))
+        XCTAssertTrue(SelfUpdate.replaceable(bundlePath: "/Users/me/Applications/Nookdeck.app"))
+        XCTAssertFalse(SelfUpdate.replaceable(bundlePath: "/Volumes/Nookdeck/Nookdeck.app"))
+        XCTAssertFalse(SelfUpdate.replaceable(bundlePath: "/private/var/folders/x/AppTranslocation/ABC/d/Nookdeck.app"))
+        XCTAssertFalse(SelfUpdate.replaceable(bundlePath: "/Users/me/src/apps/macos/.build/debug"))
+    }
+
+    /// The swap script against a fake app, with `open` stubbed out: the new bundle replaces the old, the work dir goes.
+    func testSwapScriptReplacesTheBundle() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("nd-swap-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: root) }
+        let target = root.appendingPathComponent("Apps/Nookdeck.app"), work = root.appendingPathComponent("work")
+        let staged = work.appendingPathComponent("Nookdeck.app"), bin = root.appendingPathComponent("bin"), log = root.appendingPathComponent("update.log")
+        for d in [target, staged, bin] { try fm.createDirectory(at: d, withIntermediateDirectories: true) }
+        try "old".write(to: target.appendingPathComponent("v"), atomically: true, encoding: .utf8)
+        try "new".write(to: staged.appendingPathComponent("v"), atomically: true, encoding: .utf8)
+        let stub = bin.appendingPathComponent("open")
+        try "#!/bin/sh\necho \"opened $1\"\n".write(to: stub, atomically: true, encoding: .utf8)
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/sh")
+        p.arguments = ["-c", SelfUpdate.swapScript, "sh", "999999", target.path, staged.path, work.path, log.path]
+        p.environment = ["PATH": "\(bin.path):/usr/bin:/bin"]
+        try p.run()
+        p.waitUntilExit()
+
+        XCTAssertEqual(p.terminationStatus, 0)
+        XCTAssertEqual(try String(contentsOf: target.appendingPathComponent("v"), encoding: .utf8), "new")
+        XCTAssertFalse(fm.fileExists(atPath: target.path + ".old"))
+        XCTAssertFalse(fm.fileExists(atPath: work.path))
+        let out = try String(contentsOf: log, encoding: .utf8)
+        XCTAssertTrue(out.contains("replaced"), out)
+        XCTAssertTrue(out.contains("opened \(target.path)"), out)
+    }
+
+    /// An app that never quits is left alone: no swap, no open, the download is removed. (Waits the full 20 s.)
+    func testSwapScriptLeavesARunningAppAlone() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("nd-swap-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: root) }
+        let target = root.appendingPathComponent("Apps/Nookdeck.app"), work = root.appendingPathComponent("work")
+        let staged = work.appendingPathComponent("Nookdeck.app"), bin = root.appendingPathComponent("bin"), log = root.appendingPathComponent("update.log")
+        for d in [target, staged, bin] { try fm.createDirectory(at: d, withIntermediateDirectories: true) }
+        try "old".write(to: target.appendingPathComponent("v"), atomically: true, encoding: .utf8)
+        try "new".write(to: staged.appendingPathComponent("v"), atomically: true, encoding: .utf8)
+        let stub = bin.appendingPathComponent("open")
+        try "#!/bin/sh\necho \"opened $1\"\n".write(to: stub, atomically: true, encoding: .utf8)
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/sh")
+        // the test process itself plays the app that does not quit
+        p.arguments = ["-c", SelfUpdate.swapScript, "sh", String(ProcessInfo.processInfo.processIdentifier), target.path, staged.path, work.path, log.path]
+        p.environment = ["PATH": "\(bin.path):/usr/bin:/bin"]
+        try p.run()
+        p.waitUntilExit()
+
+        XCTAssertEqual(p.terminationStatus, 1)
+        XCTAssertEqual(try String(contentsOf: target.appendingPathComponent("v"), encoding: .utf8), "old")
+        XCTAssertFalse(fm.fileExists(atPath: work.path))
+        let out = try String(contentsOf: log, encoding: .utf8)
+        XCTAssertTrue(out.contains("still running"), out)
+        XCTAssertFalse(out.contains("opened"), out)
+    }
+}

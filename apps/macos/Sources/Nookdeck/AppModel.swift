@@ -17,7 +17,8 @@ final class AppModel: ObservableObject {
     @Published var pairingFailed = false
     @Published var doctor: DoctorReport?
     @Published var update: UpdateInfo?
-    @Published var appUpdate: String?
+    @Published var appRelease: AppRelease?
+    var appUpdate: String? { appRelease?.version }
     @Published var updateNote: String?
     @Published var checkingUpdates = false
     @Published var busy: String?          // a status key while an action runs
@@ -28,6 +29,7 @@ final class AppModel: ObservableObject {
     private var busyInstall = false
     private var tick = 0
     private var polling: Task<Void, Never>?
+    private var alerted: Set<String> = []   // versions already offered this run, so the hourly check does not ask again
 
     var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0" }
 
@@ -154,23 +156,65 @@ final class AppModel: ObservableObject {
         defer { checkingUpdates = false }
         do { update = try await api.update(refresh: force); updateNote = nil }
         catch { if force { updateNote = t("error.updateCheckFailed") } }
-        appUpdate = await newerAppRelease()
+        appRelease = await newerAppRelease()
+        if let r = appRelease, !config.sandbox, force || (!alerted.contains(r.version) && UserDefaults.standard.string(forKey: Self.skippedKey) != r.version) {
+            alerted.insert(r.version)
+            promptAppUpdate(r)
+        }
         if force && updateNote == nil && update?.available != true && appUpdate == nil { updateNote = t("menu.upToDate", ["version": appVersion]) }
         if force, updateNote != nil { // the answer replaces the menu item for a few seconds, then it is the button again
             Task { try? await Task.sleep(nanoseconds: 6_000_000_000); updateNote = nil }
         }
     }
 
-    /// The newest GitHub release when it is newer than this app (the dmg is downloaded by hand: no Sparkle without a Developer ID).
-    func newerAppRelease() async -> String? {
+    /// The newest GitHub release when it is newer than this app and has the dmg and its checksum.
+    func newerAppRelease() async -> AppRelease? {
         let urlString = ProcessInfo.processInfo.environment["NOOKDECK_APP_RELEASES_URL"] ?? "https://api.github.com/repos/howznguyen/nookdeck/releases/latest"
         guard let url = URL(string: urlString) else { return nil }
         var r = URLRequest(url: url)
         r.setValue("application/vnd.github+json", forHTTPHeaderField: "accept")
         r.timeoutInterval = 8
-        guard let (d, resp) = try? await URLSession.shared.data(for: r), (resp as? HTTPURLResponse)?.statusCode == 200,
-              let tag = (try? JSONSerialization.jsonObject(with: d) as? [String: Any])?["tag_name"] as? String else { return nil }
-        return Version.compare(tag, appVersion) > 0 ? Version.bare(tag) : nil
+        guard let (d, resp) = try? await URLSession.shared.data(for: r), (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return AppRelease.newer(json: d, current: appVersion)
+    }
+
+    static let skippedKey = "skippedAppUpdate"
+
+    /// The alert: install and restart, later (asks again next launch) or skip this version. A copy that cannot replace
+    /// itself (run from the dmg, a translocated copy, a folder we may not write) offers the download page instead.
+    func promptAppUpdate(_ r: AppRelease) {
+        let auto = SelfUpdater.canReplace()
+        let a = NSAlert()
+        a.messageText = t("update.alert.title", ["version": r.version])
+        a.informativeText = auto ? t("update.alert.body", ["current": appVersion])
+                                 : t("update.alert.manualBody", ["current": appVersion, "path": SelfUpdater.bundlePath])
+        a.addButton(withTitle: t(auto ? "update.alert.install" : "update.alert.download"))
+        a.addButton(withTitle: t("update.alert.later"))
+        a.addButton(withTitle: t("update.alert.skip"))
+        NSApp.activate(ignoringOtherApps: true)
+        switch a.runModal() {
+        case .alertFirstButtonReturn: if auto { Task { await installAppUpdate() } } else { openReleasePage() }
+        case .alertThirdButtonReturn: UserDefaults.standard.set(r.version, forKey: Self.skippedKey)
+        default: break
+        }
+    }
+
+    /// Downloads and checks the new app, then quits; the swap script puts it in place and opens it again.
+    func installAppUpdate() async {
+        guard let r = appRelease, busy == nil else { return }
+        guard SelfUpdater.canReplace() else { openReleasePage(); return }
+        busy = "status.updatingApp"
+        defer { busy = nil }
+        do {
+            try await SelfUpdater.prepare(r, log: config.logsDir.appendingPathComponent("app-update.log"))
+            NSApp.terminate(nil)
+        } catch SelfUpdater.Failure.verify(let detail) {
+            error = t("error.appUpdateVerify", ["detail": detail])
+        } catch SelfUpdater.Failure.step(let detail) {
+            error = t("error.updateFailed", ["error": detail])
+        } catch {
+            self.error = t("error.updateFailed", ["error": error.localizedDescription])
+        }
     }
 
     func openReleasePage() { NSWorkspace.shared.open(URL(string: "https://github.com/howznguyen/nookdeck/releases/latest")!) }

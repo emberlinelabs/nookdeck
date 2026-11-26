@@ -61,7 +61,11 @@ struct MenuContent: View {
 
     @ViewBuilder var updateItems: some View {
         if let v = model.appUpdate {
-            Button(model.t("menu.updateAvailable", ["version": v])) { model.openReleasePage() }
+            if SelfUpdater.canReplace() {
+                Button(model.t("menu.installUpdate", ["version": v])) { Task { await model.installAppUpdate() } }.disabled(model.busy != nil)
+            } else {
+                Button(model.t("menu.updateAvailable", ["version": v])) { model.openReleasePage() }
+            }
         } else if let u = model.update, u.available, let latest = u.latest {
             Button(model.t("menu.updateAvailable", ["version": latest])) { Task { await model.updateNow() } }.disabled(model.busy != nil)
         }
