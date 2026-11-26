@@ -20,7 +20,11 @@ async function until(f: () => boolean | Promise<boolean>, ms = 15_000) {
   while (Date.now() < end) { if (await f()) return; await sleep(10); }
   throw new Error("timed out waiting: " + f.toString().slice(0, 120));
 }
-/** expect(p).rejects, with the plugin log in the message: a host that ends (as on the Windows runner) says why. */
+/**
+ * expect(p).rejects for a call into a real plugin host. On Windows, bun test's `await expect(p).rejects` waits without reading
+ * the host's stdout: the answer and the pings go unread, the agent kills the host as hung, and the call fails with "the
+ * plugin process ended" (the same call answers at once with .then). The plugin log is in the message if it fails anyway.
+ */
 async function rejectsWith(p: Promise<unknown>, m: RegExp | string, logFile: string) {
   const e: any = await p.then(() => null, (x) => x ?? new Error("rejected"));
   if (!e) throw new Error(`expected a rejection matching ${m}`);
@@ -238,8 +242,7 @@ async function setup(dir: string, id: string, over: Record<string, unknown> = {}
   const h = new PluginHosts(store, {
     fetch: fetch, shell: async () => ({ code: 0, stdout: "" }), keys: { hotkey: async () => {}, type: async () => {} },
     logDir: join(d, "logs"), dataDir: join(d, "data"),
-    // the REST test's ping timing: it runs the same throwing provider and passes on the Windows runner
-    timing: { pingIntervalMs: 500, pingTimeoutMs: 10_000, callTimeoutMs: 20_000, backoffMs: [60, 120], restartMax: 3 },
+    timing: { pingIntervalMs: 150, pingTimeoutMs: 2000, callTimeoutMs: 20_000, backoffMs: [60, 120], restartMax: 3 },
     onair: { set: (pid: string, kind: string, on: boolean, since?: number) => onair.push(["set", pid, kind, on, since]), clear: (pid: string) => onair.push(["clear", pid]) },
     ...over,
   } as any);
@@ -271,7 +274,7 @@ describe("through a real plugin host", () => {
     await rejectsWith(h.action("dev.t.ws", "a", { do: "bad" }), /localhost:1 is not in this plugin's allowed hosts|permission denied: network/, logFile);
     await h.action("dev.t.ws", "a", { do: "close" });
     await until(async () => (await state()).closed === 1000);
-    await expect(h.action("dev.t.ws", "a", { do: "send", text: "late" })).rejects.toThrow(/closed/);
+    await rejectsWith(h.action("dev.t.ws", "a", { do: "send", text: "late" }), /closed/, logFile);
   });
 
   test("stopping the plugin closes its sockets on the server and clears its On Air state", async () => {
@@ -321,7 +324,7 @@ describe("through a real plugin host", () => {
     expect(list.slice(0, 3)).toEqual(["Main", "Intro A", "s0"]);
     expect(list.length).toBe(200);
     await rejectsWith(h.options("dev.t.opts", "broken", {}), "OBS is not connected", logFile);
-    await expect(h.options("dev.t.opts", "nope", {})).rejects.toThrow(/no options provider/);
+    await rejectsWith(h.options("dev.t.opts", "nope", {}), /no options provider/, logFile);
   });
 });
 
