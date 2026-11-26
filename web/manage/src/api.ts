@@ -1,6 +1,6 @@
 import { t } from "./lib/i18n";
 import { asPlatform, type Platform } from "./lib/platform";
-import { AI_PROVIDERS, type IconCatalog, type MacApp, type Sound, type HassConfig, type HassEntity, type HassService, type GeoPlace, type WebhookInfo, type AiProvider, type DeviceInfo, type About, type UpdateInfo, type DoctorItem, type DoctorStatus, type Integration, type Layout, type Pairing, type PluginInfo, type RegistryEntry, type RegistryManifest, type RegistryResult, type PluginProcess, type PluginProcessState, type PluginField, type PluginPermissions, type Theme, type HassStatus, type ThemeLook, type ThemePack, type ThemeVariantInfo, type ThemeOptionInfo, type ThemeOptionValue, type ThemeSource, type ThemesResult } from "./types";
+import { AI_PROVIDERS, type IconCatalog, type MacApp, type Sound, type HassConfig, type HassEntity, type HassService, type GeoPlace, type WebhookInfo, type AiProvider, type DeviceInfo, type About, type UpdateInfo, type DoctorItem, type DoctorStatus, type Integration, type AiAccounts, type AiAccountTool, type Layout, type Pairing, type PluginInfo, type RegistryEntry, type RegistryManifest, type RegistryResult, type PluginProcess, type PluginProcessState, type PluginField, type PluginPermissions, type Theme, type HassStatus, type ThemeLook, type ThemePack, type ThemeVariantInfo, type ThemeOptionInfo, type ThemeOptionValue, type ThemeSource, type ThemesResult } from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -141,6 +141,7 @@ export function normalizePermissions(raw: unknown): PluginPermissions {
     keyboard: !!r.keyboard,
     storage: !!r.storage,
     onair: !!r.onair,
+    notify: !!r.notify,
   };
 }
 
@@ -443,6 +444,11 @@ export const api = {
   enableAskHook: (idleOnly: boolean) => request<unknown>("/api/integrations/claude/ask-hook", json("POST", { idleOnly })),
   disableAskHook: () => request<unknown>("/api/integrations/claude/ask-hook", { method: "DELETE" }),
   disableHook: (id: AiProvider) => request<unknown>(hookUrl(id), { method: "DELETE" }),
+  /** Several Claude accounts / Codex profiles: extra config folders, each with a name. Every call answers with the new list. */
+  getAiAccounts: () => request<AiAccounts>("/api/ai/accounts"),
+  addAiAccount: (tool: AiAccountTool, name: string, dir: string) => request<AiAccounts>("/api/ai/accounts", json("POST", { tool, name, dir })),
+  renameAiAccount: (tool: AiAccountTool, id: string, name: string) => request<AiAccounts>(`/api/ai/accounts/${tool}/${encodeURIComponent(id)}`, json("PATCH", { name })),
+  removeAiAccount: (tool: AiAccountTool, id: string) => request<AiAccounts>(`/api/ai/accounts/${tool}/${encodeURIComponent(id)}`, { method: "DELETE" }),
   getPlugins: async (): Promise<PluginInfo[]> => {
     const raw = await request<unknown>("/api/plugins");
     const list = Array.isArray(raw) ? raw : rec(raw).plugins;

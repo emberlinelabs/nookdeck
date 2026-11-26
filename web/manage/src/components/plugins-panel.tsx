@@ -29,6 +29,7 @@ export function permissionLines(p: PluginPermissions): string[] {
   if (p.keyboard) out.push(t("Press keys and type text"));
   if (p.storage) out.push(t("Store its own data"));
   if (p.onair) out.push(t("Turn On Air on"));
+  if (p.notify) out.push(t("Show notifications on your phones"));
   return out;
 }
 
@@ -296,7 +297,7 @@ export function PluginsPanel({ update, layout, onSaveLayout, only, quietIfMissin
       </Dialog>
 
       <PermissionDialog open={!!grant} name={grant?.name ?? ""} version={grant?.version ?? ""} author={grant?.author} unreviewed={!!grant?.unreviewed && !grant?.builtin}
-        permissions={grant?.permissions ?? { network: [], shell: false, keyboard: false, storage: false, onair: false }} source={grant && !grant.builtin ? grant.source : undefined}
+        permissions={grant?.permissions ?? { network: [], shell: false, keyboard: false, storage: false, onair: false, notify: false }} source={grant && !grant.builtin ? grant.source : undefined}
         onCancel={() => setGrant(null)} onConfirm={() => void confirmGrant()} />
 
       <Dialog

@@ -48,4 +48,21 @@ export const FR_LIVE: Record<string, string> = {
   "OBS plugin: streaming or recording": "Plugin OBS : direct ou enregistrement",
   "Needs the OBS plugin from the Store.": "Nécessite le plugin OBS du Store.",
   "Add an On Air tile from the palette (On Air). To turn a spare phone into a sign by the door, open Screen & alarms on that phone and switch on Full-screen ON AIR.": "Ajoutez une tuile On Air depuis la palette (On Air). Pour faire d'un téléphone en trop un panneau près de la porte, ouvrez Écran et alarmes sur ce téléphone et activez ON AIR en plein écran.",
+  // Screen settings: pages, the page dots, lock sleeps the phone
+  "Pages": "Pages",
+  "Wrap around": "Défilement en boucle",
+  "Swiping past the last page goes back to the first, and from the first to the last.": "Glisser après la dernière page ramène à la première, et depuis la première à la dernière.",
+  "Hide the page dots": "Masquer les points de page",
+  "The dots show for a moment while you swipe, so you still see where you are.": "Les points s'affichent un instant pendant le glissement, pour savoir où vous êtes.",
+  "When a button locks the computer": "Quand un bouton verrouille l'ordinateur",
+  "For the Lock computer button (ctrl+cmd+q), also inside a macro.": "Pour le bouton Verrouiller l'ordinateur (ctrl+cmd+q), y compris dans une macro.",
+  "Phone screen": "Écran du téléphone",
+  "The phone goes black and stops keeping its screen on, until you tap it.": "Le téléphone passe au noir et cesse de garder l'écran allumé, jusqu'à ce que vous le touchiez.",
+  "This phone": "Ce téléphone",
+  "All phones": "Tous",
+  // The lock action
+  "Lock": "Verrou",
+  "Lock the computer's screen": "Verrouiller l'écran de l'ordinateur",
+  "Locks the computer the right way for its system: the lock shortcut on macOS, the lock screen on Windows and Linux.": "Verrouille l'ordinateur comme il faut pour son système : le raccourci de verrouillage sur macOS, l'écran de verrouillage sur Windows et Linux.",
+  "Lock computer": "Verrouiller l'ordinateur",
 };

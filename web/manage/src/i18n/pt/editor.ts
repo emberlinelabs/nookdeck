@@ -236,4 +236,8 @@ export const PT_EDITOR: Record<string, string> = {
   "Tile sizes": "Tamanhos de bloco",
   "Per-tile colour and fill": "Cor e preenchimento por bloco",
   "Screen size preview": "Prévia por tamanho de tela",
+  // preview at a connected phone's size
+  "Connected phone (auto)": "Celular conectado (automático)",
+  "none online": "nenhum online",
+  "A paired phone (offline)": "Um celular pareado (offline)",
 };

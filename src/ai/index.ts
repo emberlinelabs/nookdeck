@@ -1,5 +1,6 @@
-import { fetchClaudeQuota } from "./claude";
-import { fetchCodexQuota } from "./codex";
+import { claudeDir, claudeKeychainService, fetchClaudeQuota } from "./claude";
+import { codexDir, fetchCodexQuota } from "./codex";
+import type { AccountStore, AiAccountRef } from "./accounts";
 import { fetchAntigravityQuota } from "./antigravity";
 import { fetchOpencodeQuota, detectOpencode, readOpencodeSessions, activeOpencodeSessions } from "./opencode";
 import { grokQuota, readGrokSessions } from "./grok";
@@ -7,7 +8,7 @@ import { withToolState, type ToolStates } from "./states";
 import { listSessions, MAX_SESSIONS } from "./sessions";
 import type { QuotaHistory } from "./history";
 import { t } from "../i18n";
-import type { AiProviderId, AiSession, AiSnapshot, ProviderQuota, WaitingHint } from "./types";
+import type { AiProviderId, AiSession, AiSnapshot, ProviderQuota, QuotaAccount, WaitingHint } from "./types";
 
 export * from "./types";
 import { QUOTA_SOURCE } from "./types";
@@ -27,9 +28,50 @@ export interface AiSources {
   sessions: (hints: WaitingHint[]) => Promise<AiSession[]>;
 }
 
-export const realAiSources = (states?: ToolStates): AiSources => ({
-  claude: (last) => fetchClaudeQuota({}, last),
-  codex: () => fetchCodexQuota(),
+/**
+ * Reads every account of a tool and merges them: the provider keeps the default account's reading (so a single-account setup
+ * looks as before), and with two or more accounts `accounts` lists each one by id and name. Each account keeps its own last
+ * reading for the "stale" fallback.
+ */
+export function multiAccount(
+  refs: AiAccountRef[],
+  read: (ref: AiAccountRef, last?: ProviderQuota) => Promise<ProviderQuota>,
+  lastBy: Map<string, ProviderQuota>,
+): Promise<ProviderQuota> {
+  return Promise.all(refs.map(async (r) => {
+    let q: ProviderQuota;
+    try { q = await read(r, lastBy.get(r.id)); } catch (err: any) {
+      const l = lastBy.get(r.id);
+      q = { id: l?.id ?? "claude", name: l?.name ?? "", windows: l?.windows ?? [], error: String(err?.message ?? err), updatedAt: Date.now(), ...(l?.windows.length ? { stale: true } : {}) };
+    }
+    lastBy.set(r.id, q);
+    return { r, q };
+  })).then((all) => {
+    for (const k of [...lastBy.keys()]) if (!refs.some((r) => r.id === k)) lastBy.delete(k); // removed accounts
+    const base = all[0]!.q;
+    if (all.length < 2) return base;
+    const accounts: QuotaAccount[] = all.map(({ r, q }) => ({
+      id: r.id,
+      label: r.name,
+      ...(q.plan ? { plan: q.plan } : {}),
+      windows: q.windows,
+      ...(q.status ? { status: q.status } : {}),
+      ...(q.stale ? { stale: true } : {}),
+      ...(q.error ? { error: q.error } : {}),
+      fetchedAt: q.updatedAt,
+    }));
+    return { ...base, accounts };
+  });
+}
+
+const defaultRef = (dir: string): AiAccountRef[] => [{ id: "default", name: "", dir, isDefault: true }];
+
+export const realAiSources = (states?: ToolStates, accounts?: AccountStore): AiSources => {
+  const lastClaude = new Map<string, ProviderQuota>(), lastCodex = new Map<string, ProviderQuota>();
+  return {
+  claude: () => multiAccount(accounts?.list("claude") ?? defaultRef(claudeDir()), (r, last) =>
+    fetchClaudeQuota(r.isDefault ? {} : { dir: r.dir, keychainService: claudeKeychainService(r.dir, false) }, last), lastClaude),
+  codex: () => multiAccount(accounts?.list("codex") ?? defaultRef(codexDir()), (r) => fetchCodexQuota(r.isDefault ? undefined : r.dir), lastCodex),
   antigravity: (force) => fetchAntigravityQuota(undefined, undefined, undefined, { force }),
   opencode: async () => fetchOpencodeQuota({ version: await detectOpencode() }),
   grok: () => grokQuota(),
@@ -49,7 +91,8 @@ export const realAiSources = (states?: ToolStates): AiSources => ({
     const grokOut = grok.map((s) => (hints.some((h) => h.source === "grok" && h.sessionId === s.id) ? { ...s, state: "waiting" as const, prompt: true as const } : s));
         return [...base, ...opencode, ...grokOut].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_SESSIONS);
   },
-});
+  };
+};
 
 const ORDER: AiProviderId[] = ["claude", "codex", "antigravity", "opencode", "grok"];
 const NAMES: Record<AiProviderId, string> = { claude: "Claude", codex: "Codex", antigravity: "Antigravity", opencode: "OpenCode", grok: "Grok" };
@@ -65,6 +108,8 @@ export class AiHub {
   private sessions: AiSession[] = [];
   private quotaAt = Number.NEGATIVE_INFINITY;
   private quotaBusy = false;
+  /** the read in progress: a second caller (the manage page asks from two places at once) waits for it instead of answering "Reading…" */
+  private quotaRun: Promise<void> | undefined;
   private sessionsBusy = false;
   private lastJson = "";
 
@@ -105,14 +150,19 @@ export class AiHub {
 
   /** Reads the quotas. At most once per minute unless forced. True when the snapshot changed. */
   async refreshQuotas(force = false): Promise<boolean> {
-    if (this.quotaBusy || (!force && !this.quotasStale)) return false;
+    if (this.quotaBusy) { await this.quotaRun?.catch(() => {}); return false; }
+    if (!force && !this.quotasStale) return false;
     this.quotaBusy = true;
     this.quotaAt = this.now();
-    try {
+    this.quotaRun = (async () => {
       await Promise.all(ORDER.map(async (id) => { this.providers.set(id, await this.localQuota(id, force)); }));
       this.history?.record([...this.providers.values()]);
+    })();
+    try {
+      await this.quotaRun;
     } finally {
       this.quotaBusy = false;
+      this.quotaRun = undefined;
     }
     return this.changed();
   }

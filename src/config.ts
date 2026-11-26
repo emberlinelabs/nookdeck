@@ -1,5 +1,6 @@
 import { PLUGIN_STYLES } from "../web/shared/plugin-styles";
 import { validOnairAction, type CameraAction, type MicAction, type OnAirAction } from "../web/shared/onair";
+import { LOCK_SLEEP, isLockKeys, type LockSleep } from "../web/shared/lock";
 import { userHome } from "./home";
 import "./compat";
 
@@ -21,6 +22,8 @@ export type Action =
   /** Soundboard: play an uploaded clip (~/.nookdeck/sounds/<id>.<ext>) on the Mac (afplay), the phone, or both. */
   | { type: "sound"; sound: string; on?: SoundTarget; volume?: number; mode?: SoundMode }
   | { type: "sound-stop" }
+  /** Lock the computer: ctrl+cmd+q on macOS, LockWorkStation on Windows, loginctl / xdg-screensaver on Linux (src/actions.ts buildCommand). */
+  | { type: "lock" }
   /** Home Assistant service call through the agent's HA connection, e.g. {service:"scene.turn_on", entityId:"scene.movie"}. */
   | { type: "hass"; service: string; entityId?: string; data?: Record<string, unknown> }
   /** Several steps in order (keys, text, waits, other buttons, HA calls…), see src/automation.ts. */
@@ -262,6 +265,12 @@ export interface ScreenSettings {
   dim?: DimSettings;
   /** Move the whole grid by up to 2 px every 3 minutes against burn-in. Missing = off; new layouts start with it on. */
   burnInShift?: boolean;
+  /** Swiping past the last page goes to the first, and back from the first to the last. Missing = off. */
+  wrap?: boolean;
+  /** Hide the page dots; they show for a moment while swiping. Missing = shown. */
+  hideDots?: boolean;
+  /** After a button that locks the computer: the phone that pressed it goes black (default), every phone, or none. */
+  lockSleep?: LockSleep;
 }
 export const SCREEN_DEFAULTS = {
   lite: "auto" as LiteMode,
@@ -329,7 +338,7 @@ export const HOME = process.env.NOOKDECK_HOME ?? join(userHome(), ".nookdeck");
 const LAYOUT_FILE = join(HOME, "layout.json");
 const DEVICES_FILE = join(HOME, "devices.json");
 
-export const ACTION_TYPES = ["open", "hotkey", "type", "shell", "media", "volume", "page", "sound", "sound-stop", "hass", "macro", "plugin", "onair", "mic", "camera"] as const;
+export const ACTION_TYPES = ["open", "hotkey", "type", "shell", "media", "volume", "page", "sound", "sound-stop", "lock", "hass", "macro", "plugin", "onair", "mic", "camera"] as const;
 /** The On Air tile's sizes (w x h). */
 export const ONAIR_SIZES = ["1x1", "2x1", "2x2"];
 export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "gpu", "memory", "uptime", "load", "network", "nowplaying", "quota", "sessions", "entity", "weather", "value", "notifications", "plugin", "onair"];
@@ -407,7 +416,7 @@ export function defaultLayout(): Layout {
           { id: "b-redo", kind: "button", label: "Redo", icon: "arrow-forward-up", x: 5, y: 0, action: { type: "hotkey", keys: "cmd+shift+z" } },
           { id: "b-save", kind: "button", label: "Save", icon: "device-floppy", x: 6, y: 0, action: { type: "hotkey", keys: "cmd+s" } },
           { id: "b-find", kind: "button", label: "Find", icon: "search", x: 7, y: 0, action: { type: "hotkey", keys: "cmd+f" } },
-          { id: "b-lock", kind: "button", label: "Lock", icon: "lock", x: 0, y: 1, action: { type: "hotkey", keys: "ctrl+cmd+q" } },
+          { id: "b-lock", kind: "button", label: "Lock", icon: "lock", x: 0, y: 1, action: { type: "lock" } },
           { id: "b-home", kind: "button", label: "Home", icon: "home", color: "#38bdf8", x: 7, y: 1, action: { type: "page", page: "home" } },
         ],
       },
@@ -438,7 +447,30 @@ export async function loadLayout(): Promise<Layout> {
     await writeJson(LAYOUT_FILE, layout);
     return layout;
   }
-  return validateLayout(raw);
+  const { platform } = await import("./platform"); // lazy: config is imported by the platform code
+  return migrateLockHotkeys(validateLayout(raw), platform.id);
+}
+
+/**
+ * "Lock computer" used to be the macOS hotkey ctrl+cmd+q everywhere; on Windows that is Ctrl+Win+Q (Quick Assist) and on Linux nothing.
+ * At load, on Windows and Linux, a button whose action is exactly that hotkey becomes {type:"lock"}. Only in memory: layout.json is
+ * rewritten the next time the layout is saved. macOS keeps the hotkey (it locks there).
+ */
+export function migrateLockHotkeys(layout: Layout, os: NodeJS.Platform): Layout {
+  if (os !== "win32" && os !== "linux") return layout;
+  let changed = false;
+  const pages = layout.pages.map((p) => {
+    let hit = false;
+    const items = p.items.map((it) => {
+      if (it.kind !== "button" || !it.action || it.action.type !== "hotkey" || !isLockKeys(it.action.keys)) return it;
+      hit = true;
+      return { ...it, action: { type: "lock" as const } };
+    });
+    if (!hit) return p;
+    changed = true;
+    return { ...p, items };
+  });
+  return changed ? { ...layout, pages } : layout;
 }
 
 export async function saveLayout(layout: Layout): Promise<void> {
@@ -652,6 +684,12 @@ function validateScreen(v: any): ScreenSettings | undefined {
   }
   if (v.keepAwake !== undefined) out.keepAwake = bool(v.keepAwake, "theme.screen.keepAwake");
   if (v.burnInShift !== undefined) out.burnInShift = bool(v.burnInShift, "theme.screen.burnInShift");
+  if (v.wrap !== undefined) out.wrap = bool(v.wrap, "theme.screen.wrap");
+  if (v.hideDots !== undefined) out.hideDots = bool(v.hideDots, "theme.screen.hideDots");
+  if (v.lockSleep !== undefined) {
+    if (!LOCK_SLEEP.includes(v.lockSleep)) throw new Error(`theme.screen.lockSleep must be one of ${LOCK_SLEEP.join(", ")}`);
+    out.lockSleep = v.lockSleep;
+  }
   if (v.standby !== undefined && v.standby !== null) {
     const s = obj(v.standby, "theme.screen.standby");
     const d = SCREEN_DEFAULTS.standby;
@@ -922,6 +960,7 @@ function validateAction(a: any, where: string): Action {
       return out;
     }
     case "sound-stop": return { type: "sound-stop" };
+    case "lock": return { type: "lock" };
     case "onair": case "mic": case "camera": return liveAction(a, `${where}.action`);
     case "macro": return { type: "macro", steps: macroSteps(a.steps, `${where}.action.steps`) };
     case "plugin": {

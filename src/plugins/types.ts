@@ -27,6 +27,8 @@ export interface Permissions {
   storage?: boolean;
   /** May report to On Air that it is live / recording (ctx.onair.set): the On Air sources obs-stream / obs-record. */
   onair?: boolean;
+  /** May show notifications on the phones, with an optional sound (ctx.notify). */
+  notify?: boolean;
 }
 
 export const SETTING_TYPES = ["string", "number", "boolean", "select", "secret", "entity"] as const;

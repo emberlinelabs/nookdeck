@@ -55,6 +55,7 @@ const schema = {
         keyboard: { type: "boolean", description: "Press keys and type text on this computer." },
         storage: { type: "boolean", description: "Keep its own saved data." },
         onair: { type: "boolean", description: "Report to On Air that it is live or recording (ctx.onair.set)." },
+        notify: { type: "boolean", description: "Show notifications on the phones, with an optional sound (ctx.notify)." },
       },
     },
     settingField: settingField,

@@ -377,3 +377,50 @@ describe("ctx.widgets.push(fn): each tile's settings", () => {
     expect(sent.map((x) => [x.key, (x.data as any).root.text])).toEqual([["a", "1:Intro:false"], ["b", "2:Main:true"], ["c", "1:-:false"]]);
   });
 });
+
+describe("ctx.notify (permission: notify)", () => {
+  setDefaultTimeout(60_000);
+  test("the agent checks the grant, the fields and the rate, and trims what it keeps", async () => {
+    const got: any[] = [];
+    let now = 1_000_000;
+    let granted: any = { network: [] };
+    const s = new PluginServices({ granted: () => granted, fetch, shell: async () => ({ code: 0, stdout: "" }), keys: { hotkey: async () => {}, type: async () => {} }, dataFile: join(tmp(), "d.json"), notify: (n: any) => got.push(n), now: () => now } as any);
+    await expect(s.request("notify", { title: "x" })).rejects.toThrow(/notify/);
+    granted = { network: [], notify: true };
+    await expect(s.request("notify", {})).rejects.toThrow(/title/);
+    await expect(s.request("notify", { title: "x", sound: "siren" })).rejects.toThrow(/sound/);
+    await expect(s.request("notify", { title: "x", level: "loud" })).rejects.toThrow(/level/);
+    await s.request("notify", { title: "  Drink water  ", body: "b".repeat(600), level: "warn", sound: "chime" });
+    expect(got[0]).toEqual({ title: "Drink water", body: "b".repeat(500), level: "warn", sound: "chime" });
+    for (let i = 1; i < 6; i++) await s.request("notify", { title: `n${i}` });
+    await expect(s.request("notify", { title: "seventh" })).rejects.toThrow(/6 notifications a minute/);
+    now += 60_001;
+    await s.request("notify", { title: "a minute later" });
+    expect(got.length).toBe(7);
+    expect(describePermissions({ network: [], notify: true })).toEqual(["Show notifications on your phones"]);
+    expect(covers({ network: [] }, { network: [], notify: true })).toBe(false);
+  });
+
+  test("through a real host: ctx.notify exists only when granted, and reaches the agent with the plugin id", async () => {
+    const got: any[] = [];
+    const on = plugin("dev.t.note", `ctx.actions.handle("a", async () => { await ctx.notify("Pomodoro done", { body: "Take a break", sound: "soft" }); });`, { permissions: { notify: true } });
+    const { h } = await setup(on, "dev.t.note", { notify: (pid: string, n: any) => got.push([pid, n]) });
+    await h.action("dev.t.note", "a", {});
+    expect(got).toEqual([["dev.t.note", { title: "Pomodoro done", body: "Take a break", sound: "soft" }]]);
+    const off = plugin("dev.t.nonote", `ctx.widgets.provide("w", () => ({ render: "text", data: { body: typeof ctx.notify } }));`);
+    const { h: h2 } = await setup(off, "dev.t.nonote");
+    expect(((await h2.widget("dev.t.nonote", "w", {})).data as any).body).toBe("undefined");
+  });
+});
+
+describe("plugins granted notify keep running", () => {
+  setDefaultTimeout(60_000);
+  test("they start with the agent and are not stopped as idle, so a reminder comes while the phones sleep", async () => {
+    const dir = plugin("dev.t.remind", `ctx.widgets.provide("w", () => ({ render: "text", data: { body: "x" } }));`, { permissions: { notify: true } });
+    const { h } = await setup(dir, "dev.t.remind", { timing: { pingIntervalMs: 150, pingTimeoutMs: 2000, callTimeoutMs: 8000, idleStopMs: 200 } });
+    h.startEager();
+    await until(() => h.info("dev.t.remind").state === "running", 8000);
+    await sleep(700); // several idle periods
+    expect(h.info("dev.t.remind").state).toBe("running");
+  });
+});

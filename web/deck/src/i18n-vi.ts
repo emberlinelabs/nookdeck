@@ -242,4 +242,5 @@ export const VI: { [en: string]: string } = {
   "Tap to show the deck": "Chạm để hiện bảng điều khiển",
   "Full-screen ON AIR": "ON AIR toàn màn hình",
   "While On Air is on, this phone shows a large ON AIR sign": "Khi On Air bật, điện thoại này hiện biển ON AIR lớn",
+  "Tap to wake": "Chạm để mở lại",
 }

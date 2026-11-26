@@ -80,6 +80,8 @@ export type MacroStep =
   /** On Air manual source, and the computer's mic mute (On Air spec FR-10, FR-12). */
   | { kind: "onair"; mode?: "toggle" | "on" | "off" }
   | { kind: "mic"; mode?: "toggle" | "mute" | "unmute" }
+  /** Lock the computer (the `lock` action). */
+  | { kind: "lock" }
   | { kind: "item"; pageId: string; itemId: string } // run another button's action (no nested macros beyond depth 2)
   | { kind: "notify"; text: string };
 
@@ -115,6 +117,7 @@ export function macroSteps(v: any, where: string): MacroStep[] {
       }
       case "item": return { kind: "item", pageId: s(st.pageId, `${w}.pageId`, 80), itemId: s(st.itemId, `${w}.itemId`, 80) };
       case "notify": return { kind: "notify", text: s(st.text, `${w}.text`, 200) };
+      case "lock": return { kind: "lock" };
       default: return fail(`${w}.kind "${st.kind}" is not supported`);
     }
   });

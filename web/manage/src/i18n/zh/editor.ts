@@ -236,4 +236,8 @@ export const ZH_EDITOR: Record<string, string> = {
   "Tile sizes": "磁贴尺寸",
   "Per-tile colour and fill": "每个磁贴的颜色与填充",
   "Screen size preview": "屏幕尺寸预览",
+  // preview at a connected phone's size
+  "Connected phone (auto)": "已连接的手机（自动）",
+  "none online": "没有在线的手机",
+  "A paired phone (offline)": "已配对的手机（离线）",
 };

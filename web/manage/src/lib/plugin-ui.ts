@@ -14,11 +14,12 @@ export function permChips(p: PluginPermissions): PermChip[] {
   for (const h of p.network) { const host = networkLabel(h); out.push({ key: `net-${h}`, label: host, risk: "low", plain: t("Can connect to {host} and nowhere else on the internet.", { host }) }); }
   if (p.storage) out.push({ key: "storage", label: t("Saves data"), risk: "low", plain: t("Can keep its own small file of saved data on this computer.") });
   if (p.onair) out.push({ key: "onair", label: t("On Air"), risk: "low", plain: t("Can turn On Air on while it is live or recording.") });
+  if (p.notify) out.push({ key: "notify", label: t("Notifications"), risk: "low", plain: t("Can show notifications on your phones, with a sound.") });
   return out;
 }
 
 export const riskTone = (r: Risk): "danger" | "warning" | "neutral" => (r === "high" ? "danger" : r === "medium" ? "warning" : "neutral");
-export const hasPerms = (p: PluginPermissions): boolean => p.network.length > 0 || p.shell || p.keyboard || p.storage || p.onair;
+export const hasPerms = (p: PluginPermissions): boolean => p.network.length > 0 || p.shell || p.keyboard || p.storage || p.onair || p.notify;
 
 /** `ws://127.0.0.1:4455` -> `127.0.0.1:4455`: a WebSocket origin is shown as its host and port; a host name as it is. */
 export const networkLabel = (entry: string): string => entry.replace(/^wss?:\/\//, "");

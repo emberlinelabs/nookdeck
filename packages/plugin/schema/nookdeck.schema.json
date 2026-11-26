@@ -172,6 +172,10 @@
         "onair": {
           "type": "boolean",
           "description": "Report to On Air that it is live or recording (ctx.onair.set)."
+        },
+        "notify": {
+          "type": "boolean",
+          "description": "Show notifications on the phones, with an optional sound (ctx.notify)."
         }
       }
     },

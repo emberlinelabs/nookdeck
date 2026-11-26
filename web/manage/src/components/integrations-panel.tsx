@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/knowns/card";
 import { Dialog } from "@/components/ui/knowns/dialog";
 import { Spinner } from "@/components/ui/knowns/spinner";
 import { Switch } from "@/components/ui/knowns/switch";
+import { AiAccountsSection } from "@/components/ai-accounts";
 import { ApiError, api } from "@/api";
 import { localeTag, t, useLanguage } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -262,6 +263,7 @@ function ToolCard({ tool, info, onChanged, backendMissing, busy, onToggle }: {
           </p>
         )}
         <p className="text-[13px] leading-relaxed text-muted-foreground">{t(tool.reads)}</p>
+        {(tool.id === "claude" || tool.id === "codex") && !backendMissing && <AiAccountsSection tool={tool.id} toolName={tool.name} onChanged={onChanged} />}
         {tool.id === "claude" && <AskHookSection info={info} disabled={backendMissing || !info} onChanged={onChanged} />}
         {hookable && (
           <div className="flex items-center justify-between gap-3 border-t pt-3">

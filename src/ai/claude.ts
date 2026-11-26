@@ -8,6 +8,14 @@ import { clampPercent, safeHome, type ProviderQuota, type QuotaWindow } from "./
 export const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 /** English key; run through t() when shown. */
 export const TOKEN_EXPIRED = "Claude Code sign-in expired, open Claude Code once to refresh it";
+
+/**
+ * The macOS Keychain service that holds a config folder's sign-in: Claude Code uses "Claude Code-credentials" for its own folder
+ * and adds "-" + the first 8 hex digits of sha256(folder) when CLAUDE_CONFIG_DIR points elsewhere.
+ */
+export function claudeKeychainService(dir: string, isDefault: boolean): string {
+  return isDefault ? "Claude Code-credentials" : `Claude Code-credentials-${createHash("sha256").update(dir).digest("hex").slice(0, 8)}`;
+}
 /** English key: no sign-in, or one that was blanked (signed out). */
 export const SIGNED_OUT = "Claude Code is not signed in on this computer. Run `claude` and use /login.";
 /** English key: the credentials file names a sign-in (claudeAiOauth) but holds no access token (Claude Code keeps it in the OS credential store). */
@@ -54,6 +62,8 @@ export interface ClaudeDeps {
   platform?: NodeJS.Platform;
   /** Backoff store (tests); defaults to a module-level map. */
   blocked?: Map<string, number>;
+  /** macOS Keychain service of this folder's sign-in (claudeKeychainService); default: Claude Code's own. */
+  keychainService?: string;
 }
 
 /** Credentials file first, then (macOS) the Keychain entry. Never writes anything. */
@@ -72,7 +82,7 @@ export async function readClaudeToken(deps: ClaudeDeps = {}): Promise<ClaudeCred
     try { return parseCredentials((await deps.readKeychain!()).trim()); } catch { return null; }
   }
   try {
-    const raw = await platform.claudeCredentials();
+    const raw = await platform.claudeCredentials(deps.keychainService);
     return raw ? parseCredentials(raw) : null;
   } catch {
     return null;
@@ -126,24 +136,28 @@ export function parseUsage(body: any): QuotaWindow[] {
 export async function fetchClaudeQuota(deps: ClaudeDeps = {}, last?: ProviderQuota): Promise<ProviderQuota> {
   const now = (deps.now ?? Date.now)();
   const blocked = deps.blocked ?? blockedTokens;
-  const keep = (error: string, plan?: string): ProviderQuota => ({
+  // the last windows stay, marked stale (#577: an expired token must not look like a current reading); a sign-in problem
+  // also says needs_login, so the phone shows "Sign in again on your computer"
+  const keep = (error: string, plan?: string, signIn = false): ProviderQuota => ({
     id: "claude",
     name: "Claude",
     plan: plan ?? last?.plan,
     windows: last?.windows ?? [],
     error,
     updatedAt: now,
+    ...(last?.windows?.length ? { stale: true } : {}),
+    ...(signIn ? { status: "needs_login" as const } : {}),
   });
   const creds = await readClaudeToken(deps);
   if (!creds) {
     const st = await fileSignInState(deps);
-    return keep(t(st === "no-token" ? TOKEN_NOT_IN_FILE : SIGNED_OUT));
+    return keep(t(st === "no-token" ? TOKEN_NOT_IN_FILE : SIGNED_OUT), undefined, true);
   }
-  if (creds.expiresAt !== undefined && creds.expiresAt <= now) return keep(t(TOKEN_EXPIRED), creds.plan);
+  if (creds.expiresAt !== undefined && creds.expiresAt <= now) return keep(t(TOKEN_EXPIRED), creds.plan, true);
   const fp = tokenFingerprint(creds.accessToken);
   const until = blocked.get(fp);
   if (until !== undefined) {
-    if (now < until) return keep(t(TOKEN_EXPIRED), creds.plan);
+    if (now < until) return keep(t(TOKEN_EXPIRED), creds.plan, true);
     blocked.delete(fp);
   }
   try {
@@ -158,7 +172,7 @@ export async function fetchClaudeQuota(deps: ClaudeDeps = {}, last?: ProviderQuo
     });
     if (res.status === 401 || res.status === 403) {
       blocked.set(fp, now + UNAUTHORIZED_BACKOFF_MS);
-      return keep(t(TOKEN_EXPIRED), creds.plan);
+      return keep(t(TOKEN_EXPIRED), creds.plan, true);
     }
     if (res.status === 429) return keep(t("Claude is rate limiting, will retry later"), creds.plan);
     if (!res.ok) return keep(t("Claude returned error {status}", { status: res.status }), creds.plan);

@@ -33,6 +33,9 @@ import { NEAR_END_MS, NEAR_END_S, LastMediaStore, MediaTracker, openMediaApp as 
 import type { Stats } from "./stats";
 import type { VolumeChange, VolumeState } from "./actions";
 import { AiHub, QUOTA_SOURCE, realAiSources, type AiProviderId, type AiSources } from "./ai";
+import { ACCOUNT_TOOLS, AccountStore, type AccountTool } from "./ai/accounts";
+import { claudeDir } from "./ai/claude";
+import { codexDir } from "./ai/codex";
 import { agyPath } from "./ai/antigravity";
 import { findCli } from "./ai/find-cli";
 import { ToolStates, type ToolState } from "./ai/states";
@@ -68,6 +71,7 @@ import { Registry, compareVersions, type RegistryEntry } from "./plugins/registr
 import { ThemeRegistry } from "./plugins/theme-registry";
 import { BUILTIN_THEMES } from "./plugins/builtin-themes";
 import { ThemeStore, THEME_MIME, isLicenseFile, applyLook, buildThemePackage, extractLook, manifestSummary } from "./plugins/themes";
+import { isLockAction, sleepTargets } from "../web/shared/lock";
 import { ThemePreviewCache } from "./plugins/theme-preview";
 import { zipFiles } from "./plugins/cli";
 import { ERR_DISABLED, ERR_MISSING, ERR_NOT_GRANTED } from "./plugins/types";
@@ -147,6 +151,8 @@ export interface StartOptions {
   /** Quota/session sources (fakes in tests). */
   aiSources?: AiSources;
   aiSessionsMs?: number; // default 5000
+  /** Extra Claude accounts / Codex profiles file (tests). */
+  aiAccountsFile?: string;
   aiQuotaMs?: number; // how often to check quota staleness, default 60000 (a real fetch happens every 5 min)
   permissionTimeoutMs?: number;
   hookSecret?: string;
@@ -186,6 +192,8 @@ interface WsData {
   deviceId: string | null;
   /** this phone keeps the full-screen ON AIR sign on (onair-watch), so mic / camera are checked */
   onairWatch?: boolean;
+  /** this phone's screen in CSS px, as the deck reports it (the manage page previews at it) */
+  viewport?: { w: number; h: number };
 }
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
@@ -215,7 +223,10 @@ export async function startServer(opts: StartOptions = {}) {
     topProcesses: opts.deps?.topProcesses ?? realTopProcesses,
   };
   const toolStates = new ToolStates();
-  const baseSources = opts.aiSources ?? realAiSources(toolStates);
+  // several Claude accounts / Codex profiles (PhoneBox #538, #633): extra config folders, read-only
+  const aiAccounts = new AccountStore({ claude: claudeDir, codex: codexDir }, opts.aiAccountsFile);
+  await aiAccounts.load();
+  const baseSources = opts.aiSources ?? realAiSources(toolStates, aiAccounts);
   const quotaHistory = new QuotaHistory(opts.quotaHistoryFile);
   await quotaHistory.load();
   const hub = new AiHub(baseSources, undefined, quotaHistory);
@@ -329,7 +340,7 @@ export async function startServer(opts: StartOptions = {}) {
     rules.setPush(key, v?.value);
     broadcast({ type: "pushed", values: { [key]: v ? { value: v.value, ...(v.sub ? { sub: v.sub } : {}), at: v.at } : null } });
   });
-  const addNote = (n: { title: string; body?: string; level?: NotifyLevel; ttl?: number; source?: string }) => {
+  const addNote = (n: { title: string; body?: string; level?: NotifyLevel; ttl?: number; source?: string; sound?: string }) => {
     const notification = notes.add(n);
     broadcast({ type: "notify", notification });
     return notification;
@@ -354,6 +365,7 @@ export async function startServer(opts: StartOptions = {}) {
     keys: { hotkey: (keys) => platform.runAction({ type: "hotkey", keys }), type: (text) => platform.runAction({ type: "type", text }) },
     // ctx.onair.set of a plugin granted "onair" (the OBS plugin): its own On Air source, cleared when it stops
     onair: { set: (pid, kind, on, since) => onair.setPluginSource(pid, kind, on, since), clear: (pid) => onair.clearPlugin(pid) },
+    notify: (pid, n) => { addNote({ ...n, source: `plugin:${pid}` }); },
     ...opts.pluginHostDeps,
   });
   pluginHosts.startEager();
@@ -913,7 +925,10 @@ export async function startServer(opts: StartOptions = {}) {
         if (denied) return denied;
         const devices = await loadDevices();
         const online = new Set([...sockets].map((s) => s.data.deviceId));
-        return json(devices.map(({ tokenHash, ...d }) => ({ ...d, online: online.has(d.id) })));
+        // the screen size each online phone reported last (a phone with two tabs open: the newest one)
+        const viewports = new Map<string, { w: number; h: number }>();
+        for (const s of sockets) if (s.data.deviceId && s.data.viewport) viewports.set(s.data.deviceId, s.data.viewport);
+        return json(devices.map(({ tokenHash, ...d }) => ({ ...d, online: online.has(d.id), ...(viewports.has(d.id) ? { viewport: viewports.get(d.id) } : {}) })));
       }
 
       if (path === "/api/devices/reload" && req.method === "POST") {
@@ -1321,6 +1336,44 @@ export async function startServer(opts: StartOptions = {}) {
         return json({ ok: true, item });
       }
 
+      // ----- several Claude accounts / Codex profiles: list, add, rename, remove (manage page only; folders never reach phones) -----
+      if (path === "/api/ai/accounts" || path.startsWith("/api/ai/accounts/")) {
+        const denied = guardLocal(server, req);
+        if (denied) return denied;
+        const listing = () => {
+          const snap = hub.snapshot();
+          const out: Record<string, unknown[]> = {};
+          for (const tool of ACCOUNT_TOOLS) {
+            const p = snap.providers.find((x) => x.id === tool);
+            out[tool] = aiAccounts.list(tool).map((a) => {
+              const q = p?.accounts ? p.accounts.find((x) => x.id === a.id) : a.isDefault ? p : undefined;
+              return { id: a.id, name: a.name, dir: a.dir, isDefault: a.isDefault,
+                ...(q ? { plan: q.plan, status: q.status, stale: q.stale, error: q.error, windows: q.windows.length } : {}) };
+            });
+          }
+          return out;
+        };
+        const changed = async () => { await hub.refreshQuotas(true).catch(() => false); pushAi(); return json(listing()); };
+        try {
+          if (path === "/api/ai/accounts" && req.method === "GET") {
+            await hub.refreshQuotas().catch(() => false); // the readers keep their own 5 min cache
+            return json(listing());
+          }
+          if (path === "/api/ai/accounts" && req.method === "POST") {
+            const b = await readBody(req);
+            if (!ACCOUNT_TOOLS.includes(b?.tool)) return json({ error: "tool must be claude or codex" }, 400);
+            await aiAccounts.add(b.tool, b.name, b.dir);
+            return await changed();
+          }
+          const m = path.match(/^\/api\/ai\/accounts\/(claude|codex)\/([A-Za-z0-9-]{1,40})$/);
+          if (m && req.method === "PATCH") { await aiAccounts.rename(m[1] as AccountTool, m[2]!, (await readBody(req))?.name); return await changed(); }
+          if (m && req.method === "DELETE") { await aiAccounts.remove(m[1] as AccountTool, m[2]!); return await changed(); }
+        } catch (err: any) {
+          return json({ error: err?.message ?? String(err) }, 400);
+        }
+        return json({ error: "not found" }, 404);
+      }
+
       if (path === "/api/integrations" && req.method === "GET") {
         const denied = guardLocal(server, req);
         if (denied) return denied;
@@ -1646,6 +1699,11 @@ export async function startServer(opts: StartOptions = {}) {
         try { msg = JSON.parse(String(raw)); } catch { return; }
         if (msg?.type === "ping") return send(ws, { type: "pong" });
         if (msg?.type === "onair-watch") { ws.data.onairWatch = msg.on === true; return syncOnAirNeed(); }
+        if (msg?.type === "viewport") {
+          const w = Math.round(Number(msg.w)), h = Math.round(Number(msg.h));
+          if (w >= 200 && w <= 4000 && h >= 200 && h <= 4000) ws.data.viewport = { w, h };
+          return;
+        }
         const reqId = msg?.reqId;
         if (msg?.type === "media" || msg?.type === "volume") {
           const c = parseControl(msg);
@@ -1736,6 +1794,12 @@ export async function startServer(opts: StartOptions = {}) {
         try {
           await execute(item.action, 0, ws);
           send(ws, { type: "result", reqId, ok: true });
+          // "Lock sleeps the phone": after a button that locks the computer, the presser (or every phone) goes to the black sleep screen
+          if (isLockAction(item.action)) {
+            const to = sleepTargets(layout.theme?.screen?.lockSleep);
+            if (to === "all") broadcast({ type: "sleep" });
+            else if (to === "presser") send(ws, { type: "sleep" });
+          }
         } catch (err: any) {
           send(ws, { type: "result", reqId, ok: false, error: err?.message ?? String(err) });
         }

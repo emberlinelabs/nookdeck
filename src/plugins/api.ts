@@ -19,7 +19,7 @@ export type { Permissions, Renderer, SettingValue, Settings };
 // ------------------------------------------------------------------------------------------------ permissions
 
 /** Permission names as they appear in the manifest `permissions` object and in error messages. */
-export const PERMISSION_NAMES = ["network", "shell", "keyboard", "storage", "onair"] as const;
+export const PERMISSION_NAMES = ["network", "shell", "keyboard", "storage", "onair", "notify"] as const;
 export type PermissionName = (typeof PERMISSION_NAMES)[number];
 
 /** Thrown (and sent over RPC as `error.data.permission`) when a plugin uses something it was not granted. */
@@ -119,6 +119,12 @@ export interface PluginWebSocket {
 /** `ctx.onair`: what a plugin reports to On Air (permission: onair). */
 export type OnAirKind = "stream" | "record";
 
+/** The sounds a phone can play with a notification (synthesized on the phone, no files). */
+export const NOTIFY_SOUNDS = ["chime", "soft", "birds"] as const;
+export type NotifySound = (typeof NOTIFY_SOUNDS)[number];
+/** `ctx.notify` options. `level` colours the toast; `sound` plays on phones that have been tapped once (browsers need that). */
+export interface NotifyOptions { body?: string; level?: "info" | "warn" | "alert"; sound?: NotifySound }
+
 /** What `ctx.settings.options` providers return: the choices of a select with `optionsFrom`. */
 export type OptionsProvider = (settings: Settings) => Promise<string[]> | string[];
 
@@ -165,6 +171,11 @@ export interface PluginContext {
   onair?: {
     set(kind: OnAirKind, on: boolean, since?: number): void;
   };
+  /**
+   * Shows a notification on every phone, like the notify webhook (permission: notify): a toast and the notification list, with an
+   * optional sound. At most NOTIFY_PER_MINUTE a minute; more are refused. Present only when granted.
+   */
+  notify?(title: string, o?: NotifyOptions): Promise<void>;
   /** Presses keys on this computer (permission: keyboard). */
   keys?: {
     hotkey(k: string): Promise<void>;
@@ -210,6 +221,10 @@ export const WS_MAX_MESSAGE_BYTES = 1_000_000;
 export const WS_OPEN_TIMEOUT_MS = 10_000;
 /** `ctx.settings.options`: the most choices a provider may return (longer lists are cut), and the longest choice. */
 export const OPTIONS_MAX = 200;
+/** ctx.notify: notifications a plugin may show in one minute, and the title / body lengths kept. */
+export const NOTIFY_PER_MINUTE = 6;
+export const NOTIFY_TITLE_MAX = 120;
+export const NOTIFY_BODY_MAX = 500;
 export const OPTION_MAX_CHARS = 200;
 /** `shell.run` timeout, ms. */
 export const SHELL_TIMEOUT_MS = 30_000;
@@ -333,6 +348,8 @@ export interface HostToAgent {
   "net.ws.close": { params: { sid: number }; result: null };
   /** ctx.onair.set (permission: onair). */
   "onair.set": { params: { kind: OnAirKind; on: boolean; since?: number }; result: null };
+  /** ctx.notify (permission: notify). */
+  "notify": { params: { title: string } & NotifyOptions; result: null };
 }
 /** host -> agent, no answer. */
 export interface HostNotifications {
@@ -349,5 +366,5 @@ export type ResultOf<T extends { result: unknown }, K extends keyof T> = T[K] ex
 /** Method names the host accepts / the agent accepts, for validating incoming messages. */
 export const AGENT_METHODS = ["init", "widget.get", "action.run", "settings.options", "ping"] as const;
 export const AGENT_NOTIFICATIONS = ["settings.changed", "shutdown", "net.ws.message", "net.ws.closed"] as const;
-export const HOST_METHODS = ["storage.get", "storage.set", "net.fetch", "shell.run", "keys.hotkey", "keys.type", "widget.tiles", "net.ws.open", "net.ws.send", "net.ws.close", "onair.set"] as const;
+export const HOST_METHODS = ["storage.get", "storage.set", "net.fetch", "shell.run", "keys.hotkey", "keys.type", "widget.tiles", "net.ws.open", "net.ws.send", "net.ws.close", "onair.set", "notify"] as const;
 export const HOST_NOTIFICATIONS = ["log", "widget.push"] as const;

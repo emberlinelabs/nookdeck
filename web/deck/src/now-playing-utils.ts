@@ -159,3 +159,35 @@ export const NP_COL_MIN = 44 + 52 + 44 + 44 + 8
 export function npCoverSize(tw: number, th: number): number {
   return Math.max(48, Math.min(168, th - 24, tw - 32 - 14 - NP_COL_MIN))
 }
+
+/**
+ * Width of a text in em at weight 600, without the DOM: CJK and full-width characters are about 1 em, wide capitals and digits about
+ * 0.68, the rest about 0.55. Good enough to pick a font size; the line is still clamped with an ellipsis at the minimum size.
+ */
+export function textEm(text: string): number {
+  let w = 0
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i)
+    if (c >= 0xd800 && c <= 0xdbff) continue // first half of a surrogate pair (emoji): counted once, below
+    if ((c >= 0x1100 && c <= 0x115f) || (c >= 0x2e80 && c <= 0xa4cf) || (c >= 0xac00 && c <= 0xd7a3) || (c >= 0xf900 && c <= 0xfaff) || (c >= 0xfe30 && c <= 0xfe4f) || (c >= 0xff00 && c <= 0xff60) || (c >= 0xdc00 && c <= 0xdfff)) w += 1
+    else if (c === 32) w += 0.28
+    else if ((c >= 65 && c <= 90) || (c >= 48 && c <= 57) || c === 87 || c === 109 || c === 77) w += 0.68
+    else if (c === 105 || c === 108 || c === 106 || c === 46 || c === 44 || c === 39 || c === 73 || c === 124) w += 0.3
+    else w += 0.55
+  }
+  return w
+}
+
+/**
+ * Font size (px) for a line that should fit `lines` lines of `room` px: the largest size up to `max` that fits, never under `min`
+ * (at `min` the line is cut with an ellipsis as before). Two lines lose some room to word wrapping, so they count as 1.85 lines.
+ * room <= 0 (not measured yet): `max`. Rounded down to half pixels so it does not jitter.
+ */
+export function fitTextSize(text: string, room: number, lines: number, max: number, min: number): number {
+  if (!(room > 0) || !text) return max
+  const em = textEm(text)
+  if (em <= 0) return max
+  const usable = room * (lines > 1 ? lines - 0.15 : 1)
+  const s = Math.min(max, usable / em)
+  return Math.max(min, Math.floor(s * 2) / 2)
+}

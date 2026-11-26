@@ -48,4 +48,21 @@ export const VI_LIVE: Record<string, string> = {
   "OBS plugin: streaming or recording": "Plugin OBS: đang phát trực tiếp hoặc đang ghi",
   "Needs the OBS plugin from the Store.": "Cần plugin OBS từ Store.",
   "Add an On Air tile from the palette (On Air). To turn a spare phone into a sign by the door, open Screen & alarms on that phone and switch on Full-screen ON AIR.": "Thêm ô On Air từ bảng chọn (On Air). Muốn biến một điện thoại dư thành biển báo ở cửa, hãy mở Màn hình & báo thức trên điện thoại đó và bật ON AIR toàn màn hình.",
+  // Screen settings: pages, the page dots, lock sleeps the phone
+  "Pages": "Trang",
+  "Wrap around": "Vuốt vòng",
+  "Swiping past the last page goes back to the first, and from the first to the last.": "Vuốt qua trang cuối sẽ về trang đầu, và từ trang đầu về trang cuối.",
+  "Hide the page dots": "Ẩn chấm trang",
+  "The dots show for a moment while you swipe, so you still see where you are.": "Các chấm hiện thoáng qua khi bạn vuốt, nên bạn vẫn biết mình đang ở trang nào.",
+  "When a button locks the computer": "Khi một nút khóa máy tính",
+  "For the Lock computer button (ctrl+cmd+q), also inside a macro.": "Áp dụng cho nút Khóa máy tính (ctrl+cmd+q), kể cả trong macro.",
+  "Phone screen": "Màn hình điện thoại",
+  "The phone goes black and stops keeping its screen on, until you tap it.": "Điện thoại chuyển màn hình đen và thôi giữ màn hình sáng, cho đến khi bạn chạm vào.",
+  "This phone": "Điện thoại này",
+  "All phones": "Mọi điện thoại",
+  // The lock action
+  "Lock": "Khóa",
+  "Lock the computer's screen": "Khóa màn hình máy tính",
+  "Locks the computer the right way for its system: the lock shortcut on macOS, the lock screen on Windows and Linux.": "Khóa máy tính đúng cách theo hệ điều hành: phím tắt khóa trên macOS, màn hình khóa trên Windows và Linux.",
+  "Lock computer": "Khoá máy",
 };

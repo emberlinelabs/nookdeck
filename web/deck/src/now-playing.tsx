@@ -5,7 +5,7 @@ import { isMac } from './platform'
 import { Icon } from './icon'
 import { reducedMotion } from './knowns'
 import { crossfadeGains, easeOut } from './crossfade'
-import { clampPosition, clampVolume, coverFallback, coverGradient, fitLevels, formatTime, projectPosition, reconcilePosition, resolveLabels, spokenPosition, DEFAULT_LABELS, npVariant, npInlineVol, npCoverSize, type NowPlayingLabels } from './now-playing-utils'
+import { clampPosition, clampVolume, coverFallback, coverGradient, fitLevels, formatTime, projectPosition, reconcilePosition, resolveLabels, spokenPosition, DEFAULT_LABELS, npVariant, npInlineVol, npCoverSize, fitTextSize, type NowPlayingLabels } from './now-playing-utils'
 import type { Media, MediaCommand, Stats } from './types'
 
 /**
@@ -233,6 +233,38 @@ const layer = (opacity: number, x: number, scale?: number) => {
   return { opacity: opacity, transform: tf, WebkitTransform: tf }
 }
 
+/**
+ * A title or artist line that shrinks its font to fit its width (PhoneBox #643), down to `min`; at `min` it is still cut with an ellipsis.
+ * Measures its own box (ResizeObserver, else window resize: Safari 12 has no ResizeObserver).
+ */
+function FitLine(props: { text: string; cls: string; max: number; min: number; lines: number }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const [w, setW] = useState(0)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const read = () => {
+      const nw = el.clientWidth
+      setW((o) => (Math.abs(o - nw) > 1 ? nw : o))
+    }
+    read()
+    const RO = (window as any).ResizeObserver
+    const ro = RO ? new RO(read) : null
+    if (ro) ro.observe(el)
+    else window.addEventListener('resize', read)
+    return () => {
+      if (ro) ro.disconnect()
+      else window.removeEventListener('resize', read)
+    }
+  }, [])
+  const size = fitTextSize(props.text, w, props.lines, props.max, props.min)
+  return (
+    <span ref={ref} class={props.cls} style={{ fontSize: size + 'px' }} title={size <= props.min ? props.text : undefined}>
+      {props.text}
+    </span>
+  )
+}
+
 export const NP_HIT = { ghost: 44, play: 52, playRow: 48, slider: 44, thumb: 22 }
 
 export function NowPlayingTile(props: NowPlayingTileProps) {
@@ -341,13 +373,17 @@ export function NowPlayingTile(props: NowPlayingTileProps) {
   )
   const VolBtn = () => (vol ? Ghost(vol.muted ? 'volume-3' : 'volume', L.volume, () => setPop(!pop), pop) : <span class="pd-npl__sp" />)
 
+  // the title shrinks to fit (one line, or two on a narrow row) down to 72% of its size; the artist line down to 10 px
+  const titleMax = (big: boolean) => (big ? 18 : two ? 13 : 14) * Math.min(1.15, props.scale)
+  const Title = (text: string, big: boolean) => (
+    <FitLine text={text} cls={'pd-npl__title' + (two ? ' pd-npl__title--two' : '')} max={titleMax(big)} min={Math.max(10, Math.round(titleMax(big) * 0.72))} lines={two ? 2 : 1} />
+  )
+  const Artist = (text: string) => (text ? <FitLine text={text} cls="pd-npl__artist" max={12.5} min={10} lines={1} /> : <span class="pd-npl__artist" />)
   const TextInner = (t: Track | null, big: boolean, app?: string, label?: string) => (
     <>
       {big && t && app ? <span class="pd-npl__src">{app}</span> : null}
-      <span class={'pd-npl__title' + (two ? ' pd-npl__title--two' : '')} style={{ fontSize: (big ? 18 : two ? 13 : 14) * Math.min(1.15, props.scale) + 'px' }}>
-        {t ? t.title : L.nothingPlaying}
-      </span>
-      {label ? <span class="pd-npl__artist pd-npx__label">{label}</span> : t ? <span class="pd-npl__artist">{[t.artist, big ? t.album : undefined].filter(Boolean).join(' · ')}</span> : null}
+      {Title(t ? t.title : L.nothingPlaying, big)}
+      {label ? <span class="pd-npl__artist pd-npx__label">{label}</span> : t ? Artist([t.artist, big ? t.album : undefined].filter(Boolean).join(' · ')) : null}
     </>
   )
   // track change: the outgoing block fades and slides out while the incoming one comes in (Knowns Pro now-playing transition look)
@@ -356,10 +392,8 @@ export function NowPlayingTile(props: NowPlayingTileProps) {
   const StaticText = (big: boolean) => (
     <span class="pd-npl__txt">
       {state === 'last' && (big || !two) ? <span class="pd-npl__chip">{variant === 'compact' || variant === 'medium' ? agoText((props.last && props.last.at) || nowTick, nowTick) : tn('Last played') + ' · ' + agoShort((props.last && props.last.at) || nowTick, nowTick)}</span> : null}
-      <span class={'pd-npl__title' + (two ? ' pd-npl__title--two' : '')} style={{ fontSize: (big ? 18 : two ? 13 : 14) * Math.min(1.15, props.scale) + 'px' }}>
-        {vt ? vt.title : t('Nothing playing')}
-      </span>
-      {vt || !two ? <span class="pd-npl__artist">{vt ? [vt.artist, big ? vt.album : undefined].filter(Boolean).join(' · ') : emptySub}</span> : null}
+      {Title(vt ? vt.title : t('Nothing playing'), big)}
+      {vt || !two ? Artist(vt ? [vt.artist, big ? vt.album : undefined].filter(Boolean).join(' · ') : emptySub) : null}
     </span>
   )
   const Text = (big: boolean) =>

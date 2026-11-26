@@ -1,6 +1,6 @@
 import { gpuFromHelper } from "./win32/gpu";
 import { createHash } from "node:crypto";
-import { escapePowerShell } from "../actions";
+import { buildCommand, escapePowerShell } from "../actions";
 import { runCapture } from "./exec";
 import { WinHelper } from "./win32/helper";
 import { idleSeconds as realIdle, realCredApi, sendInput, vkScan, type CredApi } from "./win32/ffi";
@@ -186,6 +186,7 @@ export function createWin32(d: Win32Deps = {}): Platform {
         case "type": await sendPaced(typeEvents(a.text)); return;
         case "media": send(mediaEvents(a.command)); return;
         case "volume": send(volumeKeyEvents(a.command)); return;
+        case "lock": await run(buildCommand(a, "win32")); return;
         default: throw new Error(`${a.type} actions are not run as OS commands`);
       }
     },
@@ -259,7 +260,8 @@ export function createWin32(d: Win32Deps = {}): Platform {
 
     secrets: credentialStore(d.cred),
     /** Newer Claude Code may keep the OAuth secrets in Credential Manager. Read-only; the first target that holds JSON with an access token wins. */
-    async claudeCredentials() {
+    async claudeCredentials(service) {
+      if (service && service !== "Claude Code-credentials") return null; // an extra folder: its .credentials.json only
       const api = d.cred ?? realCredApi;
       for (const target of CLAUDE_CRED_TARGETS) {
         try {

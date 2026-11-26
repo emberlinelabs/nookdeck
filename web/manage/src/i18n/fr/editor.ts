@@ -236,4 +236,8 @@ export const FR_EDITOR: Record<string, string> = {
   "Tile sizes": "Tailles des tuiles",
   "Per-tile colour and fill": "Couleur et remplissage par tuile",
   "Screen size preview": "Aperçu par taille d'écran",
+  // preview at a connected phone's size
+  "Connected phone (auto)": "Téléphone connecté (auto)",
+  "none online": "aucun en ligne",
+  "A paired phone (offline)": "Un téléphone associé (hors ligne)",
 };

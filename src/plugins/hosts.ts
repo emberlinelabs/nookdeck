@@ -13,6 +13,9 @@ import { PluginLog, PluginProcess, hostArgv, realSpawn, type ProcessInfo, type S
 import type { PluginStore } from "./store";
 import type { SourceDeps } from "./sources";
 
+/** A plugin that must keep running without a phone asking: it reports On Air or sends notifications (reminders, a timer's end). */
+const alwaysOn = (g: { onair?: boolean; notify?: boolean } | null | undefined): boolean => !!(g?.onair || g?.notify);
+
 export interface HostsDeps extends SourceDeps {
   keys: { hotkey(k: string): Promise<void>; type(t: string): Promise<void> };
   spawn?: SpawnFn;
@@ -23,6 +26,8 @@ export interface HostsDeps extends SourceDeps {
   timing?: Partial<Pick<ConstructorParameters<typeof PluginProcess>[0], "pingIntervalMs" | "pingTimeoutMs" | "callTimeoutMs" | "idleStopMs" | "backoffMs" | "restartResetMs" | "restartMax">>;
   /** On Air, for plugins granted `onair` (ctx.onair.set). `clear` = this plugin reports nothing any more (stopped, disabled, revoked). */
   onair?: { set(pluginId: string, kind: OnAirKind, on: boolean, since?: number): void; clear(pluginId: string): void };
+  /** Notifications for plugins granted `notify` (ctx.notify), already checked and limited. */
+  notify?: (pluginId: string, n: { title: string; body?: string; level?: "info" | "warn" | "alert"; sound?: string }) => void;
   /** Client WebSockets for ctx.net.websocket (tests); the runtime's WebSocket otherwise. */
   websocket?: (url: string, protocols: string[]) => WebSocketLike;
 }
@@ -44,10 +49,13 @@ export class PluginHosts {
     store.onChange(() => void this.reconcile());
   }
 
-  /** Plugins granted `onair` report live state even with no phone open: start them now (the agent calls this once it is up). */
+  /**
+   * Plugins granted `onair` report live state, and plugins granted `notify` send reminders, even with no phone open or with the
+   * phone asleep: start them now (the agent calls this once it is up), and never stop them as idle.
+   */
   startEager(): void {
     for (const id of this.store.ids()) {
-      if (!this.store.entry(id)?.state.granted?.onair) continue;
+      if (!alwaysOn(this.store.entry(id)?.state.granted)) continue;
       const s = this.slot(id);
       s?.proc.ensureStarted().catch((e) => s.log.append(`[agent] start failed: ${e?.message ?? e}`));
     }
@@ -84,6 +92,7 @@ export class PluginHosts {
       dataFile: join(this.dataDir, `${id}.json`),
       ...(this.deps.websocket ? { websocket: this.deps.websocket } : {}),
       onair: (kind, on, since) => this.deps.onair?.set(id, kind, on, since),
+      notify: (n) => this.deps.notify?.(id, n),
     });
     const slot: Slot = {
       version: e.state.version, sha: e.state.sha256, settingsJson: JSON.stringify(e.state.settings), every: {}, log,
@@ -103,7 +112,7 @@ export class PluginHosts {
           for (const a of m?.actions ?? []) if ("agent" in a.run && !r.actions.includes(a.id)) log.append(`[agent] warning: action "${a.id}" has no ctx.actions.handle("${a.id}", ...)`); for (const f of this.registeredFns) f(id); },
         onFailed: (m) => { for (const f of this.failedFns) f(id, m); },
         onEnded: () => this.deps.onair?.clear(id),
-        keepAlive: () => !!this.store.entry(id)?.state.granted?.onair,
+        keepAlive: () => alwaysOn(this.store.entry(id)?.state.granted),
         ...this.deps.timing,
       }),
     };

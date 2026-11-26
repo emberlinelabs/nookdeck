@@ -162,6 +162,7 @@ export async function runPluginHost(io: HostIO): Promise<void> {
       actions: { handle(id, fn) { handlers.set(String(id), fn); } },
     };
     if (p.granted.shell) ctx.shell = { run: (cmd) => rpc("shell.run", { cmd: String(cmd) }) };
+    if (p.granted.notify) ctx.notify = async (title, o) => { await rpc("notify", { title, ...(o ?? {}) }); };
     if (p.granted.onair) ctx.onair = { set: (kind, on, since) => { rpc("onair.set", { kind, on: !!on, ...(since !== undefined ? { since } : {}) }).catch((e) => log("onair.set failed:", e?.message ?? e)); } };
     if (p.granted.keyboard) ctx.keys = { hotkey: async (k) => { await rpc("keys.hotkey", { k: String(k) }); }, type: async (t) => { await rpc("keys.type", { t: String(t) }); } };
     return ctx;

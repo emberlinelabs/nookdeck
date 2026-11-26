@@ -275,6 +275,7 @@ function ActionFields({ action, pages, onChange, onPickApp }: { action: Action |
         </Field>
       )}
       {a?.type === "sound" && <SoundFields action={a} onChange={(next) => onChange(next)} />}
+      {a?.type === "lock" && <p className="text-xs text-muted-foreground">{t("Locks the computer the right way for its system: the lock shortcut on macOS, the lock screen on Windows and Linux.")}</p>}
       {a?.type === "sound-stop" && <p className="text-xs text-muted-foreground">{t("Press this button to stop all playing sounds (on the computer and the phone).")}</p>}
       {a?.type === "macro" && <MacroEditor steps={a.steps} pages={pages} onChange={(steps) => onChange({ type: "macro", steps })} />}
       {a?.type === "hass" && <HassFields action={a} onChange={(next) => onChange(next)} />}

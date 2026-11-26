@@ -73,7 +73,7 @@ export function parsePermissions(v: unknown, where = "permissions"): Permissions
   if (v === undefined || v === null) return { network: [] };
   if (!isObj(v)) return fail(`${where} must be an object`);
   const out: Permissions = { network: [] };
-  for (const k of Object.keys(v)) if (!["network", "shell", "keyboard", "storage", "onair"].includes(k)) fail(`${where}.${k} is not a known permission (network, shell, keyboard, storage, onair)`);
+  for (const k of Object.keys(v)) if (!["network", "shell", "keyboard", "storage", "onair", "notify"].includes(k)) fail(`${where}.${k} is not a known permission (network, shell, keyboard, storage, onair, notify)`);
   if (v.network !== undefined) {
     if (!Array.isArray(v.network) || v.network.length > 20) fail(`${where}.network must be a list of up to 20 host names or WebSocket origins`);
     const hosts = (v.network as unknown[]).map((h, i) => {
@@ -85,7 +85,7 @@ export function parsePermissions(v: unknown, where = "permissions"): Permissions
     });
     out.network = [...new Set(hosts)];
   }
-  for (const k of ["shell", "keyboard", "storage", "onair"] as const) {
+  for (const k of ["shell", "keyboard", "storage", "onair", "notify"] as const) {
     if (v[k] === undefined) continue;
     if (typeof v[k] !== "boolean") fail(`${where}.${k} must be true or false`);
     if (v[k]) out[k] = true;
@@ -99,7 +99,7 @@ const patternCovers = (pattern: string, host: string): boolean =>
 /** Is everything in `asked` also in `have`? (a network host needs an equal or wider pattern) */
 export function covers(have: Permissions | null | undefined, asked: Permissions): boolean {
   const h = have ?? { network: [] };
-  for (const k of ["shell", "keyboard", "storage", "onair"] as const) if (asked[k] && !h[k]) return false;
+  for (const k of ["shell", "keyboard", "storage", "onair", "notify"] as const) if (asked[k] && !h[k]) return false;
   for (const host of asked.network) if (!h.network.some((p) => patternCovers(p, host))) return false;
   return true;
 }
@@ -112,6 +112,7 @@ export function describePermissions(p: Permissions): string[] {
   if (p.keyboard) out.push("Press keys and type text on this computer");
   if (p.storage) out.push("Keep its own saved data");
   if (p.onair) out.push("Turn On Air on");
+  if (p.notify) out.push("Show notifications on your phones");
   return out;
 }
 

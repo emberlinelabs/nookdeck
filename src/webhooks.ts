@@ -108,7 +108,7 @@ export class PushStore {
 }
 
 export type NotifyLevel = "info" | "warn" | "alert";
-export interface Notification { id: string; title: string; body?: string; level: NotifyLevel; at: number; expiresAt?: number; source?: string }
+export interface Notification { id: string; title: string; body?: string; level: NotifyLevel; at: number; expiresAt?: number; source?: string; /** played by phones that can (a plugin's ctx.notify) */ sound?: string }
 
 /** The 50 most recent notifications (newest first). */
 export class NotificationStore {
@@ -116,12 +116,12 @@ export class NotificationStore {
   private seq = 0;
   constructor(private now: () => number = Date.now) {}
 
-  add(n: { title: string; body?: string; level?: NotifyLevel; ttl?: number; source?: string }): Notification {
+  add(n: { title: string; body?: string; level?: NotifyLevel; ttl?: number; source?: string; sound?: string }): Notification {
     const at = this.now();
     const note: Notification = {
       id: `${at.toString(36)}${(this.seq++).toString(36)}`,
       title: n.title.slice(0, 120), ...(n.body ? { body: n.body.slice(0, 500) } : {}),
-      level: n.level ?? "info", at, ...(n.ttl && n.ttl > 0 ? { expiresAt: at + Math.min(n.ttl, 86400) * 1000 } : {}), ...(n.source ? { source: n.source } : {}),
+      level: n.level ?? "info", at, ...(n.ttl && n.ttl > 0 ? { expiresAt: at + Math.min(n.ttl, 86400) * 1000 } : {}), ...(n.source ? { source: n.source } : {}), ...(n.sound ? { sound: n.sound } : {}),
     };
     this.items.unshift(note);
     if (this.items.length > NOTIFY_MAX) this.items.length = NOTIFY_MAX;

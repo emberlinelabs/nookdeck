@@ -33,6 +33,24 @@ export interface ProviderQuota {
   source?: QuotaSource;
   /** Balances (credits, resets...). */
   extras?: QuotaExtra[];
+  /** The sign-in is expired or gone and Nookdeck cannot renew it: the phone says "Sign in again on your computer". */
+  status?: "needs_login";
+  /** The windows are the last good reading, not a current one (expired token, network, rate limit). */
+  stale?: boolean;
+  /** Several accounts / profiles (Claude config folders, Codex homes): one entry each, the default first. Only with 2 or more. */
+  accounts?: QuotaAccount[];
+}
+
+/** One account of a provider, as phones get it: no folder, email or token (NFR: secrets and paths stay on the agent). */
+export interface QuotaAccount {
+  id: string;
+  label: string;
+  plan?: string;
+  windows: QuotaWindow[];
+  status?: "needs_login";
+  stale?: boolean;
+  error?: string;
+  fetchedAt: number;
 }
 
 export type SessionState = "working" | "waiting" | "idle";

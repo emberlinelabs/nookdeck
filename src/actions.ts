@@ -9,7 +9,7 @@ import { platform } from "./platform";
  * Contract:
  * - `buildCommand(action, platform)` is pure and always returns ONE argv (`string[]`). On macOS, hotkey / type / media /
  *   volume have no argv: they are native calls (src/platform/mac-native.ts) and buildCommand throws MAC_NATIVE for them.
- *   `page` actions have no command and make buildCommand throw.
+ *   `page` actions have no command and make buildCommand throw. `lock` is native on macOS (ctrl+cmd+q), a command elsewhere.
  * - `runAction(action)` resolves on exit code 0 and throws an Error otherwise
  *   (stderr trimmed, or "timed out" after 10 s). `page` resolves immediately.
  *
@@ -20,7 +20,7 @@ import { platform } from "./platform";
 export { ACTION_TIMEOUT_MS } from "./platform/exec";
 
 export { parseHotkey, type ParsedHotkey } from "./platform/hotkey";
-import { parseHotkey, type ParsedHotkey } from "./platform/hotkey";
+import { parseHotkey } from "./platform/hotkey";
 
 // ---------- macOS ----------
 // Keys, typing, media keys and volume on macOS are native calls (src/platform/mac-native.ts), not commands:
@@ -141,6 +141,13 @@ export function buildCommand(a: Action, platform: NodeJS.Platform, input: LinuxI
       if (isWin) return ps(`(New-Object -ComObject WScript.Shell).SendKeys([char]${WIN_MEDIA[a.command]})`);
       return ["playerctl", a.command === "playpause" ? "play-pause" : a.command];
 
+    case "lock":
+      // macOS: the system lock shortcut ctrl+cmd+q, sent natively like any hotkey (no public lock API without private frameworks)
+      if (isMac) throw new Error(MAC_NATIVE);
+      if (isWin) return ["rundll32.exe", "user32.dll,LockWorkStation"];
+      // systemd-logind tells the desktop (GNOME, KDE, ...) to lock; xdg-screensaver covers sessions without logind
+      return ["sh", "-c", "loginctl lock-session || xdg-screensaver lock"];
+
     case "volume":
       if (isMac) throw new Error(MAC_NATIVE);
       if (isWin) {
@@ -225,9 +232,6 @@ export function getVolumeCached(): VolumeState | null {
 export { runCapture } from "./platform/exec";
 import { runCapture } from "./platform/exec";
 
-async function exec(argv: string[]): Promise<void> {
-  await runCapture(argv);
-}
 
 export async function runAction(a: Action): Promise<void> {
   if (a.type === "page") return;

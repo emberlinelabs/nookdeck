@@ -34,6 +34,7 @@ function toAction(st: MacroStep): Action | null {
     case "hass": return { type: "hass", service: st.service, ...(st.entityId ? { entityId: st.entityId } : {}), ...(st.data ? { data: st.data } : {}) };
     case "onair": return { type: "onair", ...(st.mode ? { mode: st.mode } : {}) };
     case "mic": return { type: "mic", ...(st.mode ? { mode: st.mode } : {}) };
+    case "lock": return { type: "lock" };
     default: return null;
   }
 }

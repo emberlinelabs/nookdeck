@@ -236,4 +236,8 @@ export const VI_EDITOR: Record<string, string> = {
   "Tile sizes": "Kích thước ô",
   "Per-tile colour and fill": "Màu và kiểu nền từng ô",
   "Screen size preview": "Xem trước theo cỡ màn hình",
+  // preview at a connected phone's size
+  "Connected phone (auto)": "Điện thoại đang kết nối (tự động)",
+  "none online": "chưa có máy nào",
+  "A paired phone (offline)": "Điện thoại đã ghép nối (đang tắt)",
 };

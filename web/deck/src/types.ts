@@ -10,6 +10,7 @@ export type Action =
   | { type: 'page'; page: string }
   | { type: 'sound'; sound: string; on?: 'mac' | 'phone' | 'both'; volume?: number; mode?: 'overlap' | 'restart' | 'toggle' }
   | { type: 'sound-stop' }
+  | { type: 'lock' }
   | { type: 'macro'; steps: { kind: string; [k: string]: unknown }[] }
   | { type: 'plugin'; plugin: string; action: string; args?: { [k: string]: unknown } }
   | { type: 'hass'; service: string; entityId?: string; data?: { [k: string]: unknown } }
@@ -83,6 +84,8 @@ export interface Notice {
   level?: 'info' | 'warn' | 'alert'
   at: number
   ttl?: number
+  /** a plugin's ctx.notify sound, played when the notification arrives */
+  sound?: 'chime' | 'soft' | 'birds'
 }
 export interface GotoReq {
   id: string
@@ -210,6 +213,12 @@ export interface ScreenSettings {
   keepAwake?: boolean
   /** move the grid by up to 2 px every 3 minutes against burn-in; missing = off */
   burnInShift?: boolean
+  /** swiping past the last page goes to the first and back; missing = off */
+  wrap?: boolean
+  /** hide the page dots (they show for a moment while swiping); missing = shown */
+  hideDots?: boolean
+  /** after a button that locks the computer: this phone goes black (default), every phone, or none (the agent sends {type:'sleep'}) */
+  lockSleep?: 'phone' | 'all' | 'off'
   standby?: {
     enabled: boolean
     /** idle minutes (no touch) before standby, 1..120; default 5 */
@@ -315,6 +324,8 @@ export interface AiAccount {
   plan?: string
   windows: AiWindow[]
   stale?: boolean
+  /** why this account has no current reading (the agent sends it per account) */
+  error?: string
   fetchedAt?: number | string
 }
 export interface AiExtra {

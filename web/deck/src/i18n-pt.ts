@@ -250,4 +250,5 @@ export const PT: { [en: string]: string } = {
   "Tap to show the deck": "Toque para mostrar o painel",
   "Full-screen ON AIR": "ON AIR em tela cheia",
   "While On Air is on, this phone shows a large ON AIR sign": "Com o On Air ligado, este celular mostra uma placa ON AIR grande",
+  "Tap to wake": "Toque para acordar",
 };

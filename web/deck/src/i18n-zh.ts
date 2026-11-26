@@ -226,4 +226,5 @@ export const ZH: { [en: string]: string } = {
   "Tap to show the deck": "轻点显示面板",
   "Full-screen ON AIR": "全屏 ON AIR",
   "While On Air is on, this phone shows a large ON AIR sign": "On Air 开启时，此手机显示大号 ON AIR 标牌",
+  "Tap to wake": "轻点唤醒",
 }

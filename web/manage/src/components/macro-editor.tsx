@@ -25,6 +25,7 @@ const KINDS: { kind: Kind; label: string; hint: string }[] = [
   { kind: "volume", label: "Volume", hint: "Up, down, mute" },
   { kind: "hass", label: "Home Assistant", hint: "Call a Home Assistant service" },
   { kind: "item", label: "Press another button", hint: "Run the action of an existing button" },
+  { kind: "lock", label: "Lock computer", hint: "Lock the computer's screen" },
   { kind: "notify", label: "Notification", hint: "Show a notification on the phone" },
 ];
 const LABEL = Object.fromEntries(KINDS.map((k) => [k.kind, k.label])) as Record<Kind, string>;
@@ -40,6 +41,7 @@ export function newStep(kind: Kind, pages: Page[] = []): MacroStep {
     case "volume": return { kind, command: "up" };
     case "hass": return { kind, service: "" };
     case "item": return { kind, pageId: pages[0]?.id ?? "", itemId: "" };
+    case "lock": return { kind };
     case "notify": return { kind, text: "" };
   }
 }
@@ -162,6 +164,7 @@ function StepFields({ i, step: s, pages, onChange }: { i: number; step: MacroSte
       </>
     );
     case "item": return <ItemRefPicker pages={pages} pageId={s.pageId} itemId={s.itemId} idPrefix={`ms-${i}`} onChange={(pageId, itemId) => onChange({ ...s, pageId, itemId })} />;
+    case "lock": return null;
     case "notify": return <Input size="sm" aria-label={t("Notification text")} value={s.text} maxLength={200} placeholder={t("Notification text")} onChange={(e) => onChange({ ...s, text: e.target.value })} />;
   }
 }

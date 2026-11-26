@@ -63,6 +63,8 @@ export interface ScreenLayerProps {
   preview?: boolean
   /** preview flags: standby, alarm, sunrise, dim */
   pvFlags?: string[]
+  /** the phone sleeps (a button locked the computer): no keep-awake video */
+  asleep?: boolean
 }
 
 export function ScreenLayer(props: ScreenLayerProps) {
@@ -97,7 +99,7 @@ export function ScreenLayer(props: ScreenLayerProps) {
 
   // keep awake: Deck.tsx holds the Wake Lock; phones without it (iOS 12) get the muted looping inline video trick
   useEffect(() => {
-    if (preview || !keepAwakeOn(s) || (navigator as any).wakeLock) return
+    if (preview || props.asleep || !keepAwakeOn(s) || (navigator as any).wakeLock) return
     const video = document.createElement('video')
     video.setAttribute('muted', '')
     video.setAttribute('playsinline', '')
@@ -125,7 +127,7 @@ export function ScreenLayer(props: ScreenLayerProps) {
       document.removeEventListener('click', play, true)
       if (video.parentNode) video.parentNode.removeChild(video)
     }
-  }, [preview, !!(s && s.keepAwake === false)])
+  }, [preview, !!(s && s.keepAwake === false), !!props.asleep])
 
   // touches: idle clock + audio unlock
   useEffect(() => {

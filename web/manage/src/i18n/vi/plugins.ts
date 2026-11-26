@@ -245,4 +245,7 @@ export const VI_PLUGINS: Record<string, string> = {
   "Loading the choices…": "Đang tải danh sách…",
   "Could not get the choices ({error}). You can type the name.": "Không lấy được danh sách ({error}). Bạn có thể gõ tên.",
   "No choices yet. You can type the name.": "Chưa có lựa chọn nào. Bạn có thể gõ tên.",
+  // plugin API: notifications
+  "Show notifications on your phones": "Hiện thông báo trên điện thoại",
+  "Can show notifications on your phones, with a sound.": "Có thể hiện thông báo trên điện thoại, kèm âm thanh.",
 };

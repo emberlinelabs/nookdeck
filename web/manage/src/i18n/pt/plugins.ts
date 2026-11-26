@@ -248,4 +248,7 @@ export const PT_PLUGINS: Record<string, string> = {
   "Loading the choices…": "Carregando as opções…",
   "Could not get the choices ({error}). You can type the name.": "Não foi possível obter as opções ({error}). Você pode digitar o nome.",
   "No choices yet. You can type the name.": "Ainda não há opções. Você pode digitar o nome.",
+  // plugin API: notifications
+  "Show notifications on your phones": "Mostrar notificações nos seus celulares",
+  "Can show notifications on your phones, with a sound.": "Pode mostrar notificações nos seus celulares, com um som.",
 };

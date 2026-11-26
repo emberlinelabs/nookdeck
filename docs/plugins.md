@@ -50,6 +50,7 @@ The user sees this list before the plugin turns on, and nothing runs until they 
 | `keyboard` | Press keys and type text. |
 | `storage` | Keep the plugin's own data. |
 | `onair` | Turn On Air on while the plugin reports it is live or recording (see [On Air](#on-air)). |
+| `notify` | Show notifications on the phones, with an optional sound (see [Notifications](#notifications)). |
 
 Ask for the least you need. Plugins from a link or a folder are shown as **Unreviewed**.
 
@@ -354,6 +355,7 @@ Each code plugin runs in its own process, started by the agent, so a crash or a 
 | `ctx.net.fetch(url, init?)` | `network` hosts | `fetch`, limited to the hosts you list |
 | `ctx.net.websocket(url, { protocols? })` | `network` ws origins | A WebSocket to an origin you list. See [WebSockets](#websockets) |
 | `ctx.settings.options(id, fn)` | | Supplies the choices of a `select` with `optionsFrom: id` |
+| `ctx.notify?.(title, { body?, level?, sound? })` | `notify` | Shows a notification on every phone. See [Notifications](#notifications) |
 | `ctx.onair?.set(kind, on, since?)` | `onair` | Tells On Air you are live (`"stream"`) or recording (`"record"`). Present only when granted |
 | `ctx.shell?.run(cmd)` | `shell` | Run a command, get `{ code, stdout }`. Present only when granted |
 | `ctx.keys?.hotkey / type` | `keyboard` | Press keys and type text. Present only when granted |
@@ -361,7 +363,7 @@ Each code plugin runs in its own process, started by the agent, so a crash or a 
 | `ctx.widgets.push(id, update)` | | Push new data when something changes |
 | `ctx.actions.handle(id, fn)` | | Handle a button press |
 
-`ctx.shell`, `ctx.keys` and `ctx.onair` exist only when the user granted that permission. A call that is not allowed (a host you did not list, storage without `storage`) rejects with a `PluginPermissionError`. A widget provider or an action handler receives the plugin-wide settings overlaid with the tile's own settings. The exact types are in `src/plugins/api.ts`, re-exported by `@nookdeck/plugin` (`PluginContext`, `PluginModule`, `WidgetUpdate`).
+`ctx.shell`, `ctx.keys`, `ctx.onair` and `ctx.notify` exist only when the user granted that permission. A call that is not allowed (a host you did not list, storage without `storage`) rejects with a `PluginPermissionError`. A widget provider or an action handler receives the plugin-wide settings overlaid with the tile's own settings. The exact types are in `src/plugins/api.ts`, re-exported by `@nookdeck/plugin` (`PluginContext`, `PluginModule`, `WidgetUpdate`).
 
 ### No dependencies
 
@@ -380,11 +382,12 @@ An import of any other package stops the plugin with a message that says so. The
 | `net.fetch` | 5 MB response, 15 s, 5 redirects, only your listed hosts (checked on every redirect) |
 | `net.websocket` | 4 open sockets, 1 MB per message either way, text frames only, 10 s to connect, only your listed origins, no redirects |
 | Choices (`optionsFrom`) | 200 per list, 200 characters each |
+| `notify` | 6 a minute; title up to 120 characters, body up to 500 |
 | `shell.run` | 30 s |
 | `storage` | 1 MB in total |
 | Widget refresh | `every` defaults to 60 s, minimum 5 s |
 | After a crash | restarts after 0.5, 2, 10, then 60 s; marked failed after 8 crashes in a row |
-| Idle | a plugin with no calls for 5 minutes is stopped and starts again on the next call, unless it has a WebSocket open or the `onair` permission |
+| Idle | a plugin with no calls for 5 minutes is stopped and starts again on the next call, unless it has a WebSocket open or the `onair` or `notify` permission (those start with the agent and keep running) |
 
 ### WebSockets
 
@@ -435,6 +438,20 @@ ctx.onair.set("record", false);             // recording stopped
 ```
 
 These feed On Air's OBS sources (live and recording). The owner can turn that source off in the On Air settings. When the plugin stops, is turned off or loses the permission, its On Air state is cleared. A plugin with `onair` starts when the agent starts, not only when a phone shows one of its tiles, so On Air works with no phone open. The install screen says "Turn On Air on".
+
+### Notifications
+
+A plugin with `"notify": true` in its permissions gets `ctx.notify`. The notification shows as a toast on every phone and in the notification list, like one from the notify webhook:
+
+```ts
+await ctx.notify?.("Time for a glass of water", { body: "3 of 8 today", sound: "chime" });
+```
+
+- `level` is `info` (default), `warn` or `alert`, and colours the toast.
+- `sound` is `chime`, `soft` or `birds`. The phone plays it once with the toast. A browser plays sound only after the page has been tapped once, so a phone that was never touched since it loaded shows the toast without sound.
+- More than 6 notifications in a minute are refused (the call rejects). Keep reminders rare.
+- A plugin with `notify` starts with the agent and is never stopped as idle, so a reminder or a timer's end comes on time while the phones sleep. Phones that were asleep find it in their notification list.
+- Needs Nookdeck 0.7.
 
 ### Permissions and trust
 

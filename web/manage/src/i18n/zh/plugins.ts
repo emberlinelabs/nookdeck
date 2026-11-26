@@ -248,4 +248,7 @@ export const ZH_PLUGINS: Record<string, string> = {
   "Loading the choices…": "正在加载选项…",
   "Could not get the choices ({error}). You can type the name.": "无法获取选项（{error}）。你可以直接输入名称。",
   "No choices yet. You can type the name.": "还没有选项。你可以直接输入名称。",
+  // plugin API: notifications
+  "Show notifications on your phones": "在手机上显示通知",
+  "Can show notifications on your phones, with a sound.": "可以在手机上显示通知，并播放提示音。",
 };

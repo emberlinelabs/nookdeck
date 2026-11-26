@@ -3,6 +3,7 @@ import { api } from "@/api";
 import { Field } from "@/components/ui/knowns/input";
 import { Select } from "@/components/ui/knowns/select";
 import { Switch } from "@/components/ui/knowns/switch";
+import { QuotaAccountPicker } from "@/components/ai-accounts";
 import { cn } from "@/lib/utils";
 import { t, useLanguage } from "@/lib/i18n";
 import { QUOTA_CHARTS, type AiProvider, type QuotaChart, type QuotaOptions } from "@/types";
@@ -79,6 +80,7 @@ export function QuotaOptionsForm({ provider, value, onChange }: { provider: AiPr
 
   return (
     <div className="flex flex-col gap-3">
+      {(provider === "claude" || provider === "codex") && <QuotaAccountPicker tool={provider} id={`${uid}-account`} value={o.account} onChange={(account) => set({ account })} />}
       <Field label={t("Quota display style")} id={`${uid}-chart`}>
         <div role="radiogroup" aria-label={t("Quota display style")} className="grid grid-cols-3 gap-2">
           {QUOTA_CHARTS.map((c) => (

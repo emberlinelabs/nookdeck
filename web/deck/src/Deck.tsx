@@ -15,9 +15,11 @@ import { ScreenLayer, ScreenSheet } from './screen'
 import { swapPreview } from './swap'
 import { LiveBadge, OnAirSign, OnAirTile } from './onair'
 import { liveView, signVisible, PEEK_MS, type LiveView } from './live-logic'
+import { DOTS_FLASH_MS, dotsVisible, edgeWrap, swipeTarget } from './page-logic'
 import type { OnAirMsg } from '../../shared/onair'
 import { coreTileOf, previewSlot } from './plugin-logic'
 import { CameraView, setCameraBase } from './camera'
+import { previewSound } from './alarm-sound'
 import type { PluginSlot } from './plugin-logic'
 import { browserShiftHost, headerMode, keepAwakeOn, liteOn, localScreen, onLocalScreen, runShift, shiftOn } from './screen-logic'
 import type { PermissionRequest, QuestionRequest, WeatherData, PushedValue, Notice, GotoReq, HassEntity, HassState, IconAssets, AiData, Item, Layout, Media, MediaCommand, Orientation, Page, Stats, Theme, TileStyle } from './types'
@@ -1134,6 +1136,13 @@ export function Deck(props: DeckProps) {
     }
   }, [])
 
+  // the agent learns this phone's screen size (the manage page can preview at it); a size that settles for half a second
+  useEffect(() => {
+    if (preview || DEMO.on) return
+    const id = window.setTimeout(() => client.setViewport(vp.w, vp.h), 500)
+    return () => window.clearTimeout(id)
+  }, [vp.w, vp.h])
+
   // connect only while visible (never in preview)
   useEffect(() => {
     if (!active || preview) return
@@ -1196,6 +1205,10 @@ export function Deck(props: DeckProps) {
     for (let i = 0; i < l.length && l[i].id !== seenNote.current; i++) fresh.push(l[i])
     seenNote.current = l[0].id
     if (fresh.length && !preview) showToast(fresh[fresh.length - 1].title + (fresh[fresh.length - 1].body ? ' · ' + fresh[fresh.length - 1].body : ''), fresh[fresh.length - 1].level || 'info')
+    // one sound for the newest notification that has one (a plugin's ctx.notify); the browser needs an earlier tap, which the deck has had
+    let sound: Notice['sound']
+    for (let i = 0; i < fresh.length && !sound; i++) sound = fresh[i].sound
+    if (sound && !preview) previewSound(sound)
   }, [st.notes])
 
   // goto request: immediate when countdown is 0, otherwise a visible countdown that can be cancelled
@@ -1222,8 +1235,29 @@ export function Deck(props: DeckProps) {
     return () => clearTimeout(t)
   }, [gt])
 
+  // screen settings for swiping, the dots and sleep
+  const scrSet = st.layout && st.layout.theme ? st.layout.theme.screen : undefined
+  const wrapRef = useRef(false)
+  wrapRef.current = !!(scrSet && scrSet.wrap)
+  const hideDots = !!(scrSet && scrSet.hideDots)
+  const [dotsUntil, setDotsUntil] = useState(0)
+  const flashDots = () => {
+    if (hideDots) setDotsUntil(Date.now() + DOTS_FLASH_MS)
+  }
+  useEffect(() => {
+    if (!dotsUntil) return
+    const id = window.setTimeout(() => setDotsUntil(0), Math.max(0, dotsUntil - Date.now()) + 30)
+    return () => window.clearTimeout(id)
+  }, [dotsUntil])
+  useEffect(() => {
+    flashDots()
+  }, [pageIdx])
+  // a button locked the computer: black screen, no wake lock, until a tap (the agent sends {type:'sleep'})
+  const [wokeAt, setWokeAt] = useState(0)
+  const asleep = !preview && !!st.sleepAt && st.sleepAt > wokeAt
+
   // screen wake lock
-  const keepAwake = keepAwakeOn(st.layout && st.layout.theme ? st.layout.theme.screen : undefined)
+  const keepAwake = keepAwakeOn(st.layout && st.layout.theme ? st.layout.theme.screen : undefined) && !asleep
   useEffect(() => {
     if (!active || preview || !keepAwake) return
     let lock: any = null
@@ -1405,6 +1439,59 @@ export function Deck(props: DeckProps) {
   }, [st.status, st.layout])
 
   /**
+   * Wrap around on the native (not rotated) strip: past the last page the browser cannot scroll, so a horizontal swipe there (started anywhere,
+   * buttons and list tiles included: the touch bubbles to the strip) jumps to the first page, and back from the first to the last.
+   * Also shows hidden page dots for a moment when a finger goes down.
+   */
+  useEffect(() => {
+    const s = stripRef.current
+    if (!s || rotated || st.status === 'pair') return
+    let t0: { x: number; y: number; t: number; i: number } | null = null
+    let last = { x: 0, y: 0 }
+    const down = (e: TouchEvent) => {
+      flashDots()
+      if (e.touches.length !== 1 || !wrapRef.current) { t0 = null; return }
+      const tg = e.target as HTMLElement | null
+      if (tg && tg.closest && tg.closest('input, select, textarea, [data-noswipe]')) { t0 = null; return }
+      const tt = e.touches[0]
+      t0 = { x: tt.clientX, y: tt.clientY, t: Date.now(), i: idxRef.current }
+      last = { x: tt.clientX, y: tt.clientY }
+    }
+    const move = (e: TouchEvent) => {
+      if (t0 && e.touches.length === 1) last = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+    }
+    const end = () => {
+      if (!t0) return
+      const dx = last.x - t0.x
+      const dy = last.y - t0.y
+      const v = dx / Math.max(1, Date.now() - t0.t)
+      const j = edgeWrap(t0.i, pagesRef.current.length, dx, dy, v, wrapRef.current)
+      t0 = null
+      if (j < 0) return
+      swiped.current = Date.now()
+      window.setTimeout(() => {
+        startIdx.current = -1 // a wrap jump is wanted: settle() must not clamp it back to one page from the start
+        goTo(j, true)
+      }, 0)
+    }
+    const click = (e: Event) => {
+      if (Date.now() - swiped.current < 350) { e.stopPropagation(); e.preventDefault() }
+    }
+    s.addEventListener('touchstart', down, { passive: true })
+    s.addEventListener('touchmove', move, { passive: true })
+    s.addEventListener('touchend', end, { passive: true })
+    s.addEventListener('touchcancel', end, { passive: true })
+    s.addEventListener('click', click, true)
+    return () => {
+      s.removeEventListener('touchstart', down)
+      s.removeEventListener('touchmove', move)
+      s.removeEventListener('touchend', end)
+      s.removeEventListener('touchcancel', end)
+      s.removeEventListener('click', click, true)
+    }
+  }, [rotated, st.status, st.layout, hideDots])
+
+  /**
    * Rotated deck: the strip's scroll axis is the screen's y axis, so native touch scrolling goes the wrong way. The strip gets touch-action:none and
    * swipes are read in the deck's own frame (client y == deck x when rotated 90deg). Left swipe in the deck = next page, with a rubber band at the ends.
    */
@@ -1464,8 +1551,8 @@ export function Deck(props: DeckProps) {
       swiped.current = Date.now()
       const w = s.clientWidth
       let i = startI
-      if (dx < -40 || (dx < -15 && v < -0.4)) i = Math.min(pagesRef.current.length - 1, i + 1)
-      else if (dx > 40 || (dx > 15 && v > 0.4)) i = Math.max(0, i - 1)
+      if (dx < -40 || (dx < -15 && v < -0.4)) i = swipeTarget(i, 1, pagesRef.current.length, wrapRef.current)
+      else if (dx > 40 || (dx > 15 && v > 0.4)) i = swipeTarget(i, -1, pagesRef.current.length, wrapRef.current)
       if (i !== idxRef.current) goTo(i, true)
       else s.scrollLeft = i * w
     }
@@ -2152,7 +2239,7 @@ export function Deck(props: DeckProps) {
                 })}
               </div>
               {pages.length > 1 ? (
-                <div class="pd-dots" role="tablist" data-part="page-dots">
+                <div class={'pd-dots' + (hideDots ? ' pd-dots--auto' : '') + (dotsVisible(hideDots, dotsUntil, Date.now()) ? '' : ' pd-dots--off')} role="tablist" data-part="page-dots">
                   {pages.map((p, i) => (
                     <button key={p.id} type="button" role="tab" aria-label={p.name || p.id} class="pd-dots__b" onClick={() => goTo(i)}>
                       <span class={'pd-dots__d' + (i === pageIdx ? ' pd-dots__d--on' : '')} />
@@ -2213,8 +2300,9 @@ export function Deck(props: DeckProps) {
           </div>
         </div>
       </div>
-      {st.status !== 'pair' ? <ScreenLayer settings={theme.screen} alarms={st.layout ? st.layout.alarms : undefined} preview={preview} pvFlags={preview ? pv.np.split(',') : undefined} /> : null}
-      {!preview && st.status !== 'pair' && st.onair && signVisible(onAirFull, st.onair, peekUntil, Date.now()) ? <OnAirSign onair={st.onair} onPeek={() => setPeekUntil(Date.now() + PEEK_MS)} /> : null}
+      {st.status !== 'pair' ? <ScreenLayer settings={theme.screen} alarms={st.layout ? st.layout.alarms : undefined} preview={preview} pvFlags={preview ? pv.np.split(',') : undefined} asleep={asleep} /> : null}
+      {!preview && !asleep && st.status !== 'pair' && st.onair && signVisible(onAirFull, st.onair, peekUntil, Date.now()) ? <OnAirSign onair={st.onair} onPeek={() => setPeekUntil(Date.now() + PEEK_MS)} /> : null}
+      {asleep ? <div class="pd-sleep" role="button" aria-label={t('Tap to wake')} data-part="sleep" onClick={(e) => { e.stopPropagation(); setWokeAt(Date.now()) }} /> : null}
     </div>
   )
 }

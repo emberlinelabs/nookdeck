@@ -48,4 +48,21 @@ export const ZH_LIVE: Record<string, string> = {
   "OBS plugin: streaming or recording": "OBS 插件：直播或录制",
   "Needs the OBS plugin from the Store.": "需要 Store 中的 OBS 插件。",
   "Add an On Air tile from the palette (On Air). To turn a spare phone into a sign by the door, open Screen & alarms on that phone and switch on Full-screen ON AIR.": "从组件面板（OBS / On Air）添加 On Air 方块。想把一台闲置手机变成门口的标牌，请在那台手机上打开 Screen & alarms，并打开 全屏 ON AIR。",
+  // Screen settings: pages, the page dots, lock sleeps the phone
+  "Pages": "页面",
+  "Wrap around": "循环翻页",
+  "Swiping past the last page goes back to the first, and from the first to the last.": "在最后一页继续滑动会回到第一页，在第一页反向滑动会到最后一页。",
+  "Hide the page dots": "隐藏页面圆点",
+  "The dots show for a moment while you swipe, so you still see where you are.": "滑动时圆点会短暂出现，让你仍能知道自己在哪一页。",
+  "When a button locks the computer": "当按钮锁定电脑时",
+  "For the Lock computer button (ctrl+cmd+q), also inside a macro.": "适用于“锁定电脑”按钮（ctrl+cmd+q），宏中的也算。",
+  "Phone screen": "手机屏幕",
+  "The phone goes black and stops keeping its screen on, until you tap it.": "手机屏幕变黑并停止保持常亮，直到你轻点它。",
+  "This phone": "本机",
+  "All phones": "所有手机",
+  // The lock action
+  "Lock": "锁定",
+  "Lock the computer's screen": "锁定电脑屏幕",
+  "Locks the computer the right way for its system: the lock shortcut on macOS, the lock screen on Windows and Linux.": "按系统的方式锁定电脑：macOS 上用锁定快捷键，Windows 和 Linux 上用锁屏。",
+  "Lock computer": "锁定电脑",
 };

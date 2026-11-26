@@ -177,6 +177,20 @@ export function ScreenPanel({ layout, pageId, update, orientation, onOrientation
             <SwitchRow id="s-awake" label={t("Keep the phone screen on")} checked={screen.keepAwake !== false} onChange={(v) => setScreen({ keepAwake: v ? undefined : false })} />
           </Section>
 
+          <Section title={t("Pages")}>
+            <SwitchRow id="s-wrap" label={t("Wrap around")} checked={screen.wrap === true} onChange={(v) => setScreen({ wrap: v ? true : undefined })} />
+            <p className="-mt-2 text-xs text-muted-foreground">{t("Swiping past the last page goes back to the first, and from the first to the last.")}</p>
+            <SwitchRow id="s-dots" label={t("Hide the page dots")} checked={screen.hideDots === true} onChange={(v) => setScreen({ hideDots: v ? true : undefined })} />
+            <p className="-mt-2 text-xs text-muted-foreground">{t("The dots show for a moment while you swipe, so you still see where you are.")}</p>
+          </Section>
+
+          <Section title={t("When a button locks the computer")} hint={t("For the Lock computer button (ctrl+cmd+q), also inside a macro.")}>
+            <Field label={t("Phone screen")} id="s-locksleep" hint={t("The phone goes black and stops keeping its screen on, until you tap it.")}>
+              <SegmentedControl size="sm" aria-label={t("Phone screen")} value={screen.lockSleep ?? "phone"} onValueChange={(v) => setScreen({ lockSleep: v === "phone" ? undefined : (v as "all" | "off") })}
+                options={[{ value: "phone", label: t("This phone") }, { value: "all", label: t("All phones") }, { value: "off", label: t("Off") }]} />
+            </Field>
+          </Section>
+
           <Section title={t("Standby clock")} hint={t("After a while without touch, the phone shows a quiet full-screen clock. Tap to go back.")}>
             <SwitchRow id="s-standby" label={t("Show a clock when idle")} checked={standby.enabled} onChange={(v) => setScreen({ standby: { ...standby, enabled: v } })} />
             {standby.enabled && (

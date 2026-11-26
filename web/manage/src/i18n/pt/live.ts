@@ -48,4 +48,21 @@ export const PT_LIVE: Record<string, string> = {
   "OBS plugin: streaming or recording": "Plugin do OBS: transmitindo ou gravando",
   "Needs the OBS plugin from the Store.": "Requer o plugin do OBS da Store.",
   "Add an On Air tile from the palette (On Air). To turn a spare phone into a sign by the door, open Screen & alarms on that phone and switch on Full-screen ON AIR.": "Adicione um bloco On Air pela paleta (On Air). Para transformar um celular sobrando em uma placa na porta, abra Tela e alarmes nesse celular e ative ON AIR em tela cheia.",
+  // Screen settings: pages, the page dots, lock sleeps the phone
+  "Pages": "Páginas",
+  "Wrap around": "Rolagem em loop",
+  "Swiping past the last page goes back to the first, and from the first to the last.": "Deslizar depois da última página volta para a primeira, e da primeira para a última.",
+  "Hide the page dots": "Ocultar os pontos de página",
+  "The dots show for a moment while you swipe, so you still see where you are.": "Os pontos aparecem por um momento enquanto você desliza, para você saber onde está.",
+  "When a button locks the computer": "Quando um botão bloqueia o computador",
+  "For the Lock computer button (ctrl+cmd+q), also inside a macro.": "Para o botão Bloquear computador (ctrl+cmd+q), também dentro de uma macro.",
+  "Phone screen": "Tela do celular",
+  "The phone goes black and stops keeping its screen on, until you tap it.": "O celular fica preto e para de manter a tela ligada, até você tocar nele.",
+  "This phone": "Este celular",
+  "All phones": "Todos",
+  // The lock action
+  "Lock": "Bloquear",
+  "Lock the computer's screen": "Bloquear a tela do computador",
+  "Locks the computer the right way for its system: the lock shortcut on macOS, the lock screen on Windows and Linux.": "Bloqueia o computador do jeito certo para o sistema: o atalho de bloqueio no macOS, a tela de bloqueio no Windows e no Linux.",
+  "Lock computer": "Bloquear computador",
 };

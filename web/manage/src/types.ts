@@ -10,6 +10,7 @@ export type Action =
   | { type: "page"; page: string }
   | { type: "sound"; sound: string; on?: SoundTarget; volume?: number; mode?: SoundMode }
   | { type: "sound-stop" }
+  | { type: "lock" }
   | { type: "hass"; service: string; entityId?: string; data?: Record<string, unknown> }
   | { type: "macro"; steps: MacroStep[] }
   | { type: "plugin"; plugin: string; action: string; settings?: Record<string, unknown> }
@@ -29,7 +30,7 @@ export interface Sound {
 }
 
 export type ActionType = Action["type"];
-export const ACTION_TYPES: ActionType[] = ["open", "hotkey", "type", "shell", "media", "volume", "page", "sound", "sound-stop", "hass", "onair", "mic", "camera", "macro"];
+export const ACTION_TYPES: ActionType[] = ["open", "hotkey", "type", "shell", "media", "volume", "page", "sound", "sound-stop", "lock", "hass", "onair", "mic", "camera", "macro"];
 
 export type AiProvider = "claude" | "codex" | "antigravity" | "opencode" | "grok";
 export const AI_PROVIDERS: AiProvider[] = ["claude", "codex", "antigravity", "opencode", "grok"];
@@ -50,6 +51,22 @@ export interface ClockOptions {
 
 export type QuotaChart = "auto" | "bars" | "rings" | "gauge" | "meter" | "number" | "history";
 export const QUOTA_CHARTS: QuotaChart[] = ["auto", "bars", "rings", "gauge", "meter", "number", "history"];
+/** One Claude account (config folder) or Codex profile (CODEX_HOME), GET /api/ai/accounts. Local to the manage page. */
+export interface AiAccountInfo {
+  id: string;
+  name: string;
+  dir: string;
+  isDefault: boolean;
+  plan?: string;
+  status?: "needs_login";
+  stale?: boolean;
+  error?: string;
+  /** number of quota windows read */
+  windows?: number;
+}
+export type AiAccountTool = "claude" | "codex";
+export type AiAccounts = Record<AiAccountTool, AiAccountInfo[]>;
+
 export interface QuotaOptions {
   chart?: QuotaChart;
   /** Which quota windows to show: all, the main one, or a list of window ids in display order (1-6, first is the main one). */
@@ -128,6 +145,7 @@ export type MacroStep =
   | { kind: "volume"; command: "up" | "down" | "mute" }
   | { kind: "hass"; service: string; entityId?: string; data?: Record<string, unknown> }
   | { kind: "item"; pageId: string; itemId: string }
+  | { kind: "lock" }
   | { kind: "notify"; text: string };
 export const MACRO_MAX_STEPS = 20;
 export const MACRO_MAX_WAIT_MS = 30000;
@@ -237,6 +255,12 @@ export interface ScreenSettings {
   keepAwake?: boolean;
   /** Move the grid by up to 2 px every 3 minutes against burn-in. Missing = off. */
   burnInShift?: boolean;
+  /** Swiping past the last page goes to the first, and back. Missing = off. */
+  wrap?: boolean;
+  /** Hide the page dots; they show for a moment while swiping. Missing = shown. */
+  hideDots?: boolean;
+  /** After a button that locks the computer: the phone that pressed it goes black (default), every phone, or none. */
+  lockSleep?: "phone" | "all" | "off";
   standby?: { enabled: boolean; afterMin: number; style: "digital" | "analog" | "words"; showDate?: boolean; showNext?: boolean };
   /** Black overlay opacity 0..0.9; from/to "HH:MM" is the schedule (may wrap midnight); both missing = never auto-dim. */
   dim?: { level: number; from?: string; to?: string };
@@ -343,6 +367,8 @@ export interface DeviceInfo {
   /** When the pairing lapses if the device is not used (ISO string or epoch ms). */
   expiresAt?: string | number;
   online?: boolean;
+  /** The phone's screen in CSS px, as its deck reported it (online phones only). */
+  viewport?: { w: number; h: number };
 }
 
 export type PairAddressKind = "local" | "lan" | "tailscale" | "vpn" | "other";
@@ -468,6 +494,8 @@ export interface PluginPermissions {
   storage: boolean;
   /** May turn On Air on (the OBS plugin reports live / recording). */
   onair: boolean;
+  /** May show notifications on the phones, with a sound (a reminder plugin). */
+  notify: boolean;
 }
 /** One plugin of the community registry (GET /api/plugins/registry). Entries carry no tiles or buttons: see RegistryManifest. */
 export interface RegistryEntry {

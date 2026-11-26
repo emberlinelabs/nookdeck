@@ -4,7 +4,7 @@ import { IconAlertTriangle as Warn, IconDeviceMobile as Iphone, IconRotateClockw
 import { SegmentedControl } from "@/components/ui/knowns/segmented-control";
 import { Select } from "@/components/ui/knowns/select";
 import { Input } from "@/components/ui/knowns/input";
-import { CUSTOM_MAX, CUSTOM_MIN, SCREEN_PRESETS, useScreenSize } from "@/lib/screen-size";
+import { AUTO, CUSTOM_MAX, CUSTOM_MIN, DEVICE_PREFIX, SCREEN_PRESETS, onlinePhones, resolveScreen, useScreenSize, type OnlinePhone } from "@/lib/screen-size";
 import { t, useLanguage } from "@/lib/i18n";
 import { previewPluginData } from "@/lib/plugin-ui";
 import type { PluginInfo } from "@/types";
@@ -209,7 +209,11 @@ export function PhonePreview({ layout, override, ghost, controller, pageId, sele
   }, [controller]);
 
   const [size, setSize] = useScreenSize();
-  const [lw, lh] = [Math.max(size.w, size.h), Math.min(size.w, size.h)];
+  const phones = useOnlinePhones();
+  const shownSize = resolveScreen(size, phones);
+  const [lw, lh] = [Math.max(shownSize.w, shownSize.h), Math.min(shownSize.w, shownSize.h)];
+  const dims = (x: { w: number; h: number }) => `${Math.max(x.w, x.h)}×${Math.min(x.w, x.h)}`;
+  const savedPhone = size.preset.startsWith(DEVICE_PREFIX) && !phones.some((p) => DEVICE_PREFIX + p.id === size.preset);
   const [w, h] = orientation === "portrait" ? [lh, lw] : [lw, lh];
   // Cell size as the deck lays it out at this screen size (read from the same-origin iframe after it settles).
   const [cell, setCell] = useState<number | null>(null);
@@ -240,8 +244,18 @@ export function PhonePreview({ layout, override, ghost, controller, pageId, sele
           aria-label={t("Screen size")}
           className="w-[250px]"
           value={size.preset}
-          onChange={(e) => setSize({ preset: e.target.value, w: size.w, h: size.h })}
-          options={[...SCREEN_PRESETS.map((p) => ({ value: p.id, label: `${t(p.label)} · ${p.w}×${p.h}` })), { value: "custom", label: t("Custom…") }]}
+          onChange={(e) => {
+            const v = e.target.value;
+            const phone = phones.find((p) => DEVICE_PREFIX + p.id === v);
+            setSize({ preset: v, w: phone?.w ?? size.w, h: phone?.h ?? size.h });
+          }}
+          options={[
+            { value: AUTO, label: `${t("Connected phone (auto)")} · ${shownSize.from && size.preset === AUTO ? dims(shownSize.from) : phones[0] ? dims(phones[0]) : t("none online")}` },
+            ...phones.map((p) => ({ value: DEVICE_PREFIX + p.id, label: `${p.name} · ${dims(p)}` })),
+            ...(savedPhone ? [{ value: size.preset, label: `${t("A paired phone (offline)")} · ${dims(size)}` }] : []),
+            ...SCREEN_PRESETS.map((p) => ({ value: p.id, label: `${t(p.label)} · ${p.w}×${p.h}` })),
+            { value: "custom", label: t("Custom…") },
+          ]}
         />
         {size.preset === "custom" && (
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -320,4 +334,17 @@ export function PhonePreview({ layout, override, ghost, controller, pageId, sele
       </div>
     </div>
   );
+}
+
+/** Paired phones online right now with their screen size, asked again every 15 s (a phone that wakes up or turns shows up). */
+function useOnlinePhones(): OnlinePhone[] {
+  const [phones, setPhones] = useState<OnlinePhone[]>([]);
+  useEffect(() => {
+    let live = true;
+    const load = () => api.getDevices().then((d) => { if (live) setPhones((old) => { const next = onlinePhones(d); return JSON.stringify(next) === JSON.stringify(old) ? old : next; }); }, () => {});
+    load();
+    const id = setInterval(load, 15_000);
+    return () => { live = false; clearInterval(id); };
+  }, []);
+  return phones;
 }

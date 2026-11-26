@@ -43,7 +43,8 @@ export interface Platform {
   /** The OS secret store (macOS Keychain, Windows Credential Manager); null when there is none. */
   secrets: SecretStore | null;
   /** Claude Code's credentials JSON from an OS store (macOS Keychain); null elsewhere (the file is read by the caller). */
-  claudeCredentials(): Promise<string | null>;
+  /** `service`: the Keychain service of an extra config folder (macOS); other systems read only Claude Code's own entry. */
+  claudeCredentials(service?: string): Promise<string | null>;
   /** Seconds since the last keyboard/mouse input, or null when unknown. */
   /** Where the "system load" figure comes from: the OS load average, or an estimate from CPU use (Windows has none). */
   loadKind: "loadavg" | "estimate";

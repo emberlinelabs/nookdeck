@@ -168,6 +168,7 @@ export function createDarwin(): Platform {
           return void (await mac().call("media", { command: a.command as MediaKey }));
         }
         case "volume": return void (await mac().call("volumeStep", { command: a.command }));
+        case "lock": return void (await mac().call("hotkey", { keys: "ctrl+cmd+q" })); // the system "Lock Screen" shortcut
       }
       await runCapture(buildCommand(a, "darwin"), undefined, undefined, a.type === "shell" ? a.env : undefined);
     },
@@ -221,8 +222,9 @@ export function createDarwin(): Platform {
     },
 
     secrets: keychainStore(),
-    async claudeCredentials() {
-      try { return (await runCapture(["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"], 8000)).trim() || null; } catch { return null; }
+    async claudeCredentials(service = "Claude Code-credentials") {
+      if (!/^Claude Code-credentials(-[0-9a-f]{8})?$/.test(service)) return null; // only Claude Code's own entries
+      try { return (await runCapture(["security", "find-generic-password", "-s", service, "-w"], 8000)).trim() || null; } catch { return null; }
     },
     loadKind: "loadavg",
     idleSeconds: () => macIdleSeconds(),

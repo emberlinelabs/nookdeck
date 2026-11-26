@@ -3883,3 +3883,13 @@
 .pd-onair-sign__time { margin-top: 3vmin; font-size: 11vmin; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; font-family: var(--pd-ff-num, inherit); }
 .pd-onair-sign__why { margin-top: 3vmin; font-size: 5.5vmin; font-weight: 600; opacity: 0.9; }
 .pd-onair-sign__hint { position: absolute; left: 0; right: 0; bottom: 16px; font-size: 13px; opacity: 0.6; }
+
+/* ---------- page dots that hide (theme.screen.hideDots): they keep their room and fade in while swiping ---------- */
+.pd-dots--auto { -webkit-transition: opacity 0.35s; transition: opacity 0.35s; }
+.pd-dots--off { opacity: 0; }
+.pd-lite .pd-dots--auto { -webkit-transition: none; transition: none; }
+
+/* ---------- the phone sleeps after a button locked the computer: black until a tap ---------- */
+.pd-sleep { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 200; background: #000; cursor: pointer; -webkit-tap-highlight-color: transparent; -webkit-animation: pd-sleep-in 0.8s ease-out; animation: pd-sleep-in 0.8s ease-out; }
+@-webkit-keyframes pd-sleep-in { from { opacity: 0; } }
+@keyframes pd-sleep-in { from { opacity: 0; } }

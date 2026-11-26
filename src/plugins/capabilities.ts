@@ -6,6 +6,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import {
   FETCH_MAX_BYTES, FETCH_MAX_REDIRECTS, FETCH_TIMEOUT_MS, RPC_ERR, SHELL_TIMEOUT_MS, STORAGE_MAX_BYTES, WS_MAX_MESSAGE_BYTES, WS_MAX_SOCKETS, WS_OPEN_TIMEOUT_MS,
+  NOTIFY_BODY_MAX, NOTIFY_PER_MINUTE, NOTIFY_SOUNDS, NOTIFY_TITLE_MAX, type NotifySound,
   type FetchResult, type OnAirKind, type Permissions, type PluginFetchInit, type PermissionName,
 } from "./api";
 import { hostMatches, networkLabel, wsOrigin } from "./manifest";
@@ -23,6 +24,9 @@ export interface ServiceDeps {
   websocket?: (url: string, protocols: string[]) => WebSocketLike;
   /** ctx.onair.set, after the permission check (On Air keeps it per plugin). */
   onair?: (kind: OnAirKind, on: boolean, since?: number) => void;
+  /** ctx.notify, after the permission check and the rate limit. */
+  notify?: (n: { title: string; body?: string; level?: "info" | "warn" | "alert"; sound?: NotifySound }) => void;
+  now?: () => number;
 }
 
 /** The part of a WebSocket the agent uses. */
@@ -252,6 +256,25 @@ export class PluginServices {
     return null;
   }
 
+  // ----- notifications -----
+
+  private sent: number[] = [];
+  async showNotification(p: any): Promise<null> {
+    if (!this.d.granted()?.notify) throw denied("notify");
+    const title = typeof p?.title === "string" ? p.title.trim() : "";
+    if (!title) throw new RpcFault(RPC_ERR.invalidParams, "a notification needs a title");
+    if (p.body !== undefined && typeof p.body !== "string") throw new RpcFault(RPC_ERR.invalidParams, "body must be text");
+    if (p.level !== undefined && !["info", "warn", "alert"].includes(p.level)) throw new RpcFault(RPC_ERR.invalidParams, 'level must be "info", "warn" or "alert"');
+    if (p.sound !== undefined && !(NOTIFY_SOUNDS as readonly string[]).includes(p.sound)) throw new RpcFault(RPC_ERR.invalidParams, `sound must be one of ${NOTIFY_SOUNDS.join(", ")}`);
+    const now = (this.d.now ?? Date.now)();
+    this.sent = this.sent.filter((t) => now - t < 60_000);
+    if (this.sent.length >= NOTIFY_PER_MINUTE) throw new RpcFault(RPC_ERR.invalidParams, `at most ${NOTIFY_PER_MINUTE} notifications a minute`);
+    this.sent.push(now);
+    const body = typeof p.body === "string" && p.body.trim() ? p.body.trim().slice(0, NOTIFY_BODY_MAX) : undefined;
+    this.d.notify?.({ title: title.slice(0, NOTIFY_TITLE_MAX), ...(body ? { body } : {}), ...(p.level ? { level: p.level } : {}), ...(p.sound ? { sound: p.sound } : {}) });
+    return null;
+  }
+
   // ----- shell and keys -----
 
   async shellRun(cmd: unknown): Promise<{ code: number; stdout: string }> {
@@ -288,6 +311,7 @@ export class PluginServices {
       case "net.ws.send": return this.wsSend(p?.sid, p?.text);
       case "net.ws.close": return this.wsClose(p?.sid);
       case "onair.set": return this.onairSet(p?.kind, p?.on, p?.since);
+      case "notify": return this.showNotification(p);
       default: return Promise.reject(new RpcFault(RPC_ERR.methodNotFound, `unknown method ${method}`));
     }
   }

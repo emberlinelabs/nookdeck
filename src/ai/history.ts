@@ -64,8 +64,9 @@ export class QuotaHistory {
     const t = this.now();
     let added = false;
     for (const p of providers) {
-      if (p.error && p.windows.length === 0) continue;
-      for (const w of p.windows) added = this.sample(p.id, TOP, w, t) || added;
+      // a stale reading is the last good one again: sampling it would chart old numbers as new points
+      if (!p.stale && !(p.error && p.windows.length === 0)) for (const w of p.windows) added = this.sample(p.id, TOP, w, t) || added;
+      for (const a of p.accounts ?? []) if (!a.stale) for (const w of a.windows) added = this.sample(p.id, a.id, w, t) || added;
     }
     if (added) void this.save();
     return added;
@@ -85,6 +86,7 @@ export class QuotaHistory {
     return providers.map((p) => ({
       ...p,
       windows: withHist(p.id, undefined, p.windows),
+      ...(p.accounts ? { accounts: p.accounts.map((a) => ({ ...a, windows: withHist(p.id, a.id, a.windows) })) } : {}),
     }));
   }
 

@@ -44,6 +44,8 @@ export interface ClientState {
   modeOverride?: 'dark' | 'light' | null
   /** sound id (without snd:) -> when it started and how long it is (ms, when known); phone and computer playback merged */
   sounds?: { [id: string]: { at: number; durMs?: number } }
+  /** when the agent last sent {type:'sleep'} (a button locked the computer): the deck goes black until tapped */
+  sleepAt?: number
   /** On Air, mic and camera (contract message `onair`) */
   onair?: OnAirMsg
 }
@@ -147,6 +149,7 @@ const toNotice = (o: any): Notice => ({
   level: o && (o.level === 'warn' || o.level === 'alert') ? o.level : 'info',
   at: asMs(o && (o.at || o.time)),
   ttl: o && typeof o.ttl === 'number' ? o.ttl : undefined,
+  sound: o && (o.sound === 'chime' || o.sound === 'soft' || o.sound === 'birds') ? o.sound : undefined,
 })
 
 export class DeckClient {
@@ -251,6 +254,8 @@ export class DeckClient {
       this.pingTimer = window.setInterval(() => this.send({ type: 'ping' }), 20000)
       // this phone shows the full-screen ON AIR sign: the agent keeps checking mic and camera (onair-watch, web/shared/onair.ts)
       if (localScreen().onAirFull) this.send({ type: 'onair-watch', on: true })
+      // the screen size, so the manage page can preview at this phone's size
+      if (this.viewport) this.send({ type: 'viewport', w: this.viewport.w, h: this.viewport.h })
     }
     ws.onmessage = (ev) => {
       let msg: any
@@ -335,6 +340,9 @@ export class DeckClient {
         this.set({ hass: { entities: ents, connected: msg.connected !== false } })
         break
       }
+      case 'sleep':
+        this.set({ sleepAt: Date.now() })
+        break
       case 'onair': {
         const o = parseOnAir(msg)
         if (o) this.set({ onair: o })
@@ -509,6 +517,16 @@ export class DeckClient {
   }
 
   /** Send a request that gets a `result` reply (press, media, volume). Resolves with the agent's result. */
+  private viewport: { w: number; h: number } | null = null
+  /** This phone's screen size in CSS px (window.innerWidth x innerHeight): sent now and on every reconnect. */
+  setViewport(w: number, h: number) {
+    w = Math.round(w)
+    h = Math.round(h)
+    if (!(w > 0 && h > 0) || (this.viewport && this.viewport.w === w && this.viewport.h === h)) return
+    this.viewport = { w: w, h: h }
+    this.send({ type: 'viewport', w: w, h: h })
+  }
+
   /** The full-screen ON AIR option was switched on this phone. */
   onAirWatch(on: boolean) {
     this.send({ type: 'onair-watch', on })

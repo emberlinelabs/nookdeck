@@ -568,7 +568,9 @@ export function QuotaWidget(props: AiWidgetProps) {
   const acc = pinned || (cycling ? accounts[accIdx % accounts.length] : null)
   const cur = acc || accounts[0] || null
   const label = (cur && (cur.displayName || cur.email || cur.label)) || (info && (info.email || info.label)) || ''
-  const needsLogin = (cur && cur.status === 'needs_login') || (info && info.status === 'needs_login')
+  const needsLogin = cur ? cur.status === 'needs_login' : !!(info && info.status === 'needs_login')
+  // the error of the account on screen; the provider's own error is the default account's
+  const errText = acc ? acc.error : info && info.error
   const srcTag = ''
   const wins0: AiWindow[] = (acc && acc.windows) || (info && info.windows) || []
   const plan = (acc && acc.plan) || (info && info.plan)
@@ -643,7 +645,7 @@ export function QuotaWidget(props: AiWidgetProps) {
     const room = th - pad * 2 - (props.showLabel ? 16 : 0)
     const ci: ChartIn = { wins: wins, color: color, showReset: false, w: tw - pad * 2, h: room }
     let body: any = null
-    if (!wins.length) body = <div class={'pd-qempty' + (noPicked ? ' pd-qempty--msg' : '')}>{noPicked ? t('No data for this window yet') : info && info.error ? '!' : '-'}</div>
+    if (!wins.length) body = <div class={'pd-qempty' + (noPicked ? ' pd-qempty--msg' : '')}>{noPicked ? t('No data for this window yet') : errText ? '!' : '-'}</div>
     else if (chart === 'bars') body = BarsChart(ci)
     else if (chart === 'gauge') body = GaugeChart(ci)
     else if (chart === 'number') body = NumberChart(ci)
@@ -728,7 +730,7 @@ export function QuotaWidget(props: AiWidgetProps) {
       </div>
       {id === 'grok' && !wins.length && !needsLogin ? <div class="pd-qerr pd-qerr--mute">{t('No usage data from Grok')}</div> : !info ? <div class="pd-qerr">{t('No data yet')}</div> : null}
       {needsLogin ? <div class="pd-qerr pd-qerr--warn">{t('Sign in again on your computer')}</div> : null}
-      {info && info.error && !needsLogin && id !== 'grok' ? <div class="pd-qerr">{info.error}</div> : null}
+      {errText && !needsLogin && id !== 'grok' ? <div class="pd-qerr">{errText}</div> : null}
       {noPicked && !needsLogin ? <div class="pd-qerr pd-qerr--mute">{t('No data for this window yet')}</div> : null}
       {body ? <div ref={tallish ? bodyRef : undefined} class={'pd-qbody' + (chart === 'meter' || chart === 'bars' || chart === 'history' || tallish ? ' pd-qbody--fill' : '')}>{body}</div> : null}
       {extras.length && roomy ? (
