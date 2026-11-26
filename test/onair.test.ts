@@ -109,11 +109,12 @@ describe("On Air aggregator", () => {
 
   test("settings: spec defaults, obs follows the OBS set-up, a source switched off does not count", async () => {
     const pr = probe({ mic: true, camera: true, muted: null });
-    const a = new OnAir({ probe: pr.p, settingsFile: null, onChange: () => {} });
+    const a = new OnAir({ probe: pr.p, settingsFile: null, onChange: () => {}, pollMs: 60_000 });
     expect(a.settings()).toEqual({ sources: { obs: false, mic: true, camera: true, manual: true, api: true }, ignoreSelf: true });
     const o = fakeObs(true);
     a.attachObs(o.obs);
     expect(a.settings().sources.obs).toBe(true);
+    a.setNeeded(true); // mic / camera use is only kept while a phone needs it (review #3)
     await a.refresh();
     expect(a.snapshot().sources).toEqual(["mic", "camera"]);
     await a.setSettings({ sources: { mic: false, camera: true, obs: true, manual: true, api: true }, ignoreSelf: false });
@@ -123,6 +124,7 @@ describe("On Air aggregator", () => {
     expect(pr.calls.ignore.at(-1)).toBeUndefined();
     await expect(a.setSettings({ sources: { mic: "no" } })).rejects.toThrow(/sources.mic/);
     await expect(a.setSettings({})).rejects.toThrow(/sources/);
+    a.dispose();
   });
 
   test("settings persist to their own file", async () => {
@@ -135,6 +137,62 @@ describe("On Air aggregator", () => {
     expect(b.settings()).toEqual({ sources: { obs: false, mic: false, camera: true, manual: true, api: false }, ignoreSelf: true });
   });
 
+  test("saving before OBS is set up does not freeze obs off; an explicit change is kept (review #2)", async () => {
+    const a = new OnAir({ probe: probe().p, settingsFile: null, onChange: () => {} });
+    // the manage page sends every key back, obs resolved to false (no OBS yet)
+    expect((await a.setSettings({ sources: { obs: false, mic: true, camera: false, manual: true, api: true }, ignoreSelf: true })).sources.obs).toBe(false);
+    a.setPluginSource("obs-plugin", "stream", false); // the OBS plugin is installed later and reports
+    expect(a.settings().sources.obs).toBe(true);
+    expect(a.settings().sources.camera).toBe(false);
+    // now the user really switches OBS off: kept, even while OBS is set up
+    await a.setSettings({ sources: { ...a.settings().sources, obs: false } });
+    expect(a.settings().sources.obs).toBe(false);
+    a.clearPlugin("obs-plugin");
+    await a.setSettings({ sources: { mic: false } }); // only mic sent: the other choices stay
+    expect(a.settings().sources).toMatchObject({ mic: false, camera: false });
+  });
+  test("a read in flight when mic/camera stop being needed is dropped; GET reads once without keeping it (review #3)", async () => {
+    let release!: () => void;
+    const state = { mic: true, camera: true, muted: false as boolean | null };
+    const p: AvProbe = {
+      usage: () => new Promise((r) => { release = () => r({ mic: { inUse: state.mic }, camera: { inUse: state.camera } }); }),
+      micMuted: async () => state.muted,
+    };
+    const msgs: any[] = [];
+    const a = new OnAir({ probe: p, settingsFile: null, onChange: (m) => msgs.push(m), pollMs: 60_000 });
+    a.setNeeded(true); // starts a read that hangs
+    await flush();
+    a.setNeeded(false);
+    release();
+    await flush(); await flush();
+    expect(a.snapshot()).toMatchObject({ on: false, mic: { inUse: false }, camera: { inUse: false } });
+    expect(msgs.some((m) => m.on)).toBe(false);
+
+    // GET with nobody polling: the answer has the reading, the state does not keep it
+    const got = a.current();
+    await flush();
+    release();
+    expect(await got).toMatchObject({ on: true, sources: ["mic", "camera"], mic: { inUse: true }, camera: { inUse: true } });
+    expect(a.snapshot()).toMatchObject({ on: false, mic: { inUse: false }, camera: { inUse: false } });
+    a.dispose();
+  });
+  test("the Mic button shows its result at once; a read that started before cannot undo it (review #5)", async () => {
+    let release!: () => void;
+    const p: AvProbe = {
+      usage: async () => ({ mic: { inUse: false }, camera: { inUse: false } }),
+      micMuted: () => new Promise((r) => { release = () => r(false); }), // read before the mute
+    };
+    const msgs: any[] = [];
+    const a = new OnAir({ probe: p, settingsFile: null, onChange: (m) => msgs.push(m), pollMs: 60_000 });
+    a.setNeeded(true);
+    await flush();
+    a.noteMicMuted(true);
+    expect(msgs.at(-1).mic.muted).toBe(true);
+    release();
+    await flush(); await flush();
+    expect(a.snapshot().mic.muted).toBe(true);
+    a.dispose();
+  });
   test("OBS stream / record; since is when OBS went live; switching OBS off drops its sources", () => {
     const msgs: any[] = [];
     const a = new OnAir({ probe: probe().p, settingsFile: null, onChange: (m) => msgs.push(m), now: () => 9000 });
@@ -202,14 +260,21 @@ describe("Mic button (FR-10, NFR-6)", () => {
 });
 
 describe("Camera button (FR-11)", () => {
-  const os = (id: NodeJS.Platform, o: { camera?: string[]; inUse?: boolean; front?: { id: string; title?: string } | null; running?: string[] }) => {
+  // activates: what activateApp does (default: the app comes forward); "lies": says true but nothing moves
+  const os = (id: NodeJS.Platform, o: { camera?: string[]; inUse?: boolean; front?: { id: string; title?: string } | null; running?: string[]; activates?: true | false | "lies" }) => {
     const sent: any[] = [], activated: string[] = [];
+    let front = o.front ?? null;
     const p = {
       id,
       avUsage: async () => ({ mic: { inUse: false, apps: [] }, camera: { inUse: o.inUse ?? !!o.camera?.length, apps: o.camera ?? [] } }),
-      frontApp: async (withTitle?: boolean) => (o.front ? { id: o.front.id, ...(withTitle ? { title: o.front.title } : {}) } : null),
+      frontApp: async (withTitle?: boolean) => (front ? { id: front.id, ...(withTitle ? { title: front.title } : {}) } : null),
       runningApps: async (ids: string[]) => ids.filter((x) => o.running?.includes(x)),
-      activateApp: async (x: string) => { activated.push(x); return true; },
+      activateApp: async (x: string) => {
+        activated.push(x);
+        if (o.activates === false) return false;
+        if (o.activates !== "lies") front = { id: x };
+        return true;
+      },
       runAction: async (a: any) => void sent.push(a),
     } as unknown as AvPlatform;
     return { p, sent, activated };
@@ -231,6 +296,23 @@ describe("Camera button (FR-11)", () => {
     await cameraToggle(f.p, noWait);
     expect(f.activated).toEqual(["us.zoom.xos"]);
     expect(f.sent[0].keys).toBe("cmd+shift+v");
+  });
+  test("the camera app is not in front: brought forward first; keys only when it really is in front (review #1)", async () => {
+    // Windows and Linux cannot bring an app forward yet (activateApp is false): no keys to Chrome or whatever is in front
+    for (const pid of ["win32", "linux"] as NodeJS.Platform[]) {
+      const f = os(pid, { camera: [pid === "win32" ? "zoom.exe" : "zoom"], front: { id: pid === "win32" ? "chrome.exe" : "google-chrome" }, activates: false });
+      await expect(cameraToggle(f.p, noWait)).rejects.toThrow(/No Zoom, Google Meet or Teams/);
+      expect(f.sent).toEqual([]);
+    }
+    // the OS says it came forward but another app is still in front
+    const lie = os("win32", { camera: ["ms-teams.exe"], front: { id: "chrome.exe" }, activates: "lies" });
+    await expect(cameraToggle(lie.p, noWait)).rejects.toThrow(/No Zoom/);
+    expect(lie.sent).toEqual([]);
+    // already in front: no activation needed
+    const front = os("win32", { camera: ["zoom.exe"], front: { id: "zoom.exe" }, activates: false });
+    await cameraToggle(front.p, noWait);
+    expect(front.activated).toEqual([]);
+    expect(front.sent[0].keys).toBe("alt+v");
   });
   test("Windows names the app using the camera; Linux by WM class", async () => {
     let f = os("win32", { camera: ["zoom.exe"], front: { id: "explorer.exe" } });

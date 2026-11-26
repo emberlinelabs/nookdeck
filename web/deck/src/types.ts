@@ -11,6 +11,7 @@ export type Action =
   | { type: 'sound'; sound: string; on?: 'mac' | 'phone' | 'both'; volume?: number; mode?: 'overlap' | 'restart' | 'toggle' }
   | { type: 'sound-stop' }
   | { type: 'lock' }
+  | { type: 'screenshot'; mode?: 'region' | 'screen' | 'window' }
   | { type: 'macro'; steps: { kind: string; [k: string]: unknown }[] }
   | { type: 'plugin'; plugin: string; action: string; args?: { [k: string]: unknown } }
   | { type: 'hass'; service: string; entityId?: string; data?: { [k: string]: unknown } }

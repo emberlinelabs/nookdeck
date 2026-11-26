@@ -1,10 +1,8 @@
-import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dirname } from "node:path";
 import { platform } from "./platform";
 import { HOME } from "./config";
-import { t } from "./i18n";
 
 export interface Media {
   app: string;

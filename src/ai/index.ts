@@ -34,6 +34,8 @@ export interface AiSources {
  * reading for the "stale" fallback.
  */
 export function multiAccount(
+  /** the provider a failed read with no earlier reading stands for */
+  provider: { id: AiProviderId; name: string },
   refs: AiAccountRef[],
   read: (ref: AiAccountRef, last?: ProviderQuota) => Promise<ProviderQuota>,
   lastBy: Map<string, ProviderQuota>,
@@ -42,7 +44,7 @@ export function multiAccount(
     let q: ProviderQuota;
     try { q = await read(r, lastBy.get(r.id)); } catch (err: any) {
       const l = lastBy.get(r.id);
-      q = { id: l?.id ?? "claude", name: l?.name ?? "", windows: l?.windows ?? [], error: String(err?.message ?? err), updatedAt: Date.now(), ...(l?.windows.length ? { stale: true } : {}) };
+      q = { id: provider.id, name: l?.name ?? provider.name, windows: l?.windows ?? [], error: String(err?.message ?? err), updatedAt: Date.now(), ...(l?.windows.length ? { stale: true } : {}) };
     }
     lastBy.set(r.id, q);
     return { r, q };
@@ -69,9 +71,9 @@ const defaultRef = (dir: string): AiAccountRef[] => [{ id: "default", name: "", 
 export const realAiSources = (states?: ToolStates, accounts?: AccountStore): AiSources => {
   const lastClaude = new Map<string, ProviderQuota>(), lastCodex = new Map<string, ProviderQuota>();
   return {
-  claude: () => multiAccount(accounts?.list("claude") ?? defaultRef(claudeDir()), (r, last) =>
+  claude: () => multiAccount({ id: "claude", name: "Claude" }, accounts?.list("claude") ?? defaultRef(claudeDir()), (r, last) =>
     fetchClaudeQuota(r.isDefault ? {} : { dir: r.dir, keychainService: claudeKeychainService(r.dir, false) }, last), lastClaude),
-  codex: () => multiAccount(accounts?.list("codex") ?? defaultRef(codexDir()), (r) => fetchCodexQuota(r.isDefault ? undefined : r.dir), lastCodex),
+  codex: () => multiAccount({ id: "codex", name: "Codex" }, accounts?.list("codex") ?? defaultRef(codexDir()), (r) => fetchCodexQuota(r.isDefault ? undefined : r.dir), lastCodex),
   antigravity: (force) => fetchAntigravityQuota(undefined, undefined, undefined, { force }),
   opencode: async () => fetchOpencodeQuota({ version: await detectOpencode() }),
   grok: () => grokQuota(),

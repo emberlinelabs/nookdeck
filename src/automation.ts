@@ -5,6 +5,7 @@
  */
 
 import { validOnairAction } from "../web/shared/onair"; // onair / mic macro steps (On Air)
+import { SCREENSHOT_MODES, type ScreenshotMode } from "../web/shared/screenshot";
 
 const fail = (msg: string): never => { throw new Error(msg); };
 const isObj = (v: unknown): v is Record<string, any> => !!v && typeof v === "object" && !Array.isArray(v);
@@ -82,6 +83,8 @@ export type MacroStep =
   | { kind: "mic"; mode?: "toggle" | "mute" | "unmute" }
   /** Lock the computer (the `lock` action). */
   | { kind: "lock" }
+  /** Start the system screenshot tool (the `screenshot` action). */
+  | { kind: "screenshot"; mode?: ScreenshotMode }
   | { kind: "item"; pageId: string; itemId: string } // run another button's action (no nested macros beyond depth 2)
   | { kind: "notify"; text: string };
 
@@ -118,6 +121,11 @@ export function macroSteps(v: any, where: string): MacroStep[] {
       case "item": return { kind: "item", pageId: s(st.pageId, `${w}.pageId`, 80), itemId: s(st.itemId, `${w}.itemId`, 80) };
       case "notify": return { kind: "notify", text: s(st.text, `${w}.text`, 200) };
       case "lock": return { kind: "lock" };
+      case "screenshot": {
+        if (st.mode === undefined) return { kind: "screenshot" };
+        if (!(SCREENSHOT_MODES as unknown[]).includes(st.mode)) fail(`${w}.mode must be region, screen or window`);
+        return { kind: "screenshot", mode: st.mode };
+      }
       default: return fail(`${w}.kind "${st.kind}" is not supported`);
     }
   });

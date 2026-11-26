@@ -1,3 +1,4 @@
+import type { ScreenshotTool } from "@shared/screenshot";
 import { t } from "./lib/i18n";
 import { asPlatform, type Platform } from "./lib/platform";
 import { AI_PROVIDERS, type IconCatalog, type MacApp, type Sound, type HassConfig, type HassEntity, type HassService, type GeoPlace, type WebhookInfo, type AiProvider, type DeviceInfo, type About, type UpdateInfo, type DoctorItem, type DoctorStatus, type Integration, type AiAccounts, type AiAccountTool, type Layout, type Pairing, type PluginInfo, type RegistryEntry, type RegistryManifest, type RegistryResult, type PluginProcess, type PluginProcessState, type PluginField, type PluginPermissions, type Theme, type HassStatus, type ThemeLook, type ThemePack, type ThemeVariantInfo, type ThemeOptionInfo, type ThemeOptionValue, type ThemeSource, type ThemesResult } from "./types";
@@ -11,6 +12,9 @@ export class ApiError extends Error {
 }
 
 export const PLUGINS_CHANGED = "nookdeck:plugins-changed";
+
+/** GET /api/screenshot-tools: the tools this computer offers, the known apps installed, and the automatic choice. */
+export interface ScreenshotTools { os: string; tools: ScreenshotTool[]; installed: ScreenshotTool[]; auto: ScreenshotTool }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
@@ -327,6 +331,7 @@ export const uploadUrl = (id: string) => `/api/icons/img/${id}`;
 
 export const api = {
   getCatalog: () => request<IconCatalog>("/api/icons/catalog"),
+  getScreenshotTools: () => request<ScreenshotTools>("/api/screenshot-tools"),
   getApps: async () => normalizeApps(await request<unknown>("/api/apps")),
   listUploads: async () => normalizeUploads(await request<unknown>("/api/icons")),
   /** Sends the raw PNG/JPEG bytes (Content-Type = the file's type). Returns the 16-hex id. */

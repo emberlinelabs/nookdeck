@@ -41,6 +41,7 @@ export function defaultAction(type: ActionType, firstPage = ""): Action {
     case "sound": return { type, sound: "", on: "mac", volume: 100, mode: "restart" };
     case "sound-stop": return { type };
     case "lock": return { type };
+    case "screenshot": return { type };
     case "hass": return { type, service: "" };
     case "macro": return { type, steps: [{ kind: "hotkey", keys: "" }] };
     case "plugin": return { type, plugin: "", action: "" };
@@ -374,6 +375,7 @@ export const ACTION_LABEL: Record<ActionType, string> = {
   plugin: "Plugin action",
   "sound-stop": "Stop all sounds",
   lock: "Lock computer",
+  screenshot: "Take a screenshot",
   onair: "On Air light",
   mic: "Computer microphone",
   camera: "Meeting camera",
@@ -384,12 +386,15 @@ export const VOLUME_LABEL: Record<string, string> = { up: "Increase", down: "Dec
 
 export const ACTION_ICON: Record<ActionType, string> = {
   open: "external-link", hotkey: "keyboard", type: "type", shell: "square-terminal",
-  media: "play", volume: "volume-2", page: "layout-grid", sound: "music", "sound-stop": "player-stop", lock: "lock", hass: "home", macro: "bolt", plugin: "sparkles", onair: "radio", mic: "mic", camera: "video",
+  media: "play", volume: "volume-2", page: "layout-grid", sound: "music", "sound-stop": "player-stop", lock: "lock", screenshot: "camera", hass: "home", macro: "bolt", plugin: "sparkles", onair: "radio", mic: "mic", camera: "video",
 };
 
 export const ACTION_SHORT: Record<ActionType, string> = {
-  open: "Open", hotkey: "Hotkey", type: "Type", shell: "Command", media: "Music", volume: "Volume", page: "Screen", sound: "Sound", "sound-stop": "Stop sound", lock: "Lock", hass: "Home", macro: "Macro", plugin: "Plugin", onair: "On Air", mic: "Mic", camera: "Camera",
+  open: "Open", hotkey: "Hotkey", type: "Type", shell: "Command", media: "Music", volume: "Volume", page: "Screen", sound: "Sound", "sound-stop": "Stop sound", lock: "Lock", screenshot: "Screenshot", hass: "Home", macro: "Macro", plugin: "Plugin", onair: "On Air", mic: "Mic", camera: "Camera",
 };
+
+/** Modes of the screenshot action (English keys). */
+export const SCREENSHOT_LABEL: Record<string, string> = { region: "Region", screen: "Whole screen", window: "One window" };
 
 /** Mode words of the On Air and mic actions (English keys). */
 export const MODE_LABEL: Record<string, string> = {
@@ -409,6 +414,7 @@ export function actionSummary(a: Action | undefined): string {
     case "sound": return a.sound ? t("Play sound") : t("Play sound (no clip selected)");
     case "sound-stop": return t("Stop all sounds");
     case "lock": return t("Lock computer");
+    case "screenshot": return t("Screenshot: {mode}", { mode: t(SCREENSHOT_LABEL[a.mode ?? "region"] ?? "Region").toLowerCase() });
     case "macro": return t("Macro steps: {n}", { n: a.steps.length });
     case "plugin": return t("Plugin: {name}", { name: a.action || "…" });
     case "onair": return t("On Air: {mode}", { mode: t(MODE_LABEL[a.mode ?? "toggle"] ?? "toggle") });

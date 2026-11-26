@@ -131,15 +131,16 @@ describe("#577: an expired sign-in never looks current", () => {
 });
 
 describe("multiAccount", () => {
+  const P = { id: "claude" as const, name: "Claude" };
   const ref = (id: string, name: string) => ({ id, name, dir: `/${id}`, isDefault: id === "default" });
   const q = (plan: string, used: number, extra: Partial<ProviderQuota> = {}): ProviderQuota => ({ id: "claude", name: "Claude", plan, windows: [{ id: "five_hour", label: "5 hours", usedPercent: used }], updatedAt: 7, ...extra });
   test("one account: exactly the old shape (no accounts list)", async () => {
-    const r = await multiAccount([ref("default", "Claude")], async () => q("Pro", 5), new Map());
+    const r = await multiAccount(P, [ref("default", "Claude")], async () => q("Pro", 5), new Map());
     expect(r.accounts).toBeUndefined();
     expect(r.plan).toBe("Pro");
   });
   test("several: the default's reading on top, each account by id and name, no folder", async () => {
-    const r = await multiAccount([ref("default", "Personal"), ref("a-1", "Work")], async (a) => (a.id === "default" ? q("Pro", 5) : q("Max", 80, { status: "needs_login", stale: true, error: "expired" })), new Map());
+    const r = await multiAccount(P, [ref("default", "Personal"), ref("a-1", "Work")], async (a) => (a.id === "default" ? q("Pro", 5) : q("Max", 80, { status: "needs_login", stale: true, error: "expired" })), new Map());
     expect(r.plan).toBe("Pro");
     expect(r.accounts).toEqual([
       { id: "default", label: "Personal", plan: "Pro", windows: q("Pro", 5).windows, fetchedAt: 7 },
@@ -150,12 +151,17 @@ describe("multiAccount", () => {
   test("each account gets its own last reading; a throwing reader keeps it as stale", async () => {
     const last = new Map<string, ProviderQuota>();
     const seen: Record<string, unknown> = {};
-    await multiAccount([ref("default", "A"), ref("a-1", "B")], async (a) => q("Pro", a.id === "default" ? 1 : 2), last);
-    const r = await multiAccount([ref("default", "A"), ref("a-1", "B")], async (a, l) => { seen[a.id] = l?.windows[0]?.usedPercent; if (a.id === "a-1") throw new Error("boom"); return q("Pro", 3); }, last);
+    await multiAccount(P, [ref("default", "A"), ref("a-1", "B")], async (a) => q("Pro", a.id === "default" ? 1 : 2), last);
+    const r = await multiAccount(P, [ref("default", "A"), ref("a-1", "B")], async (a, l) => { seen[a.id] = l?.windows[0]?.usedPercent; if (a.id === "a-1") throw new Error("boom"); return q("Pro", 3); }, last);
     expect(seen).toEqual({ default: 1, "a-1": 2 });
     expect(r.accounts![1]).toMatchObject({ stale: true, error: "boom", windows: [{ usedPercent: 2 }] });
-    await multiAccount([ref("default", "A")], async () => q("Pro", 3), last);
+    await multiAccount(P, [ref("default", "A")], async () => q("Pro", 3), last);
     expect([...last.keys()]).toEqual(["default"]); // a removed account is forgotten
+  });
+  test("a failing Codex read with no earlier reading stays Codex, not Claude (review #4)", async () => {
+    const r = await multiAccount({ id: "codex", name: "Codex" }, [ref("default", "Personal")], async () => { throw new Error("no sessions folder"); }, new Map());
+    expect(r).toMatchObject({ id: "codex", name: "Codex", windows: [], error: "no sessions folder" });
+    expect(r.stale).toBeUndefined();
   });
 });
 

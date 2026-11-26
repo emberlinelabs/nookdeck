@@ -1,6 +1,7 @@
 import { PLUGIN_STYLES } from "../web/shared/plugin-styles";
 import { validOnairAction, type CameraAction, type MicAction, type OnAirAction } from "../web/shared/onair";
 import { LOCK_SLEEP, isLockKeys, type LockSleep } from "../web/shared/lock";
+import { SCREENSHOT_MODES, SCREENSHOT_TOOLS, screenshotModeForKeys, type ScreenshotChoice, type ScreenshotMode } from "../web/shared/screenshot";
 import { userHome } from "./home";
 import "./compat";
 
@@ -24,6 +25,11 @@ export type Action =
   | { type: "sound-stop" }
   /** Lock the computer: ctrl+cmd+q on macOS, LockWorkStation on Windows, loginctl / xdg-screensaver on Linux (src/actions.ts buildCommand). */
   | { type: "lock" }
+  /**
+   * Take a screenshot with a tool (web/shared/screenshot.ts): the system one (the Screenshot app on macOS, Snipping on Windows, the
+   * desktop's tool on Linux), a known app, the person's shortcut (keys) or a command. No tool: the screen's default (src/screenshot.ts).
+   */
+  | ({ type: "screenshot"; mode?: ScreenshotMode } & ScreenshotChoice)
   /** Home Assistant service call through the agent's HA connection, e.g. {service:"scene.turn_on", entityId:"scene.movie"}. */
   | { type: "hass"; service: string; entityId?: string; data?: Record<string, unknown> }
   /** Several steps in order (keys, text, waits, other buttons, HA calls…), see src/automation.ts. */
@@ -91,7 +97,7 @@ export interface ItemStyle {
 
 export type Item =
   | ({ id: string; kind: "button"; label: string; icon?: string; color?: string; action?: Action } & Size & ItemStyle)
-  | ({ id: string; kind: "widget"; widget: WidgetKind; color?: string; provider?: AiProvider; clock?: ClockOptions; metric?: MetricOptions; quota?: QuotaOptions; entity?: EntityOptions; weather?: WeatherOptions; push?: PushOptions; plugin?: PluginRef } & Size & ItemStyle);
+  | ({ id: string; kind: "widget"; widget: WidgetKind; color?: string; provider?: AiProvider; clock?: ClockOptions; metric?: MetricOptions; quota?: QuotaOptions; entity?: EntityOptions; weather?: WeatherOptions; push?: PushOptions; plugin?: PluginRef; /** On Air tiles only: "Tap turns On Air on or off" ({type:"onair"}) */ action?: Action } & Size & ItemStyle);
 
 /**
  * Quota widget looks. auto (default) picks by tile width: ring on small tiles, bars when wide, meter when wide and tall.
@@ -271,6 +277,8 @@ export interface ScreenSettings {
   hideDots?: boolean;
   /** After a button that locks the computer: the phone that pressed it goes black (default), every phone, or none. */
   lockSleep?: LockSleep;
+  /** The screenshot tool of buttons that do not pick their own. Missing = the first installed known app, else the system tool. */
+  screenshot?: ScreenshotChoice;
 }
 export const SCREEN_DEFAULTS = {
   lite: "auto" as LiteMode,
@@ -338,7 +346,7 @@ export const HOME = process.env.NOOKDECK_HOME ?? join(userHome(), ".nookdeck");
 const LAYOUT_FILE = join(HOME, "layout.json");
 const DEVICES_FILE = join(HOME, "devices.json");
 
-export const ACTION_TYPES = ["open", "hotkey", "type", "shell", "media", "volume", "page", "sound", "sound-stop", "lock", "hass", "macro", "plugin", "onair", "mic", "camera"] as const;
+export const ACTION_TYPES = ["open", "hotkey", "type", "shell", "media", "volume", "page", "sound", "sound-stop", "lock", "screenshot", "hass", "macro", "plugin", "onair", "mic", "camera"] as const;
 /** The On Air tile's sizes (w x h). */
 export const ONAIR_SIZES = ["1x1", "2x1", "2x2"];
 export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "gpu", "memory", "uptime", "load", "network", "nowplaying", "quota", "sessions", "entity", "weather", "value", "notifications", "plugin", "onair"];
@@ -400,7 +408,7 @@ export function defaultLayout(): Layout {
           { id: "b-voldn", kind: "button", label: "Volume down", icon: "volume-2", x: 6, y: 1, action: { type: "volume", command: "down" } },
           { id: "b-volup", kind: "button", label: "Volume up", icon: "volume", x: 7, y: 1, action: { type: "volume", command: "up" } },
           // row 2
-          { id: "b-shot", kind: "button", label: "Screenshot", icon: "camera", x: 0, y: 2, action: { type: "hotkey", keys: "cmd+shift+4" } },
+          { id: "b-shot", kind: "button", label: "Screenshot", icon: "camera", x: 0, y: 2, action: { type: "screenshot" } },
           { id: "b-dev", kind: "button", label: "Tools", icon: "layout-grid", color: "#38bdf8", x: 7, y: 2, action: { type: "page", page: "dev" } },
         ],
       },
@@ -448,29 +456,62 @@ export async function loadLayout(): Promise<Layout> {
     return layout;
   }
   const { platform } = await import("./platform"); // lazy: config is imported by the platform code
-  return migrateLockHotkeys(validateLayout(raw), platform.id);
+  return migrateScreenshotHotkeys(migrateLockHotkeys(validateLayout(raw), platform.id));
 }
 
-/**
- * "Lock computer" used to be the macOS hotkey ctrl+cmd+q everywhere; on Windows that is Ctrl+Win+Q (Quick Assist) and on Linux nothing.
- * At load, on Windows and Linux, a button whose action is exactly that hotkey becomes {type:"lock"}. Only in memory: layout.json is
- * rewritten the next time the layout is saved. macOS keeps the hotkey (it locks there).
- */
-export function migrateLockHotkeys(layout: Layout, os: NodeJS.Platform): Layout {
-  if (os !== "win32" && os !== "linux") return layout;
+/** Rewrites button actions (and the steps of macro buttons); fn returns null for "unchanged". Unchanged pages are the same objects. */
+function mapActions(layout: Layout, fn: (a: Action) => Action | null, step: (s: MacroStep) => MacroStep | null): Layout {
   let changed = false;
   const pages = layout.pages.map((p) => {
     let hit = false;
     const items = p.items.map((it) => {
-      if (it.kind !== "button" || !it.action || it.action.type !== "hotkey" || !isLockKeys(it.action.keys)) return it;
+      if (it.kind !== "button" || !it.action) return it;
+      let next = fn(it.action);
+      if (!next && it.action.type === "macro") {
+        let stepHit = false;
+        const steps = it.action.steps.map((st) => { const n = step(st); if (n) stepHit = true; return n ?? st; });
+        if (stepHit) next = { ...it.action, steps };
+      }
+      if (!next) return it;
       hit = true;
-      return { ...it, action: { type: "lock" as const } };
+      return { ...it, action: next };
     });
     if (!hit) return p;
     changed = true;
     return { ...p, items };
   });
   return changed ? { ...layout, pages } : layout;
+}
+
+/**
+ * "Lock computer" used to be the macOS hotkey ctrl+cmd+q everywhere; on Windows that is Ctrl+Win+Q (Quick Assist) and on Linux nothing.
+ * At load, on Windows and Linux, a button whose action is exactly that hotkey becomes {type:"lock"}, and so does such a hotkey step in a
+ * macro (isLockAction counts it as a lock, so the phone sleeps: the computer must lock too). Only in memory: layout.json is rewritten
+ * the next time the layout is saved. macOS keeps the hotkey (it locks there).
+ */
+export function migrateLockHotkeys(layout: Layout, os: NodeJS.Platform): Layout {
+  if (os !== "win32" && os !== "linux") return layout;
+  return mapActions(layout,
+    (a) => (a.type === "hotkey" && isLockKeys(a.keys) ? { type: "lock" } : null),
+    (st) => (st.kind === "hotkey" && isLockKeys(st.keys) ? { kind: "lock" } : null));
+}
+
+/**
+ * "Screenshot" / "Capture region" used to be the macOS hotkey cmd+shift+4 (cmd+shift+3 for the whole screen) everywhere: nothing on
+ * Windows and Linux, and nothing on a Mac whose screenshot shortcuts are off or taken by another app. At load, on every OS, a button
+ * whose action is exactly one of those hotkeys becomes {type:"screenshot"} with that mode, and so does such a macro step. Only in
+ * memory, like migrateLockHotkeys.
+ */
+export function migrateScreenshotHotkeys(layout: Layout): Layout {
+  return mapActions(layout,
+    (a) => {
+      const mode = a.type === "hotkey" ? screenshotModeForKeys(a.keys) : null;
+      return mode ? (mode === "region" ? { type: "screenshot" } : { type: "screenshot", mode }) : null;
+    },
+    (st) => {
+      const mode = st.kind === "hotkey" ? screenshotModeForKeys(st.keys) : null;
+      return mode ? (mode === "region" ? { kind: "screenshot" } : { kind: "screenshot", mode }) : null;
+    });
 }
 
 export async function saveLayout(layout: Layout): Promise<void> {
@@ -689,6 +730,10 @@ function validateScreen(v: any): ScreenSettings | undefined {
   if (v.lockSleep !== undefined) {
     if (!LOCK_SLEEP.includes(v.lockSleep)) throw new Error(`theme.screen.lockSleep must be one of ${LOCK_SLEEP.join(", ")}`);
     out.lockSleep = v.lockSleep;
+  }
+  if (v.screenshot !== undefined && v.screenshot !== null) {
+    const c = screenshotChoice(obj(v.screenshot, "theme.screen.screenshot"), "theme.screen.screenshot");
+    if (c.tool) out.screenshot = c;
   }
   if (v.standby !== undefined && v.standby !== null) {
     const s = obj(v.standby, "theme.screen.standby");
@@ -912,6 +957,19 @@ function normalizeIcon(v: string, where = "icon"): string {
   return Object.prototype.hasOwnProperty.call(ICON_ALIASES, v) ? ICON_ALIASES[v]! : v;
 }
 
+/** A screenshot tool choice: a known tool, with its shortcut (hotkey) or command (command); other fields are dropped. */
+function screenshotChoice(v: any, where: string): ScreenshotChoice {
+  if (v.tool === undefined) return {};
+  if (!(SCREENSHOT_TOOLS as unknown[]).includes(v.tool)) throw new Error(`${where}.tool must be one of ${SCREENSHOT_TOOLS.join(", ")}`);
+  if (v.tool === "hotkey") {
+    const keys = str(v.keys, `${where}.keys`);
+    if (keys.length > 100) throw new Error(`${where}.keys is too long`);
+    return { tool: "hotkey", keys };
+  }
+  if (v.tool === "command") return { tool: "command", command: str(v.command, `${where}.command`) };
+  return { tool: v.tool };
+}
+
 function str(v: unknown, field: string): string {
   if (typeof v !== "string") throw new Error(`${field} must be a string`);
   return v;
@@ -961,6 +1019,10 @@ function validateAction(a: any, where: string): Action {
     }
     case "sound-stop": return { type: "sound-stop" };
     case "lock": return { type: "lock" };
+    case "screenshot": {
+      if (a.mode !== undefined && !(SCREENSHOT_MODES as unknown[]).includes(a.mode)) throw new Error(`${where}.action.mode must be region, screen or window`);
+      return { type: "screenshot", ...(a.mode !== undefined ? { mode: a.mode } : {}), ...screenshotChoice(a, `${where}.action`) };
+    }
     case "onair": case "mic": case "camera": return liveAction(a, `${where}.action`);
     case "macro": return { type: "macro", steps: macroSteps(a.steps, `${where}.action.steps`) };
     case "plugin": {
@@ -1075,7 +1137,13 @@ export function validateLayout(raw: any): Layout {
           }
           plugin = { id: pid, widget: pw, ...(ps ? { settings: ps } : {}), ...(view ? { view } : {}) };
         }
-        return { id: itemId, kind: "widget", widget: it.widget, color, ...(plugin ? { plugin } : {}), ...(provider ? { provider } : {}), ...(clock ? { clock } : {}), ...(metric ? { metric } : {}), ...(quota ? { quota } : {}), ...(entity ? { entity } : {}), ...(weather ? { weather } : {}), ...(push ? { push } : {}), ...size, ...itemStyle(it, w) };
+        // an On Air tile may toggle On Air when tapped; no other widget keeps an action
+        let action: Action | undefined;
+        if (it.widget === "onair" && it.action !== undefined && it.action !== null) {
+          action = validateAction(it.action, w);
+          if (action.type !== "onair") throw new Error(`${w}.action: an On Air tile can only run an On Air action`);
+        }
+        return { id: itemId, kind: "widget", widget: it.widget, color, ...(action ? { action } : {}), ...(plugin ? { plugin } : {}), ...(provider ? { provider } : {}), ...(clock ? { clock } : {}), ...(metric ? { metric } : {}), ...(quota ? { quota } : {}), ...(entity ? { entity } : {}), ...(weather ? { weather } : {}), ...(push ? { push } : {}), ...size, ...itemStyle(it, w) };
       }
       if (it.kind === "button") {
         return {

@@ -35,6 +35,7 @@ function toAction(st: MacroStep): Action | null {
     case "onair": return { type: "onair", ...(st.mode ? { mode: st.mode } : {}) };
     case "mic": return { type: "mic", ...(st.mode ? { mode: st.mode } : {}) };
     case "lock": return { type: "lock" };
+    case "screenshot": return { type: "screenshot", ...(st.mode ? { mode: st.mode } : {}) };
     default: return null;
   }
 }

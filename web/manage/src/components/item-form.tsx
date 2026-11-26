@@ -17,10 +17,12 @@ import { MetricOptionsForm } from "@/components/metric-options";
 import { PluginStylePicker } from "@/components/plugin-style";
 import { HotkeyField } from "@/components/hotkey-field";
 import { MacroEditor } from "@/components/macro-editor";
+import { ScreenshotToolFields, effectiveTool, toolName, useScreenshotTools } from "@/components/screenshot-fields";
+import type { ScreenshotChoice } from "@shared/screenshot";
 import { LiveFields } from "@/components/live-fields";
 import { IconPicker } from "@/components/icon-picker";
 import {
-  ACTION_ICON, ACTION_SHORT, MEDIA_LABEL, PROVIDER_LABEL, VOLUME_LABEL, WIDGET_LABEL, defaultAction, tileName,
+  ACTION_ICON, ACTION_SHORT, MEDIA_LABEL, PROVIDER_LABEL, SCREENSHOT_LABEL, VOLUME_LABEL, WIDGET_LABEL, defaultAction, tileName,
 } from "@/lib/layout";
 import { cn } from "@/lib/utils";
 import { t, translationsOf, useLanguage } from "@/lib/i18n";
@@ -35,12 +37,14 @@ import { pluginSizes, useEnabledPlugins } from "@/lib/plugins";
 import type { PluginField, PluginInfo, PluginRef } from "@/types";
 import { ACTION_TYPES, AI_PROVIDERS, WIDGET_KINDS, METRIC_WIDGETS, type MetricWidget, type EntityOptions, type GeoPlace, type PushOptions, type WeatherOptions, type QuotaOptions, type MacApp, type Action, type ActionType, type AiProvider, type Item, type Page, type WidgetKind } from "@/types";
 
-export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onDelete, onResize, onWidgetKind, onMoveToPage }: {
+export function ItemForm({ item, page, pages, accent, screenshotDefault, onChange, onDuplicate, onDelete, onResize, onWidgetKind, onMoveToPage }: {
   item: Item;
   page: Page;
   pages: Page[];
   /** Theme accent: the swatch colour for items with no colour of their own. */
   accent?: string;
+  /** The screen's screenshot tool (theme.screen.screenshot), which a screenshot button uses unless it picks its own. */
+  screenshotDefault?: ScreenshotChoice;
   onChange: (next: Item) => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -183,6 +187,7 @@ export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onD
           <ActionFields
             action={item.action}
             pages={pages}
+            screenshotDefault={screenshotDefault}
             onChange={(a) => set({ action: a })}
             onPickApp={(app) => {
               const patch: Record<string, unknown> = { action: { type: "open", target: `bundle:${app.bundleId}` } };
@@ -211,7 +216,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function ActionFields({ action, pages, onChange, onPickApp }: { action: Action | undefined; pages: Page[]; onChange: (a: Action | undefined) => void; onPickApp: (app: MacApp) => void }) {
+function ActionFields({ action, pages, screenshotDefault, onChange, onPickApp }: { action: Action | undefined; pages: Page[]; screenshotDefault?: ScreenshotChoice; onChange: (a: Action | undefined) => void; onPickApp: (app: MacApp) => void }) {
   useLanguage();
   const a = action;
   const patch = (p: Record<string, string>) => onChange({ ...a, ...p } as Action);
@@ -276,6 +281,7 @@ function ActionFields({ action, pages, onChange, onPickApp }: { action: Action |
       )}
       {a?.type === "sound" && <SoundFields action={a} onChange={(next) => onChange(next)} />}
       {a?.type === "lock" && <p className="text-xs text-muted-foreground">{t("Locks the computer the right way for its system: the lock shortcut on macOS, the lock screen on Windows and Linux.")}</p>}
+      {a?.type === "screenshot" && <ScreenshotFields action={a} screenDefault={screenshotDefault} onChange={(next) => onChange(next)} />}
       {a?.type === "sound-stop" && <p className="text-xs text-muted-foreground">{t("Press this button to stop all playing sounds (on the computer and the phone).")}</p>}
       {a?.type === "macro" && <MacroEditor steps={a.steps} pages={pages} onChange={(steps) => onChange({ type: "macro", steps })} />}
       {a?.type === "hass" && <HassFields action={a} onChange={(next) => onChange(next)} />}
@@ -322,6 +328,27 @@ function Stepper({ id, value, min, max, onChange }: { id: string; value: number;
         }} />
       <Button size="md" variant="secondary" icon={<Plus />} disabled={value >= max} onClick={() => onChange(value + 1)} aria-label={t("Increase")} />
     </div>
+  );
+}
+
+function ScreenshotFields({ action, screenDefault, onChange }: { action: Extract<Action, { type: "screenshot" }>; screenDefault?: ScreenshotChoice; onChange: (a: Action) => void }) {
+  const info = useScreenshotTools();
+  const inherited = effectiveTool(undefined, screenDefault, info);
+  const tool = effectiveTool(action, screenDefault, info);
+  const mode = action.mode;
+  return (
+    <>
+      <ScreenshotToolFields id="f-shot-tool" value={action} inherited={inherited}
+        inheritLabel={t("Screen default ({name})", { name: toolName(inherited) })}
+        onChange={(c) => onChange({ type: "screenshot", ...(mode ? { mode } : {}), ...c })} />
+      {tool !== "hotkey" && tool !== "command" && (
+        <Field label={t("Capture")} id="f-shot">
+          <SegmentedControl aria-label={t("Capture")} value={mode ?? "region"}
+            onValueChange={(v) => { const { mode: _m, ...rest } = action; onChange(v === "region" ? rest : { ...rest, mode: v as "screen" | "window" }); }}
+            options={(["region", "screen", "window"] as const).map((m) => ({ value: m, label: t(SCREENSHOT_LABEL[m]!) }))} />
+        </Field>
+      )}
+    </>
   );
 }
 

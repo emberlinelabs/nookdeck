@@ -124,6 +124,14 @@ final class ReleaseNotesTests: XCTestCase {
         XCTAssertFalse(ReleaseNotes.fromReleases(json: json, current: "0.5.3", upTo: "0.7.0")!.more)
 
         XCTAssertEqual(ReleaseNotes.fromReleases(json: json, current: "0.7.0", upTo: "0.7.0")!.shown, [])
+        // review #7: a body without its own section is never shown under another version's notes
+        let odd = try! JSONSerialization.data(withJSONObject: [
+            rel("v0.6.1", "## Nookdeck 0.6.0\n\n- the old 0.6.0 notes"),            // only another version: nothing for 0.6.1
+            rel("v0.6.2", "- plain notes, no heading" + install),                     // no heading: the whole body up to Install
+        ])
+        let o = ReleaseNotes.fromReleases(json: odd, current: "0.6.0", upTo: "0.6.2")!
+        XCTAssertEqual(o.shown.map(\.version), ["0.6.2"])
+        XCTAssertEqual(o.shown[0].markdown, "- plain notes, no heading")
         XCTAssertNil(ReleaseNotes.fromReleases(json: Data("{\"message\":\"rate limited\"}".utf8), current: "0.6.0", upTo: "0.6.1"))
     }
 }

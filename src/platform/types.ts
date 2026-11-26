@@ -72,7 +72,10 @@ export interface Platform {
    * macOS reads the title only with `withTitle` (System Events, an Apple Event): the Camera button asks for it when a browser is in front.
    */
   frontApp(withTitle?: boolean): Promise<{ id: string; title?: string } | null>;
-  /** Brings a running app forward (macOS bundle id); false when it does not run or the OS cannot. */
+  /**
+   * Brings a running app forward and says whether it is in front now: a macOS bundle id, a Windows exe name or packaged family
+   * name, a Linux process name (X11 with xdotool). False when it does not run or the OS cannot (Linux on Wayland).
+   */
   activateApp(id: string): Promise<boolean>;
   /** Which of these apps run (macOS bundle ids); [] where the OS is not asked. */
   runningApps(ids: string[]): Promise<string[]>;

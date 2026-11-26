@@ -1,10 +1,12 @@
 import { gpuFromHelper } from "./win32/gpu";
 import { createHash } from "node:crypto";
-import { buildCommand, escapePowerShell } from "../actions";
+import { buildCommand, escapePowerShell, screenshotCommand } from "../actions";
+import { findScreenshotApp } from "../screenshot";
+import { homedir } from "node:os";
 import { runCapture } from "./exec";
 import { WinHelper } from "./win32/helper";
 import { idleSeconds as realIdle, realCredApi, sendInput, vkScan, type CredApi } from "./win32/ffi";
-import { hotkeyEvents, mediaEvents, typeEvents, volumeKeyEvents, type KeyEvent, type VkScan } from "./win32/keys";
+import { hotkeyEvents, mediaEvents, printScreenEvents, typeEvents, volumeKeyEvents, type KeyEvent, type VkScan } from "./win32/keys";
 import type { AppCatalog, Platform, SecretStore } from "./types";
 import type { AppInfo } from "../icons";
 import type { MediaApp, RawMedia } from "../media";
@@ -72,6 +74,8 @@ export interface Win32Deps {
   cred?: CredApi;
   idle?: () => number | null;
   run?: (argv: string[], env?: Record<string, string>) => Promise<string>;
+  /** file check for installed screenshot apps (tests fake it) */
+  exists?: (path: string) => boolean;
 }
 
 export function createWin32(d: Win32Deps = {}): Platform {
@@ -187,6 +191,19 @@ export function createWin32(d: Win32Deps = {}): Platform {
         case "media": send(mediaEvents(a.command)); return;
         case "volume": send(volumeKeyEvents(a.command)); return;
         case "lock": await run(buildCommand(a, "win32")); return;
+        // the whole screen is the PrintScreen key (what it does follows the person's Windows setting: the Snipping overlay or a
+        // copy of the screen); a region or a window is the Snipping overlay
+        case "screenshot": {
+          const mode = a.mode ?? "region";
+          if (a.tool === "greenshot") { send(printScreenEvents(mode === "window" ? "alt" : mode === "screen" ? "ctrl" : undefined)); return; }
+          if (a.tool === "sharex") {
+            const exe = findScreenshotApp("sharex", "win32", process.env, homedir(), d.exists);
+            await run(screenshotCommand(mode, "win32", "sharex", exe ?? undefined));
+            return;
+          }
+          if (mode === "screen") send(printScreenEvents()); else await run(buildCommand(a, "win32"));
+          return;
+        }
         default: throw new Error(`${a.type} actions are not run as OS commands`);
       }
     },
@@ -291,10 +308,38 @@ export function createWin32(d: Win32Deps = {}): Platform {
     async frontApp() {
       try { const f = await helper.call<{ id: string; title: string } | null>("front.app", {}, 4000); return f && f.id ? { id: f.id.toLowerCase(), title: f.title } : null; } catch { return null; }
     },
-    activateApp: async () => false,
+    async activateApp(id) {
+      try {
+        const h = pickAppWindow((await helper.call<WinOwner[] | null>("window.owners", {}, 6000)) ?? [], id);
+        // Focus: restores a minimized window, taps Alt and attaches to the foreground thread (Windows refuses a plain
+        // SetForegroundWindow from a background process), then says whether the window really is in front
+        return h !== null && !!(await helper.call<boolean>("window.focus", { hwnd: h }, 4000));
+      } catch { return false; }
+    },
     runningApps: async () => [],
   };
   return self;
+}
+
+/** A top-level window and its process, as the helper's window.owners lists them (front to back). */
+export interface WinOwner { hwnd: number; pid: number; exe: string; path: string }
+
+/**
+ * The window to bring forward for an app the camera check named: an exe name ("zoom.exe"), or a packaged app's family name
+ * ("msteams_8wekyb3d8bbwe", whose exe runs from "...\\WindowsApps\\MSTeams_<version>_x64__8wekyb3d8bbwe\\"). The first match is the
+ * one nearest the front. Null when the app has no window.
+ */
+export function pickAppWindow(wins: WinOwner[], id: string): number | null {
+  const lc = id.toLowerCase();
+  const fam = /^([^_\\/]+)_([a-z0-9]+)$/.exec(lc);
+  const hit = wins.find((w) => {
+    if (fam && !lc.endsWith(".exe")) {
+      const p = w.path.toLowerCase().replace(/\//g, "\\");
+      return p.includes(`\\windowsapps\\${fam[1]}_`) && p.includes(`__${fam[2]}\\`);
+    }
+    return w.exe === lc;
+  });
+  return hit ? hit.hwnd : null;
 }
 
 /**

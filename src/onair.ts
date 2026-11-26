@@ -3,7 +3,7 @@
  * Sources: OBS streaming / recording (a Store plugin through setPluginSource, or a client attached with attachObs), mic in use, camera in use, the manual
  * On Air button, and the API / webhook (with a label and a ttl). Manual and API are separate: turning one off leaves the other.
  *
- * Mic and camera are read every 2 s only while something needs them (`setNeeded`: a phone shows an On Air / Mic / Camera tile,
+ * Mic and camera are read every second (ONAIR_POLL_MS; 2 s felt slow on Windows) only while something needs them (`setNeeded`: a phone shows an On Air / Mic / Camera tile,
  * or keeps the full-screen sign on), NFR-4. Which apps use them never leaves this module (NFR-3): the message carries on/off,
  * the sources, the mic's mute and the start time only.
  */
@@ -57,6 +57,10 @@ export class OnAir {
   private needed = false;
   private timer: ReturnType<typeof setInterval> | undefined;
   private polling: Promise<void> | undefined;
+  /** bumped when mic/camera stop being needed: a read still in flight then is dropped */
+  private gen = 0;
+  /** bumped when the Mic button sets the mute: a read that started before keeps its stale mute to itself */
+  private muteGen = 0;
   private last = "";
   private now: () => number;
 
@@ -81,16 +85,23 @@ export class OnAir {
     if (!b || typeof b !== "object" || !b.sources || typeof b.sources !== "object") throw new Error("send { sources: { obs, mic, camera, manual, api }, ignoreSelf }");
     for (const k of ["obs", "mic", "camera", "manual", "api"]) if (b.sources[k] !== undefined && typeof b.sources[k] !== "boolean") throw new Error(`sources.${k} must be true or false`);
     if (b.ignoreSelf !== undefined && typeof b.ignoreSelf !== "boolean") throw new Error("ignoreSelf must be true or false");
-    const s = parseOnAirSettings(b, this.obsSetUp());
-    this.raw = s;
+    // store what the user chose, not the resolved defaults: "OBS on once OBS is set up" must keep following OBS. The
+    // manage page sends every key back, so an obs equal to today's default is not a choice and is not stored.
+    const prev = this.raw && typeof this.raw === "object" ? (this.raw as any) : {};
+    const sources: Record<string, boolean> = { ...(prev.sources && typeof prev.sources === "object" ? prev.sources : {}) };
+    for (const k of ["obs", "mic", "camera", "manual", "api"]) if (typeof b.sources[k] === "boolean") sources[k] = b.sources[k];
+    if (typeof b.sources.obs === "boolean" && b.sources.obs === this.obsSetUp()) delete sources.obs;
+    const ignoreSelf = typeof b.ignoreSelf === "boolean" ? b.ignoreSelf : prev.ignoreSelf;
+    const stored = { sources, ...(typeof ignoreSelf === "boolean" ? { ignoreSelf } : {}) };
+    this.raw = stored;
     if (this.o.settingsFile) {
       await mkdir(dirname(this.o.settingsFile), { recursive: true });
       const tmp = this.o.settingsFile + ".tmp";
-      await writeFile(tmp, JSON.stringify(s, null, 2));
+      await writeFile(tmp, JSON.stringify(stored, null, 2));
       await rename(tmp, this.o.settingsFile);
     }
     this.emit();
-    return s;
+    return this.settings();
   }
 
   /** Connects the OBS client's live state (PD-Worker-0's ObsClient). Re-reads configured() on every change. */
@@ -169,6 +180,7 @@ export class OnAir {
     } else {
       if (this.timer) clearInterval(this.timer);
       this.timer = undefined;
+      this.gen++;
       this.mic = { inUse: false, muted: this.mic.muted };
       this.camera = { inUse: false };
       this.emit();
@@ -177,34 +189,65 @@ export class OnAir {
 
   isNeeded(): boolean { return this.needed; }
 
-  /** One mic / camera / mute read now (the poll, GET /api/onair, right after the Mic button). Never overlaps itself. */
-  refresh(): Promise<void> {
-    this.polling ??= (async () => {
+  /** One mic / camera / mute read (shared by callers at the same time). */
+  private read(): Promise<{ inUse: { mic: boolean; camera: boolean } | null; muted: boolean | null | undefined; gen: number; muteGen: number }> {
+    const gen = this.gen, muteGen = this.muteGen;
+    return (async () => {
       const s = this.settings();
       const ignore = s.ignoreSelf ? (this.o.pid ?? process.pid) : undefined;
       const [u, muted] = await Promise.all([
         this.o.probe.usage(ignore).catch(() => null),
         this.o.probe.micMuted().catch(() => undefined), // a failed read (helper still starting) keeps the last value
       ]);
-      if (u) { this.mic.inUse = !!u.mic.inUse; this.camera.inUse = !!u.camera.inUse; }
-      if (muted !== undefined) this.mic.muted = muted;
+      return { inUse: u ? { mic: !!u.mic.inUse, camera: !!u.camera.inUse } : null, muted, gen, muteGen };
+    })();
+  }
+
+  /**
+   * The poll's read. Mic / camera use is kept only while it is still needed (a read in flight when the phones stopped
+   * needing it is dropped, or On Air could stay on with nothing to turn it off). Never overlaps itself.
+   */
+  refresh(): Promise<void> {
+    this.polling ??= this.read().then((r) => {
+      if (r.inUse && this.needed && r.gen === this.gen) { this.mic.inUse = r.inUse.mic; this.camera.inUse = r.inUse.camera; }
+      if (r.muted !== undefined && r.muteGen === this.muteGen) this.mic.muted = r.muted;
       this.emit();
-    })().finally(() => { this.polling = undefined; });
+    }).finally(() => { this.polling = undefined; });
     return this.polling;
   }
 
+  /**
+   * GET /api/onair: the current state. While the poll runs that is the snapshot; otherwise one read for this answer
+   * only (it is not kept: nothing would clear it again).
+   */
+  async current(): Promise<OnAirMsg> {
+    if (this.needed) return this.snapshot();
+    const r = await this.read();
+    if (r.muted !== undefined && r.muteGen === this.muteGen) { this.mic.muted = r.muted; this.emit(); }
+    if (!r.inUse || this.needed) return this.snapshot();
+    return this.snapshot({ mic: r.inUse.mic, camera: r.inUse.camera });
+  }
+
+  /** The Mic button set the mute: show that now (a poll already in flight read the old state). */
+  noteMicMuted(muted: boolean): void {
+    this.muteGen++;
+    this.mic.muted = muted;
+    this.emit();
+  }
+
   /** The `onair` message. */
-  snapshot(): OnAirMsg {
+  snapshot(inUse?: { mic: boolean; camera: boolean }): OnAirMsg {
     const s = this.settings().sources;
+    const micIn = inUse ? inUse.mic : this.mic.inUse, camIn = inUse ? inUse.camera : this.camera.inUse;
     const sources: OnAirSource[] = [];
     if (s.obs && this.live("stream").active) sources.push("obs-stream");
     if (s.obs && this.live("record").active) sources.push("obs-record");
-    if (s.mic && this.mic.inUse) sources.push("mic");
-    if (s.camera && this.camera.inUse) sources.push("camera");
+    if (s.mic && micIn) sources.push("mic");
+    if (s.camera && camIn) sources.push("camera");
     if (s.manual && this.manual) sources.push("manual");
     if (s.api && this.api.on) sources.push("api");
     const on = sources.length > 0;
-    const msg: OnAirMsg = { type: "onair", on, sources, mic: { inUse: this.mic.inUse, muted: this.mic.muted }, camera: { inUse: this.camera.inUse } };
+    const msg: OnAirMsg = { type: "onair", on, sources, mic: { inUse: micIn, muted: this.mic.muted }, camera: { inUse: camIn } };
     if (on && this.since !== undefined) msg.since = this.since;
     if (sources.includes("api") && this.api.label) msg.label = this.api.label;
     return msg;

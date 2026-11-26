@@ -457,6 +457,23 @@ function Cmd-WindowFocusNew($a) {
   @{ hwnd = [int64]$pick.hwnd; title = [string]$pick.title; focused = [bool]$ok }
 }
 
+# Every listed window with its process exe name and path (the Camera button brings a meeting app forward: activateApp in win32.ts).
+function Cmd-WindowOwners {
+  $procs = @{}
+  $o = @()
+  foreach ($w in (Win-Windows)) {
+    if (-not $procs.ContainsKey($w.pid)) {
+      $n = ''; $p = ''
+      try { $pr = Get-Process -Id $w.pid -ErrorAction Stop; $n = [string]$pr.ProcessName; try { $p = [string]$pr.Path } catch { } } catch { }
+      $procs[$w.pid] = @($n, $p)
+    }
+    $pn = $procs[$w.pid]
+    if (-not $pn[0]) { continue }
+    $o += @{ hwnd = $w.hwnd; pid = $w.pid; exe = ($pn[0] + '.exe').ToLowerInvariant(); path = [string]$pn[1] }
+  }
+  , $o
+}
+
 function Handle($req) {
   switch ($req.cmd) {
     'ping' { return 'pong' }
@@ -475,6 +492,8 @@ function Handle($req) {
     'window.list' { return Win-Windows }
     'window.focusnew' { return Cmd-WindowFocusNew $req }
     'window.foreground' { return [PD.Win]::Foreground() }
+    'window.owners' { return Cmd-WindowOwners }
+    'window.focus' { return [PD.Win]::Focus([int64]$req.hwnd) }
     'sound.duration' { return Cmd-SoundDuration $req }
     'av.usage' { return Cmd-AvUsage }
     'mic.get' { return Cmd-MicGet }

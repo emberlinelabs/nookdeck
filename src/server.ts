@@ -61,6 +61,9 @@ async function touchLocalNetwork(): Promise<void> {
 }
 import { currentInstance } from "./service";
 import { platform } from "./platform";
+import { automaticScreenshotTool, installedScreenshotApps, resolveScreenshot } from "./screenshot";
+import { userHome } from "./home";
+import { screenshotToolsFor } from "../web/shared/screenshot";
 import pkg from "../package.json" with { type: "json" };
 import { aboutInfo, compatVersion } from "./about";
 import { PluginStore, PluginError } from "./plugins/store";
@@ -425,8 +428,11 @@ export async function startServer(opts: StartOptions = {}) {
       case "plugin":
         return pluginRuntime.runAction(action, (steps) => execute({ type: "macro", steps }, depth, ws));
       case "onair": { onair.setManual(action.mode ?? "toggle"); return; }
-      case "mic": { await micControl.set(action.mode ?? "toggle"); void onair.refresh(); return; }
+      case "mic": { onair.noteMicMuted(await micControl.set(action.mode ?? "toggle")); return; }
       case "camera": { await cameraToggle(av); return; }
+      case "screenshot":
+        // the button's tool, else the screen's default, else the first installed known app, else the system tool
+        return deps.runAction(resolveScreenshot(action, layout.theme?.screen?.screenshot, installedScreenshotApps(platform.id, process.env, userHome()), platform.id));
       case "hass":
         if (!hass.connected()) throw new Error(t("Home Assistant is not connected"));
         return hass.callService(action.service, action.entityId, action.data);
@@ -1257,6 +1263,12 @@ export async function startServer(opts: StartOptions = {}) {
         if (denied) return denied;
         return json(aboutInfo());
       }
+      if (path === "/api/screenshot-tools" && req.method === "GET") {
+        const denied = guardLocal(server, req);
+        if (denied) return denied;
+        const installed = installedScreenshotApps(platform.id, process.env, userHome());
+        return json({ os: platform.id, tools: screenshotToolsFor(platform.id), installed, auto: automaticScreenshotTool(installed) });
+      }
       if (path === "/api/update" && req.method === "GET") {
         const denied = guardLocal(server, req);
         if (denied) return denied;
@@ -1514,8 +1526,9 @@ export async function startServer(opts: StartOptions = {}) {
         if (path === "/api/onair/settings" && req.method !== "PUT") return json({ error: "method not allowed" }, 405);
         if (req.method === "PUT") {
           try { await onair.setSettings(await readBody(req)); } catch (err: any) { return json({ error: err?.message ?? String(err) }, 400); }
-        } else if (!onair.isNeeded()) await onair.refresh(); // nobody polls: read once so the answer is current
-        return json({ ...onair.snapshot(), settings: onair.settings() });
+          return json({ ...onair.snapshot(), settings: onair.settings() });
+        }
+        return json({ ...(await onair.current()), settings: onair.settings() });
       }
       if (path === "/api/webhooks" && req.method === "GET") {
         const denied = guardLocal(server, req);
@@ -1787,7 +1800,9 @@ export async function startServer(opts: StartOptions = {}) {
             return send(ws, { type: "result", reqId, ok: false, error: err?.message ?? String(err) });
           }
         }
-        if (!item || item.kind !== "button" || !item.action) {
+        // an On Air tile set to "Tap turns On Air on or off" carries an onair action; other widgets have nothing to run
+        const onairTile = item?.kind === "widget" && item.widget === "onair" && item.action?.type === "onair";
+        if (!item || (item.kind !== "button" && !onairTile) || !item.action) {
           return send(ws, { type: "result", reqId, ok: false, error: "no action for this item" });
         }
         rules.pressed();

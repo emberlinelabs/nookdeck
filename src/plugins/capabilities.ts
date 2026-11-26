@@ -268,7 +268,7 @@ export class PluginServices {
     if (p.sound !== undefined && !(NOTIFY_SOUNDS as readonly string[]).includes(p.sound)) throw new RpcFault(RPC_ERR.invalidParams, `sound must be one of ${NOTIFY_SOUNDS.join(", ")}`);
     const now = (this.d.now ?? Date.now)();
     this.sent = this.sent.filter((t) => now - t < 60_000);
-    if (this.sent.length >= NOTIFY_PER_MINUTE) throw new RpcFault(RPC_ERR.invalidParams, `at most ${NOTIFY_PER_MINUTE} notifications a minute`);
+    if (this.sent.length >= NOTIFY_PER_MINUTE) throw new RpcFault(RPC_ERR.limit, `at most ${NOTIFY_PER_MINUTE} notifications a minute`);
     this.sent.push(now);
     const body = typeof p.body === "string" && p.body.trim() ? p.body.trim().slice(0, NOTIFY_BODY_MAX) : undefined;
     this.d.notify?.({ title: title.slice(0, NOTIFY_TITLE_MAX), ...(body ? { body } : {}), ...(p.level ? { level: p.level } : {}), ...(p.sound ? { sound: p.sound } : {}) });

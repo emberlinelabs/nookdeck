@@ -21,6 +21,7 @@ export { ACTION_TIMEOUT_MS } from "./platform/exec";
 
 export { parseHotkey, type ParsedHotkey } from "./platform/hotkey";
 import { parseHotkey } from "./platform/hotkey";
+import { SCREENSHOT_MODES, screenshotUrl, sharexArg, type ScreenshotMode, type ScreenshotTool } from "../web/shared/screenshot";
 
 // ---------- macOS ----------
 // Keys, typing, media keys and volume on macOS are native calls (src/platform/mac-native.ts), not commands:
@@ -148,6 +149,8 @@ export function buildCommand(a: Action, platform: NodeJS.Platform, input: LinuxI
       // systemd-logind tells the desktop (GNOME, KDE, ...) to lock; xdg-screensaver covers sessions without logind
       return ["sh", "-c", "loginctl lock-session || xdg-screensaver lock"];
 
+    case "screenshot": return screenshotCommand(a.mode ?? "region", platform, a.tool);
+
     case "volume":
       if (isMac) throw new Error(MAC_NATIVE);
       if (isWin) {
@@ -158,6 +161,45 @@ export function buildCommand(a: Action, platform: NodeJS.Platform, input: LinuxI
       if (a.command === "mute") return ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"];
       return ["pactl", "set-sink-volume", "@DEFAULT_SINK@", a.command === "up" ? "+5%" : "-5%"];
   }
+}
+
+// ---------- screenshot ----------
+
+/** The Linux tools tried in order, with the arguments for each mode; the desktop portal is the last resort. */
+export const LINUX_SCREENSHOT_TOOLS: { bin: string; args: Record<ScreenshotMode, string[]> }[] = [
+  { bin: "gnome-screenshot", args: { region: ["-a"], screen: [], window: ["-w"] } },
+  { bin: "spectacle", args: { region: ["-r"], screen: ["-f"], window: ["-a"] } },
+  { bin: "flameshot", args: { region: ["gui"], screen: ["full", "-c"], window: ["gui"] } },
+];
+const PORTAL_SCREENSHOT = `gdbus call --session --dest org.freedesktop.portal.Desktop --object-path /org/freedesktop/portal/desktop --method org.freedesktop.portal.Screenshot.Screenshot '' "{'interactive': <true>}"`;
+
+/**
+ * Pure: argv that starts the system screenshot tool. It returns once the tool is open (the person then picks the area), so a press
+ * never waits on them.
+ * - macOS: opens the Screenshot app (its toolbar, every mode; it remembers the last one). It is started by LaunchServices, so the
+ *   agent needs no Screen Recording permission, and it works when the cmd+shift+3/4 shortcuts are turned off.
+ * - Windows: the Snipping overlay (ms-screenclip:, what Win+Shift+S opens) for region and window. "screen" is the PrintScreen key,
+ *   pressed by the Windows adapter (SendKeys cannot press it), so this argv is only used for region and window there.
+ * - Linux: the first of gnome-screenshot, spectacle, flameshot, else the desktop portal's interactive screenshot (GNOME, KDE...).
+ */
+export function screenshotCommand(mode: ScreenshotMode, platform: NodeJS.Platform, tool: ScreenshotTool = "system", exe?: string): string[] {
+  if (!(SCREENSHOT_MODES as string[]).includes(mode)) throw new Error("screenshot mode must be region, screen or window");
+  if (platform === "darwin") {
+    // a known app through its documented URL scheme (it has its own Screen Recording permission; the agent needs none)
+    const url = screenshotUrl(tool, mode);
+    return url ? ["open", url] : ["open", "-b", "com.apple.screenshot.launcher"];
+  }
+  if (platform === "win32") {
+    // ShareX takes any of its hotkey actions as an argument; Start-Process returns at once whether ShareX was running or not
+    if (tool === "sharex") {
+      if (!exe) throw new Error("ShareX was not found in Program Files");
+      return ps(`Start-Process -FilePath '${escapePowerShell(exe)}' -ArgumentList '${sharexArg(mode)}'`);
+    }
+    return ps("Start-Process 'ms-screenclip:'");
+  }
+  const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+  const branches = LINUX_SCREENSHOT_TOOLS.map((t) => `command -v ${t.bin} >/dev/null 2>&1; then ${[t.bin, ...t.args[mode]].map(q).join(" ")} >/dev/null 2>&1 &`);
+  return ["sh", "-c", `if ${branches.join("\nelif ")}\nelif command -v gdbus >/dev/null 2>&1; then ${PORTAL_SCREENSHOT} >/dev/null 2>&1 &\nelse echo "No screenshot tool found: install gnome-screenshot, spectacle or flameshot" >&2; exit 127\nfi`];
 }
 
 // ---------- volume ----------
@@ -230,7 +272,6 @@ export function getVolumeCached(): VolumeState | null {
 // ---------- runAction ----------
 
 export { runCapture } from "./platform/exec";
-import { runCapture } from "./platform/exec";
 
 
 export async function runAction(a: Action): Promise<void> {

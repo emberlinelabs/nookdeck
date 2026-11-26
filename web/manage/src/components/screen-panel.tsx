@@ -10,6 +10,8 @@ import { Slider } from "@/components/ui/knowns/slider";
 import { Switch } from "@/components/ui/knowns/switch";
 import { OptionCards } from "@/components/visual-options";
 import { PhonePreview, type Orientation } from "@/components/phone-preview";
+import { ScreenshotToolFields, toolName, useScreenshotTools } from "@/components/screenshot-fields";
+import type { ScreenshotChoice } from "@shared/screenshot";
 import { previewAlarmSound } from "@/lib/alarm-preview";
 import { getLanguage, t, useLanguage } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -191,6 +193,10 @@ export function ScreenPanel({ layout, pageId, update, orientation, onOrientation
             </Field>
           </Section>
 
+          <Section title={t("Screenshots")} hint={t("For Screenshot buttons that do not pick a tool of their own.")}>
+            <ScreenshotDefault value={screen.screenshot} onChange={(c) => setScreen({ screenshot: c.tool ? c : undefined })} />
+          </Section>
+
           <Section title={t("Standby clock")} hint={t("After a while without touch, the phone shows a quiet full-screen clock. Tap to go back.")}>
             <SwitchRow id="s-standby" label={t("Show a clock when idle")} checked={standby.enabled} onChange={(v) => setScreen({ standby: { ...standby, enabled: v } })} />
             {standby.enabled && (
@@ -236,4 +242,11 @@ export function ScreenPanel({ layout, pageId, update, orientation, onOrientation
       </div>
     </div>
   );
+}
+
+/** The screen's screenshot tool; empty = automatic (the first installed known app, else the system tool). */
+function ScreenshotDefault({ value, onChange }: { value: ScreenshotChoice | undefined; onChange: (c: ScreenshotChoice) => void }) {
+  const info = useScreenshotTools();
+  const auto = info?.auto ?? "system";
+  return <ScreenshotToolFields id="s-shot-tool" value={value ?? {}} inherited={auto} inheritLabel={t("Automatic ({name})", { name: toolName(auto) })} onChange={onChange} />;
 }

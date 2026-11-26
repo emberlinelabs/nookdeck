@@ -35,7 +35,7 @@ export const BROWSERS = {
 type Os = "mac" | "win" | "linux";
 export const osKey = (p: NodeJS.Platform): Os => (p === "darwin" ? "mac" : p === "win32" ? "win" : "linux");
 
-const matchesNative = (app: MeetingApp, os: Os, id: string): boolean => {
+export const matchesNative = (app: MeetingApp, os: Os, id: string): boolean => {
   const ids = app[os];
   if (!ids) return false;
   const lc = id.toLowerCase();
@@ -46,7 +46,8 @@ export interface CameraPick { app: MeetingApp; keys: string; /** bring this app 
 
 /**
  * Which meeting app gets the camera shortcut:
- * 1. an app the OS says uses the camera (Windows names it; macOS and Linux do not);
+ * 1. an app the OS says uses the camera (Windows names it; macOS and Linux do not); brought forward first when it is not
+ *    in front (the shortcut goes to whatever app is in front);
  * 2. the frontmost app when it is a known meeting app, or a browser showing a known web meeting;
  * 3. on macOS, a known native meeting app that runs while the camera is in use (it is brought forward first).
  * Null: nothing known, send no keys.
@@ -61,7 +62,7 @@ export function pickMeetingApp(o: {
   for (const a of o.cameraApps) {
     const app = MEETING_APPS.find((m) => matchesNative(m, o.os, a));
     if (app && o.front && matchesNative(app, o.os, o.front.id)) return { app, keys: app.keys[o.os] };
-    if (app) return { app, keys: app.keys[o.os], ...(o.os === "mac" ? { activate: a } : {}) };
+    if (app) return { app, keys: app.keys[o.os], activate: a };
   }
   if (o.front) {
     const native = MEETING_APPS.find((m) => matchesNative(m, o.os, o.front!.id));

@@ -80,6 +80,13 @@ export function typeEvents(text: string): KeyEvent[] {
   return out;
 }
 
+/** The PrintScreen key (VK_SNAPSHOT), with Alt or Ctrl held when asked (Greenshot: Alt = window, Ctrl = whole screen). */
+export function printScreenEvents(mod?: "alt" | "ctrl"): KeyEvent[] {
+  const m = mod === "alt" ? VK.menu : mod === "ctrl" ? VK.control : 0;
+  const press = [key(0x2c, false), key(0x2c, true)];
+  return m ? [key(m, false), ...press, key(m, true)] : press;
+}
+
 export function mediaEvents(command: "playpause" | "next" | "previous"): KeyEvent[] {
   const vk = command === "playpause" ? VK.mediaPlayPause : command === "next" ? VK.mediaNext : VK.mediaPrev;
   return [key(vk, false), key(vk, true)];

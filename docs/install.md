@@ -79,6 +79,7 @@ Run `nookdeck doctor`. It checks the tools Nookdeck uses and prints the command 
 |---|---|
 | Key and typing tiles do nothing on X11 | Install `xdotool` (`sudo apt install xdotool`). |
 | Key and typing tiles do nothing on Wayland | Install `ydotool`. It writes to `/dev/uinput`, which needs one change: doctor shows the right command for your release (join the `input` group, or add a udev rule). Log out and in afterwards. ydotool 1.x (Ubuntu 24.04, Debian 13) also needs its `ydotoold` daemon running. |
+| The Camera button does nothing while the meeting app is behind another window | On X11, install `xdotool`: it brings Zoom or Teams forward before the shortcut is sent. On Wayland, other programs cannot bring a window forward, so put the meeting window in front first. |
 | Now Playing or volume tiles are empty | Install `playerctl` and `pulseaudio-utils` (`pactl` also works with PipeWire). |
 | The phone cannot connect, and `ufw` is on | Allow the port: `sudo ufw allow 7420/tcp` (doctor shows your port). |
 | The service does not start | `nookdeck service status`, then `~/.nookdeck/logs/agent.err.log` or `journalctl --user -u nookdeck`. |

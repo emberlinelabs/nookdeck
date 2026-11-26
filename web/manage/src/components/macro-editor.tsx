@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/knowns/button";
 import { Input } from "@/components/ui/knowns/input";
 import { Popover } from "@/components/ui/knowns/popover";
 import { Select } from "@/components/ui/knowns/select";
+import { SegmentedControl } from "@/components/ui/knowns/segmented-control";
+import { SCREENSHOT_LABEL } from "@/lib/layout";
 import { Textarea } from "@/components/ui/knowns/textarea";
 import { EntityPicker } from "@/components/entity-picker";
 import { HotkeyField } from "@/components/hotkey-field";
@@ -26,6 +28,7 @@ const KINDS: { kind: Kind; label: string; hint: string }[] = [
   { kind: "hass", label: "Home Assistant", hint: "Call a Home Assistant service" },
   { kind: "item", label: "Press another button", hint: "Run the action of an existing button" },
   { kind: "lock", label: "Lock computer", hint: "Lock the computer's screen" },
+  { kind: "screenshot", label: "Screenshot", hint: "Open the system's screenshot tool" },
   { kind: "notify", label: "Notification", hint: "Show a notification on the phone" },
 ];
 const LABEL = Object.fromEntries(KINDS.map((k) => [k.kind, k.label])) as Record<Kind, string>;
@@ -42,6 +45,7 @@ export function newStep(kind: Kind, pages: Page[] = []): MacroStep {
     case "hass": return { kind, service: "" };
     case "item": return { kind, pageId: pages[0]?.id ?? "", itemId: "" };
     case "lock": return { kind };
+    case "screenshot": return { kind };
     case "notify": return { kind, text: "" };
   }
 }
@@ -165,6 +169,10 @@ function StepFields({ i, step: s, pages, onChange }: { i: number; step: MacroSte
     );
     case "item": return <ItemRefPicker pages={pages} pageId={s.pageId} itemId={s.itemId} idPrefix={`ms-${i}`} onChange={(pageId, itemId) => onChange({ ...s, pageId, itemId })} />;
     case "lock": return null;
+    case "screenshot": return (
+      <SegmentedControl size="sm" aria-label={t("Capture")} value={s.mode ?? "region"} onValueChange={(v) => onChange(v === "region" ? { kind: "screenshot" } : { kind: "screenshot", mode: v as "screen" | "window" })}
+        options={(["region", "screen", "window"] as const).map((m) => ({ value: m, label: t(SCREENSHOT_LABEL[m]!) }))} />
+    );
     case "notify": return <Input size="sm" aria-label={t("Notification text")} value={s.text} maxLength={200} placeholder={t("Notification text")} onChange={(e) => onChange({ ...s, text: e.target.value })} />;
   }
 }

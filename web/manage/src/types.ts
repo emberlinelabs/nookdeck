@@ -1,5 +1,6 @@
 // Mirrors src/config.ts of the agent (that file imports node modules, so the types are duplicated here).
 import type { CameraAction, MicAction, OnAirAction } from "@shared/onair";
+import type { ScreenshotChoice, ScreenshotMode } from "@shared/screenshot";
 export type Action =
   | { type: "open"; target: string }
   | { type: "hotkey"; keys: string }
@@ -11,6 +12,7 @@ export type Action =
   | { type: "sound"; sound: string; on?: SoundTarget; volume?: number; mode?: SoundMode }
   | { type: "sound-stop" }
   | { type: "lock" }
+  | ({ type: "screenshot"; mode?: ScreenshotMode } & ScreenshotChoice)
   | { type: "hass"; service: string; entityId?: string; data?: Record<string, unknown> }
   | { type: "macro"; steps: MacroStep[] }
   | { type: "plugin"; plugin: string; action: string; settings?: Record<string, unknown> }
@@ -30,7 +32,7 @@ export interface Sound {
 }
 
 export type ActionType = Action["type"];
-export const ACTION_TYPES: ActionType[] = ["open", "hotkey", "type", "shell", "media", "volume", "page", "sound", "sound-stop", "lock", "hass", "onair", "mic", "camera", "macro"];
+export const ACTION_TYPES: ActionType[] = ["open", "hotkey", "type", "shell", "media", "volume", "page", "sound", "sound-stop", "lock", "screenshot", "hass", "onair", "mic", "camera", "macro"];
 
 export type AiProvider = "claude" | "codex" | "antigravity" | "opencode" | "grok";
 export const AI_PROVIDERS: AiProvider[] = ["claude", "codex", "antigravity", "opencode", "grok"];
@@ -146,6 +148,7 @@ export type MacroStep =
   | { kind: "hass"; service: string; entityId?: string; data?: Record<string, unknown> }
   | { kind: "item"; pageId: string; itemId: string }
   | { kind: "lock" }
+  | { kind: "screenshot"; mode?: ScreenshotMode }
   | { kind: "notify"; text: string };
 export const MACRO_MAX_STEPS = 20;
 export const MACRO_MAX_WAIT_MS = 30000;
@@ -261,6 +264,8 @@ export interface ScreenSettings {
   hideDots?: boolean;
   /** After a button that locks the computer: the phone that pressed it goes black (default), every phone, or none. */
   lockSleep?: "phone" | "all" | "off";
+  /** the screenshot tool of buttons that do not pick their own; missing = the first installed known app, else the system tool */
+  screenshot?: ScreenshotChoice;
   standby?: { enabled: boolean; afterMin: number; style: "digital" | "analog" | "words"; showDate?: boolean; showNext?: boolean };
   /** Black overlay opacity 0..0.9; from/to "HH:MM" is the schedule (may wrap midnight); both missing = never auto-dim. */
   dim?: { level: number; from?: string; to?: string };

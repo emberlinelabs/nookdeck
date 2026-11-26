@@ -393,7 +393,7 @@ describe("ctx.notify (permission: notify)", () => {
     await s.request("notify", { title: "  Drink water  ", body: "b".repeat(600), level: "warn", sound: "chime" });
     expect(got[0]).toEqual({ title: "Drink water", body: "b".repeat(500), level: "warn", sound: "chime" });
     for (let i = 1; i < 6; i++) await s.request("notify", { title: `n${i}` });
-    await expect(s.request("notify", { title: "seventh" })).rejects.toThrow(/6 notifications a minute/);
+    await expect(s.request("notify", { title: "seventh" })).rejects.toMatchObject({ code: RPC_ERR.limit, message: expect.stringMatching(/6 notifications a minute/) });
     now += 60_001;
     await s.request("notify", { title: "a minute later" });
     expect(got.length).toBe(7);

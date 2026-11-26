@@ -5,7 +5,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { buildCommand, MAC_NATIVE } from "../src/actions";
-import { defaultLayout, migrateLockHotkeys, validateLayout, type Layout } from "../src/config";
+import { HOME, defaultLayout, migrateLockHotkeys, validateLayout, type Layout } from "../src/config";
 import { macroSteps } from "../src/automation";
 import { isLockAction } from "../web/shared/lock";
 
@@ -58,20 +58,22 @@ describe("migrating stored Lock buttons at load", () => {
       { id: "lock", kind: "button", label: "Lock", action: { type: "hotkey", keys: "ctrl+cmd+q" } },
       { id: "lock2", kind: "button", label: "Lock it", action: { type: "hotkey", keys: "Cmd+Ctrl+Q" } },
       { id: "quit", kind: "button", label: "Quit", action: { type: "hotkey", keys: "cmd+q" } },
-      { id: "m", kind: "button", label: "Macro", action: { type: "macro", steps: [{ kind: "hotkey", keys: "ctrl+cmd+q" }] } },
+      { id: "m", kind: "button", label: "Macro", action: { type: "macro", steps: [{ kind: "wait", ms: 10 }, { kind: "hotkey", keys: "Q+Cmd+Ctrl" }, { kind: "hotkey", keys: "cmd+q" }] } },
     ] },
     { id: "q", name: "Q", columns: 4, rows: 3, items: [{ id: "x", kind: "button", label: "X", action: { type: "hotkey", keys: "cmd+x" } }] },
   ] });
   const actions = (l: Layout) => Object.fromEntries(l.pages.flatMap((p) => p.items).map((i: any) => [i.id, i.action]));
 
   for (const os of ["win32", "linux"] as const) {
-    test(`${os}: the exact lock hotkey becomes {type:"lock"}; other hotkeys and macro steps stay`, () => {
+    test(`${os}: the exact lock hotkey becomes {type:"lock"}, in a button or a macro step; other hotkeys stay`, () => {
       const before = stored();
       const a = actions(migrateLockHotkeys(before, os));
       expect(a.lock).toEqual({ type: "lock" });
       expect(a.lock2).toEqual({ type: "lock" });
       expect(a.quit).toEqual({ type: "hotkey", keys: "cmd+q" });
-      expect(a.m).toEqual({ type: "macro", steps: [{ kind: "hotkey", keys: "ctrl+cmd+q" }] });
+      // a lock step must lock the PC too: isLockAction already counts it, so the phone sleeps
+      expect(a.m).toEqual({ type: "macro", steps: [{ kind: "wait", ms: 10 }, { kind: "lock" }, { kind: "hotkey", keys: "cmd+q" }] });
+      expect(isLockAction(a.m)).toBe(true);
       expect(actions(before).lock).toEqual({ type: "hotkey", keys: "ctrl+cmd+q" }); // the input is not changed
     });
   }
@@ -84,7 +86,8 @@ describe("migrating stored Lock buttons at load", () => {
     expect(migrateLockHotkeys(l, "win32")).toBe(l);
   });
 
-  const file = join(process.env.NOOKDECK_HOME!, "layout.json");
+  // the file config really reads: HOME is fixed when config is first imported (another test file may have changed NOOKDECK_HOME since)
+  const file = join(HOME, "layout.json");
   const saved = existsSync(file) ? readFileSync(file) : null;
   afterAll(() => {
     if (saved) writeFileSync(file, saved);

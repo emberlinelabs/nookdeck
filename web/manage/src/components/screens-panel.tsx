@@ -237,6 +237,7 @@ export function ScreensPanel({ layout, pageIdx, itemId, setPageIdx, setItemId, u
             page={page}
             pages={layout.pages}
             accent={layout.theme?.accent}
+            screenshotDefault={layout.theme?.screen?.screenshot}
             onChange={(next) => {
               setItems(page.items.map((i) => (i.id === itemId ? next : i)));
               setItemId(next.id);

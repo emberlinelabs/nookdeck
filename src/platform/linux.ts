@@ -12,6 +12,7 @@ import type { Platform, SecretStore } from "./types";
 import { linuxInputBackend, linuxSession, ydotoolGeneration } from "./linux-input";
 import type { LinuxInputTool } from "./linux-keys";
 import { createLinuxApps } from "./linux-apps";
+import { activateX11App } from "./linux-activate";
 import { NVIDIA_SMI_ARGS, fileUrlPath, imageMime, parseMeminfo, parseNvidiaSmi, parseXprintidle } from "./linux-sys";
 import { shrinkPng } from "./png";
 import { PACTL_GET_SOURCE_MUTE, PACTL_GET_SOURCE_VOLUME, PACTL_SHORT_SOURCES, PACTL_SOURCE_OUTPUTS, cameraApps, micApps, pactlSourceMuteCommand, parseShortSources, parseSourceMute, parseSourceOutputs, type ProcFs } from "./linux-av";
@@ -215,7 +216,8 @@ export function createLinux(
         return cls.trim() ? { id: cls.trim().toLowerCase(), title: title.trim() } : null;
       } catch { return null; }
     },
-    activateApp: async () => false,
+    // X11 with xdotool; Wayland has no common way to raise another program's window
+    activateApp: async (id) => (linuxSession(env) === "x11" ? activateX11App(id, run, which).catch(() => false) : false),
     runningApps: async () => [],
   };
 }

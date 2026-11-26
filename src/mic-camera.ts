@@ -9,7 +9,7 @@ import { readFile, rm, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Platform } from "./platform/types";
 import type { AvProbe } from "./onair";
-import { BROWSERS, osKey, pickMeetingApp, MEETING_APPS } from "./meeting-apps";
+import { BROWSERS, matchesNative, osKey, pickMeetingApp, MEETING_APPS } from "./meeting-apps";
 import { t } from "./i18n";
 
 export type AvPlatform = Pick<Platform, "id" | "avUsage" | "readMic" | "setMicMuted" | "setMicVolume" | "frontApp" | "activateApp" | "runningApps" | "runAction">;
@@ -90,7 +90,14 @@ export async function cameraToggle(p: AvPlatform, sleep = (ms: number) => new Pr
   const running = os === "mac" ? await p.runningApps(MEETING_APPS.flatMap((a) => a.mac ?? [])) : [];
   const pick = pickMeetingApp({ os, cameraApps: usage.camera.apps, front, running, cameraInUse: usage.camera.inUse });
   if (!pick) throw new Error(t("No Zoom, Google Meet or Teams call found for the camera"));
-  if (pick.activate && (await p.activateApp(pick.activate))) await sleep(350);
+  if (pick.activate) {
+    // the keys go to the app in front: send them only when the meeting app really came forward, never to another app
+    // (Chrome takes ctrl+shift+o for bookmarks). Linux on Wayland cannot bring an app forward: no keys there.
+    const ok = await p.activateApp(pick.activate).catch(() => false);
+    if (ok) await sleep(350);
+    const now = ok ? await p.frontApp(false).catch(() => null) : null;
+    if (!now || !matchesNative(pick.app, os, now.id)) throw new Error(t("No Zoom, Google Meet or Teams call found for the camera"));
+  }
   await p.runAction({ type: "hotkey", keys: pick.keys });
   return pick.app.name;
 }
