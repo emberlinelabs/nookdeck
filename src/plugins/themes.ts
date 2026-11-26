@@ -147,6 +147,27 @@ export function checkPackage(m: ThemeManifest, files: Files): void {
   for (const v of m.variants) css(v.css, v.id);
 }
 
+/** The parts of a summary that come from the manifest and the file list (file urls are the agent's /api/themes/<id>/files). */
+export function manifestSummary(m: ThemeManifest, files: string[]): Omit<ThemeSummary, "sha256" | "source" | "installedAt" | "reviewed" | "registryVersion" | "builtin"> {
+  const id = m.id;
+  const url = (f: string) => `/api/themes/${id}/files/${f}`;
+  const has = (f: string | undefined): f is string => !!f && files.includes(f);
+  const fonts = new Set<string>();
+  for (const l of allLooks(m)) for (const f of l.fonts ?? []) fonts.add(f.family);
+  const mismatched = m.variants.filter((v) => modeMismatch(resolveVariant(m, v.id), v.mode)).map((v) => v.id);
+  return {
+    id, name: m.name, version: m.version, ...(m.author ? { author: m.author } : {}), ...(m.description ? { description: m.description } : {}),
+    ...(m.nookdeck ? { nookdeck: m.nookdeck } : {}),
+    variants: m.variants.map((v) => { const look = resolveVariant(m, v.id); return { id: v.id, name: v.name, mode: v.mode, look, ...(modeMismatch(look, v.mode) ? { modeMismatch: true } : {}), ...(has(v.preview) ? { preview: url(v.preview) } : {}) }; }),
+    options: m.options.map((o) => ({ id: o.id, name: o.name, values: o.values.map((v) => ({ id: v.id, name: v.name, theme: v.theme, ...(v.variants ? { variants: v.variants } : {}) })) })),
+    ...(m.auto ? { auto: m.auto } : {}),
+    ...(mismatched.length ? { modeMismatch: mismatched } : {}),
+    ...(has(m.preview) ? { preview: url(m.preview) } : {}),
+    hasCss: !!m.css || m.variants.some((v) => !!v.css), fonts: [...fonts],
+    icons: files.filter((f) => /^icons\/.+\.svg$/i.test(f)).map((f) => f.slice(6, -4)),
+  };
+}
+
 export interface ThemeStoreOptions {
   dir?: string;
   stateFile?: string;
@@ -206,20 +227,8 @@ export class ThemeStore {
   summary(id: string): ThemeSummary | null {
     const m = this.manifests.get(id), s = this.state[id];
     if (!m || !s) return null;
-    const url = (f: string) => `/api/themes/${id}/files/${f}`;
-    const has = (f: string | undefined): f is string => !!f && s.files.includes(f);
-    const fonts = new Set<string>();
-    for (const l of allLooks(m)) for (const f of l.fonts ?? []) fonts.add(f.family);
     return {
-      id, name: m.name, version: m.version, ...(m.author ? { author: m.author } : {}), ...(m.description ? { description: m.description } : {}),
-      ...(m.nookdeck ? { nookdeck: m.nookdeck } : {}),
-      variants: m.variants.map((v) => { const look = resolveVariant(m, v.id); return { id: v.id, name: v.name, mode: v.mode, look, ...(modeMismatch(look, v.mode) ? { modeMismatch: true } : {}), ...(has(v.preview) ? { preview: url(v.preview) } : {}) }; }),
-      options: m.options.map((o) => ({ id: o.id, name: o.name, values: o.values.map((v) => ({ id: v.id, name: v.name, theme: v.theme, ...(v.variants ? { variants: v.variants } : {}) })) })),
-      ...(m.auto ? { auto: m.auto } : {}),
-      ...(m.variants.some((v) => modeMismatch(resolveVariant(m, v.id), v.mode)) ? { modeMismatch: m.variants.filter((v) => modeMismatch(resolveVariant(m, v.id), v.mode)).map((v) => v.id) } : {}),
-      ...(has(m.preview) ? { preview: url(m.preview) } : {}),
-      hasCss: !!m.css || m.variants.some((v) => !!v.css), fonts: [...fonts],
-      icons: s.files.filter((f) => /^icons\/.+\.svg$/i.test(f)).map((f) => f.slice(6, -4)),
+      ...manifestSummary(m, s.files),
       sha256: s.sha256, source: s.source, installedAt: s.installedAt, reviewed: !!s.reviewed, ...(s.registryVersion ? { registryVersion: s.registryVersion } : {}), builtin: !!s.builtin,
     };
   }

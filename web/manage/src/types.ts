@@ -578,5 +578,7 @@ export interface ThemePack {
   builtin: boolean; installed: boolean; installedVersion?: string; updateAvailable: boolean;
   /** This pack is the one applied now; appliedOlder: an older version of it is applied (offer Re-apply). */
   applied: boolean; appliedOlder: boolean; reviewed: boolean;
+  /** Not installed, but the agent holds its files for a live preview (POST /api/themes/<id>/preview), so it can be drawn on the user's screen. */
+  live?: boolean;
 }
 export interface ThemesResult { packs: ThemePack[]; applied: ThemeSource | null }

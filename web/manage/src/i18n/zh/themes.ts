@@ -56,6 +56,8 @@ export const ZH_THEMES: Record<string, string> = {
   "Applied": "已应用",
   "Applying changes the look only. Your language, orientation, top bar and screen settings stay as they are, and so do per-tile colors. You can undo it right after.": "应用只改变外观。你的语言、方向、顶栏和屏幕设置保持不变，每个磁贴的颜色也不变。应用后可立即撤销。",
   "Auto (light/dark)": "自动（浅色/深色）",
+  "Could not load a preview on your screen. Install the theme to see it there.": "无法在你的屏幕上加载预览。安装此主题后即可在屏幕上查看。",
+  "Loading a preview on your screen…": "正在加载你屏幕上的预览…",
   "Custom CSS": "自定义 CSS",
   "Details of {name}": "{name} 的详情",
   "Follows the phone's light or dark setting.": "跟随手机的浅色或深色设置。",

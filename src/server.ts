@@ -65,7 +65,8 @@ import { CoreHost, legacyRef } from "./plugins/core";
 import { Registry, compareVersions, type RegistryEntry } from "./plugins/registry";
 import { ThemeRegistry } from "./plugins/theme-registry";
 import { BUILTIN_THEMES } from "./plugins/builtin-themes";
-import { ThemeStore, THEME_MIME, isLicenseFile, applyLook, buildThemePackage, extractLook } from "./plugins/themes";
+import { ThemeStore, THEME_MIME, isLicenseFile, applyLook, buildThemePackage, extractLook, manifestSummary } from "./plugins/themes";
+import { ThemePreviewCache } from "./plugins/theme-preview";
 import { zipFiles } from "./plugins/cli";
 import { ERR_DISABLED, ERR_MISSING, ERR_NOT_GRANTED } from "./plugins/types";
 import type { SourceDeps } from "./plugins/sources";
@@ -161,6 +162,10 @@ export interface StartOptions {
   registry?: Registry;
   /** Installed theme packages (tests: a temp folder). */
   themes?: ThemeStore;
+  /** The theme registry (tests: a fake fetch). */
+  themeRegistry?: ThemeRegistry;
+  /** Packs not installed yet, cached for the live preview (tests: a temp folder and a fake download). */
+  themePreviews?: ThemePreviewCache;
   pluginDeps?: Partial<SourceDeps>;
   /** Code plugins (tests: fake spawn, temp log/data folders, short timers). */
   pluginHostDeps?: Partial<HostsDeps>;
@@ -318,9 +323,10 @@ export async function startServer(opts: StartOptions = {}) {
   // a plugin that keeps crashing is switched off (the owner can turn it on again on the Plugins tab)
   pluginHosts.onFailed((id) => { void pluginStore.setEnabled(id, false).catch(() => {}); });
   const registry = opts.registry ?? new Registry();
-  const themeRegistry = new ThemeRegistry(registry.url);
+  const themeRegistry = opts.themeRegistry ?? new ThemeRegistry(registry.url);
   const themeStore = opts.themes ?? new ThemeStore({ agentVersion: compatVersion(), resolve: (s) => pluginStore.resolveSource(s), builtin: BUILTIN_THEMES });
   await themeStore.load();
+  const themePreviews = opts.themePreviews ?? new ThemePreviewCache({ agentVersion: compatVersion(), resolve: (s) => pluginStore.resolveSource(s) });
   layoutAssets = await layoutAssetsAll(layout); // now that the theme store can supply the icon pack
   /** A registry entry with what this computer has of it. */
   const annotate = (e: RegistryEntry) => {
@@ -986,12 +992,14 @@ export async function startServer(opts: StartOptions = {}) {
         if (!isLocalPeer(server, req)) { const d = await guardPhone(server, req); if (d) return d; }
         let rel = "";
         try { rel = decodeURIComponent(themeFile[2]!); } catch { return json({ error: "not found" }, 404); }
-        const f = await themeStore.file(decodeURIComponent(themeFile[1]!), rel);
+        const fid = decodeURIComponent(themeFile[1]!);
+        // a pack that is only in the preview cache (not installed) is served to this computer only: the manage page's live preview
+        const f = themeStore.has(fid) ? await themeStore.file(fid, rel) : isLocalPeer(server, req) ? await themePreviews.file(fid, rel) : null;
         if (!f) return json({ error: "not found" }, 404);
         const ext = rel.slice(rel.lastIndexOf(".") + 1).toLowerCase();
         return new Response(req.method === "HEAD" ? null : (f.bytes as unknown as BodyInit), { headers: { "content-type": isLicenseFile(rel) ? "text/plain; charset=utf-8" : THEME_MIME[ext] ?? "application/octet-stream", "x-content-type-options": "nosniff", "content-security-policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'", "cache-control": "private, max-age=300" } });
       }
-      const themeRoute = /^\/api\/themes(?:\/(install|export)|\/([^/]+)(?:\/(apply|css|fork))?)?$/.exec(path);
+      const themeRoute = /^\/api\/themes(?:\/(install|export)|\/([^/]+)(?:\/(apply|css|fork|preview))?)?$/.exec(path);
       if (themeRoute) {
         const phoneCss = themeRoute[3] === "css" && req.method === "GET"; // the stylesheet is read by phones too
         const denied = phoneCss ? null : guardLocal(server, req);
@@ -1018,7 +1026,10 @@ export async function startServer(opts: StartOptions = {}) {
             if (typeof body?.id === "string") {
               const entry = (await themeRegistry.get(false)).themes.find((p) => p.id === body.id);
               if (!entry) return json({ error: "that theme is not in the registry" }, 404);
-              const r = await themeStore.install(entry.repo, { sha256: entry.sha256, version: entry.version });
+              const pin = { sha256: entry.sha256, version: entry.version };
+              // a pack previewed before is installed from its cached files when they still hash to the registry's pin
+              const hit = await themePreviews.take(entry).catch(() => null);
+              const r = hit ? await themeStore.installFiles(hit.files, hit.shown, pin) : await themeStore.install(entry.repo, pin);
               return json(r.theme, r.updated || r.unchanged ? 200 : 201);
             }
             if (typeof body?.source !== "string") return json({ error: "source must be a folder path, an https address, or give a registry id" }, 400);
@@ -1083,10 +1094,26 @@ export async function startServer(opts: StartOptions = {}) {
             const made = await themeStore.installFiles(pkg, "a copy", undefined);
             return json(made.theme, 201);
           }
+          if (tid && sub === "preview" && req.method === "POST") {
+            // the details sheet of a pack that is not installed: fetch it at the registry's pin into the preview cache, never install it (POST: it downloads, so it needs the CSRF header)
+            const id = decodeURIComponent(tid);
+            if (themeStore.has(id)) return json({ error: "that theme is installed" }, 409);
+            const entry = (await themeRegistry.get(false)).themes.find((p) => p.id === id);
+            if (!entry) return json({ error: "that theme is not in the registry" }, 404);
+            let got;
+            try { got = await themePreviews.get(entry); }
+            catch (err) { return json({ error: err instanceof Error ? err.message : String(err) }, err instanceof PluginError && err.status === 409 ? 409 : 502); }
+            return json({ ...manifestSummary(got.manifest, got.meta.files), sha256: got.meta.sha256, installed: false, cached: got.cached, ...(entry.license ? { license: entry.license } : {}) });
+          }
           if (tid && sub === "css" && req.method === "GET") {
             // phones load this stylesheet; it is checked and scoped when served
             if (!isLocalPeer(server, req)) { const d = await guardPhone(server, req); if (d) return d; }
-            const css = await themeStore.css(decodeURIComponent(tid), url.searchParams.get("variant") ?? undefined);
+            const cid = decodeURIComponent(tid);
+            if (!themeStore.has(cid) && isLocalPeer(server, req) && (await themePreviews.has(cid))) {
+              const pcss = await themePreviews.css(cid, url.searchParams.get("variant") ?? undefined);
+              return new Response(pcss, { headers: { "content-type": "text/css; charset=utf-8", "x-content-type-options": "nosniff", "cache-control": "no-cache" } });
+            }
+            const css = await themeStore.css(cid, url.searchParams.get("variant") ?? undefined);
             return new Response(css, { headers: { "content-type": "text/css; charset=utf-8", "x-content-type-options": "nosniff", "cache-control": "no-cache" } });
           }
         } catch (err) { return failT(err); }

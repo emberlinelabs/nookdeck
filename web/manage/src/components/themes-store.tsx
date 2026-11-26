@@ -29,12 +29,12 @@ const fileUrl = (id: string, path: string) => (/^https?:\/\//.test(path) ? path 
 /** The user's own screen in this pack (their first screen with tiles), or the pack's preview picture, or a small sample, when there is nothing to draw. */
 function PackShot({ layout, pack, choice, pageId, fallback }: { layout: Layout; pack: ThemePack; choice: PackChoice; pageId?: string; fallback?: string }) {
   const pp = useMemo(() => previewPage(layout, pageId), [layout, pageId]);
-  const themed = useMemo(() => (pack.installed && pp && !pp.empty ? { ...layout, theme: themeWithPack(layout.theme, pack, choice) } : null), [layout, pack, choice, pp]);
+  const themed = useMemo(() => ((pack.installed || pack.live) && pp && !pp.empty ? { ...layout, theme: themeWithPack(layout.theme, pack, choice) } : null), [layout, pack, choice, pp]);
   if (themed && pp) return <ScreenThumb layout={themed} pageId={pp.page.id} label={t("{name} on your screen", { name: pack.name })} />;
   const v = pack.variants.find((x) => x.id === choice.variant) ?? pack.variants[0];
   // the chosen variant's picture first; a pack that is not installed only has the registry's https pictures
   const pic = v?.preview ?? fallback;
-  if (pic && (pack.installed || /^https:\/\//.test(pic))) return <img src={fileUrl(pack.id, pic)} alt="" loading="lazy" className="aspect-[844/390] w-full rounded-[10px] border object-cover" />;
+  if (pic && (pack.installed || pack.live || /^https:\/\//.test(pic))) return <img src={fileUrl(pack.id, pic)} alt="" loading="lazy" className="aspect-[844/390] w-full rounded-[10px] border object-cover" />;
   return v ? <PresetThumb theme={{ ...(packLook(pack, v.id, choice.options) as Theme) }} /> : <span className="aspect-[844/390] w-full rounded-lg border bg-muted" />;
 }
 
@@ -108,11 +108,35 @@ export function isCurrent(applied: ThemeSource | null, pack: ThemePack, variantI
   return !!applied && applied.pack.split("@")[0] === pack.id && (applied.variant === variantId || applied.auto?.light === variantId || applied.auto?.dark === variantId);
 }
 
-function PackSheet({ pack, layout, applied, onClose, busy, onInstall, onApply, onRemove }: {
+/**
+ * A pack that is not installed: the agent fetches it into its preview cache (same hash check as Install) so the sheet can draw the
+ * user's screen in it. Until then, or when that fails, the registry's picture stays.
+ */
+function useLivePack(pack: ThemePack | null): { live: ThemePack | null; state: "idle" | "loading" | "failed" } {
+  const [got, setGot] = useState<{ id: string; pack: ThemePack | null; failed: boolean } | null>(null);
+  const want = pack && !pack.installed ? pack.id : null;
+  useEffect(() => {
+    if (!want) return;
+    let on = true;
+    setGot(null);
+    api.previewTheme(want).then((p) => { if (on) setGot({ id: want, pack: p, failed: !p }); }, () => { if (on) setGot({ id: want, pack: null, failed: true }); });
+    return () => { on = false; };
+  }, [want, pack?.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!pack || !want) return { live: null, state: "idle" };
+  if (!got || got.id !== want) return { live: null, state: "loading" };
+  if (!got.pack) return { live: null, state: "failed" };
+  // the registry's words (name, author, description) and state stay; the looks, options and files come from the package
+  const p = got.pack;
+  return { live: { ...pack, variants: p.variants, options: p.options, auto: p.auto, hasCss: p.hasCss, fonts: p.fonts, icons: p.icons, preview: p.preview ?? pack.preview, live: true }, state: "idle" };
+}
+
+function PackSheet({ pack: listed, layout, applied, onClose, busy, onInstall, onApply, onRemove }: {
   pack: ThemePack | null; layout: Layout; applied: ThemeSource | null; onClose: () => void; busy: boolean;
   onInstall: (p: ThemePack) => void; onApply: (p: ThemePack, c: Choice) => void; onRemove: (p: ThemePack) => void;
 }) {
   useLanguage();
+  const { live, state: liveState } = useLivePack(listed);
+  const pack = live ?? listed;
   const [choice, setChoice] = useState<Choice | null>(null);
   const [screenId, setScreenId] = useState<string | undefined>(undefined);
   const [hover, setHover] = useState<string | null>(null);
@@ -139,12 +163,14 @@ function PackSheet({ pack, layout, applied, onClose, busy, onInstall, onApply, o
         {pack.description && <p className="text-[13.5px]">{pack.description}</p>}
         {pack.hasCss && <Alert tone="warning">{t("This theme adds its own styling (CSS). It cannot run code. You can always switch it off with safe mode or remove it.")}</Alert>}
 
-        {!pack.installed && (pack.preview ?? pack.variants[0]?.preview) && (
+        {!pack.installed && !pack.live && (
           <section aria-label={t("Preview")} className="flex flex-col gap-2">
-            <PackShot layout={layout} pack={pack} choice={shown} fallback={pack.preview} />
+            {(pack.preview ?? pack.variants[0]?.preview) && <PackShot layout={layout} pack={pack} choice={shown} fallback={pack.preview} />}
+            {liveState === "loading" && <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status"><Spinner className="size-3.5" />{t("Loading a preview on your screen…")}</p>}
+            {liveState === "failed" && <p className="text-xs text-muted-foreground" role="status">{t("Could not load a preview on your screen. Install the theme to see it there.")}</p>}
           </section>
         )}
-        {pack.installed && (
+        {(pack.installed || pack.live) && (
           <section aria-label={t("Preview")} className="flex flex-col gap-2">
             <PackShot layout={layout} pack={pack} pageId={screenId} choice={shown} fallback={pack.preview} />
             {layout.pages.length > 1 && (

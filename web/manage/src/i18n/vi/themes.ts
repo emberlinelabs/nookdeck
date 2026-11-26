@@ -56,6 +56,8 @@ export const VI_THEMES: Record<string, string> = {
   "Applied": "Đã áp dụng",
   "Applying changes the look only. Your language, orientation, top bar and screen settings stay as they are, and so do per-tile colors. You can undo it right after.": "Áp dụng chỉ đổi giao diện. Ngôn ngữ, hướng màn hình, thanh trên và cài đặt màn hình được giữ nguyên, màu từng ô cũng vậy. Bạn có thể hoàn tác ngay sau đó.",
   "Auto (light/dark)": "Tự động (sáng/tối)",
+  "Could not load a preview on your screen. Install the theme to see it there.": "Không tải được bản xem trước trên màn hình của bạn. Hãy cài giao diện để xem trên đó.",
+  "Loading a preview on your screen…": "Đang tải bản xem trước trên màn hình của bạn…",
   "Custom CSS": "CSS tùy chỉnh",
   "Details of {name}": "Chi tiết của {name}",
   "Follows the phone's light or dark setting.": "Theo chế độ sáng hoặc tối của điện thoại.",

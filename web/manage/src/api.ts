@@ -470,6 +470,11 @@ export const api = {
     }
   },
   installTheme: async (body: { id: string } | { source: string }) => normalizeThemePack(await request<unknown>("/api/themes/install", json("POST", body)), true),
+  /** A pack that is not installed, fetched by the agent into its preview cache (same hash check as Install, not installed). */
+  previewTheme: async (id: string): Promise<ThemePack | null> => {
+    const p = normalizeThemePack(await request<unknown>(`/api/themes/${encodeURIComponent(id)}/preview`, json("POST", {})), false);
+    return p ? { ...p, live: true } : null;
+  },
   applyTheme: (id: string, body: { variant?: string; auto?: { light: string; dark: string }; options?: Record<string, string> }) =>
     request<unknown>(`/api/themes/${encodeURIComponent(id)}/apply`, json("POST", body)),
   /** A local, editable copy of an installed pack (its applied variant and options by default). Does not apply it. */
