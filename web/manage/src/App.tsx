@@ -16,6 +16,7 @@ import { SoundsPanel } from "@/components/sounds-panel";
 import { ThemePanel } from "@/components/theme-panel";
 import { PermissionsPanel } from "@/components/permissions-panel";
 import { AboutCard } from "@/components/about-card";
+import { ReportCard } from "@/components/report-card";
 import { SupportCard } from "@/components/support-card";
 import { ScreenPanel } from "@/components/screen-panel";
 import { CustomizeHint } from "@/components/visual-options";
@@ -415,7 +416,7 @@ export default function App() {
           {tab === "permissions" && <PermissionsPanel {...doctor} />}
           {tab === "json" && <JsonPanel key={jsonKey} layout={layout} onChange={(l) => update(() => l)} onError={setJsonError} />}
           {tab === "devices" && <DevicesPanel />}
-          {tab === "about" && <AboutCard about={about} />}
+          {tab === "about" && <div className="flex flex-col gap-4"><AboutCard about={about} /><ReportCard /></div>}
         </main>
       )}
         </div>

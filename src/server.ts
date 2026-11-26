@@ -71,6 +71,9 @@ import { ERR_DISABLED, ERR_MISSING, ERR_NOT_GRANTED } from "./plugins/types";
 import type { SourceDeps } from "./plugins/sources";
 import { forbiddenPage, pickLanguage, wantsPage } from "./forbidden-page";
 import { layoutFrames, unusualClose } from "./ws-frames";
+import { DropLog, buildReport } from "./report";
+import { homedir, hostname as osHostname, release as osRelease, userInfo } from "node:os";
+import { join } from "node:path";
 
 export type { Stats };
 
@@ -251,6 +254,7 @@ export async function startServer(opts: StartOptions = {}) {
   // the layout in force is always the newest history entry (so the first undo has something to go back to)
   await history.push(layout).catch(() => {});
   const sockets = new Set<ServerWebSocket<WsData>>();
+  const drops = new DropLog();
   const pairing = new Pairing(opts.onPinChange, opts.pin);
 
   const send = (ws: ServerWebSocket<WsData>, msg: unknown) => {
@@ -1150,6 +1154,33 @@ export async function startServer(opts: StartOptions = {}) {
         // what the management page needs to show the right key names: layouts always store cmd / option
         return json({ id: platform.id, label: platform.label, keyNames: platform.keyNames });
       }
+      if (path === "/api/report" && req.method === "GET") {
+        // "Report a problem" on the manage page: a masked Markdown report for a GitHub issue (see report.ts)
+        const denied = guardLocal(server, req);
+        if (denied) return denied;
+        const about = aboutInfo();
+        const devices = await loadDevices().catch(() => []);
+        const names = new Map(devices.map((d) => [d.id, d.name]));
+        const tail = async (file: string, maxAgeMs?: number) => {
+          const f = Bun.file(join(HOME, "logs", file));
+          if (!(await f.exists())) return "";
+          if (maxAgeMs !== undefined && Date.now() - f.lastModified > maxAgeMs) return "";
+          const size = f.size;
+          const text = await f.slice(Math.max(0, size - 48 * 1024), size).text();
+          return size > 48 * 1024 ? text.slice(text.indexOf("\n") + 1) : text; // a cut first line is dropped
+        };
+        const frames = layoutFrames(layout, layoutAssets);
+        const markdown = buildReport({
+          now: Date.now(), version: about.version, commit: about.commit || undefined, os: `${platform.label} ${osRelease()}`, arch: about.arch,
+          doctor: (await doctorReport().catch(() => ({ items: [] as DoctorReport["items"] }))).items,
+          layout: { pages: layout.pages.length, tiles: layout.pages.reduce((n, p) => n + p.items.length, 0), bytes: frames.reduce((n, f) => n + f.length, 0), assets: Object.keys(layoutAssets).length, assetBytes: JSON.stringify(layoutAssets).length },
+          devices: devices.map((d) => ({ name: d.name, lastSeen: d.lastSeen, createdAt: d.createdAt })),
+          drops: drops.list().map((d) => ({ ...d, device: names.get(d.device) ?? "unknown device" })),
+          errLog: await tail("agent.err.log").catch(() => ""),
+          phoneCheck: await tail("phone-check.log", 7 * 86_400_000).catch(() => ""),
+        }, { home: homedir(), user: (() => { try { return userInfo().username; } catch { return undefined; } })(), hosts: [osHostname()] });
+        return json({ title: `[${about.version}] ${platform.label}: `, markdown, repo: about.repo });
+      }
       if (path === "/api/doctor" && req.method === "GET") {
         const denied = guardLocal(server, req);
         if (denied) return denied;
@@ -1593,7 +1624,10 @@ export async function startServer(opts: StartOptions = {}) {
       },
       close(ws, code, reason) {
         sockets.delete(ws);
-        if (unusualClose(code)) console.error(`websocket closed by device ${ws.data.deviceId ?? "?"}: ${code}${reason ? " " + reason : ""}`);
+        if (unusualClose(code)) {
+          console.error(`websocket closed by device ${ws.data.deviceId ?? "?"}: ${code}${reason ? " " + reason : ""}`);
+          drops.add({ at: Date.now(), code, reason: String(reason ?? "").slice(0, 120), device: ws.data.deviceId ?? "?" });
+        }
         if (sockets.size === 0 && mediaTimer) {
           stopMediaLoop();
         }

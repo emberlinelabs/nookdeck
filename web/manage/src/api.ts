@@ -405,6 +405,11 @@ export const api = {
     const d = o.buildDate ?? o.builtAt ?? o.built;
     return { version: version.replace(/^v/, ""), commit: str(o.commit)?.replace(/-dirty$/, "").slice(0, 7), dirty: o.dirty === true || /dirty/.test(str(o.commit) ?? "") || undefined, buildDate: typeof d === "number" ? new Date(d < 1e12 ? d * 1000 : d).toISOString() : str(d), platform: str(o.platform), arch: str(o.arch), repo };
   },
+  /** "Report a problem": a masked Markdown report for a GitHub issue. */
+  getReport: async (): Promise<{ title: string; markdown: string; repo: string }> => {
+    const o = rec(await request<unknown>("/api/report"));
+    return { title: str(o.title) ?? "", markdown: str(o.markdown) ?? "", repo: (str(o.repo) ?? "https://github.com/howznguyen/nookdeck").replace(/(\.git)?\/*$/, "") };
+  },
   getUpdate: async (): Promise<UpdateInfo> => {
     const o = rec(await request<unknown>("/api/update"));
     return { current: str(o.current) ?? "", latest: str(o.latest) ?? null, available: o.available === true, checkedAt: typeof o.checkedAt === "number" ? o.checkedAt : null, enabled: o.enabled !== false, error: str(o.error) };
