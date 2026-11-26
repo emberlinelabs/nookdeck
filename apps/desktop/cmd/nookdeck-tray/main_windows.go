@@ -125,13 +125,16 @@ func updateNow() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	dest := filepath.Join(os.TempDir(), core.InstallerName)
-	if err := core.DownloadInstaller(ctx, &http.Client{Timeout: 10 * time.Minute}, *u.Latest, dest); err != nil {
-		notice(t("error.updateFailed", "error", err.Error()))
+	if err := core.DownloadInstaller(ctx, &http.Client{Timeout: 10 * time.Minute}, *u.Latest, dest, updateProgress(*u.Latest)); err != nil {
+		updateFailed(*u.Latest, err.Error())
 		return
 	}
+	// the window says so before the installer closes this app; the installer starts it again
+	updateState(core.UpdateState{Stage: "installing", Version: *u.Latest})
+	time.Sleep(800 * time.Millisecond) // one poll of the window, so "Installing" is on screen
 	logf("running %s for %s", dest, *u.Latest)
 	if err := hidden0(dest, "/SILENT", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS", "/NOCANCEL"); err != nil {
-		notice(t("error.updateFailed", "error", err.Error()))
+		updateFailed(*u.Latest, err.Error())
 		return
 	}
 	systray.Quit()

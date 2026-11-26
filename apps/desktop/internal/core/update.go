@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -48,14 +49,38 @@ func get(ctx context.Context, c *http.Client, url string) (*http.Response, error
 	return res, nil
 }
 
+// Progress tells the update window where a download is: Stage "downloading" with Done and Total bytes (Total 0 when the server
+// does not say), then "checking" while the SHA256SUMS hash is compared.
+type Progress func(stage string, done, total int64)
+
 // DownloadInstaller fetches the Windows installer of `version` to dest, checked against the release's SHA256SUMS.
-func DownloadInstaller(ctx context.Context, c *http.Client, version, dest string) error {
-	return DownloadAsset(ctx, c, version, InstallerName, dest)
+func DownloadInstaller(ctx context.Context, c *http.Client, version, dest string, progress Progress) error {
+	return DownloadAsset(ctx, c, version, InstallerName, dest, progress)
+}
+
+// counter calls progress as bytes go through, at most every 150 ms (and once at the end).
+type counter struct {
+	done, total int64
+	last        time.Time
+	progress    Progress
+}
+
+func (c *counter) Write(p []byte) (int, error) {
+	c.done += int64(len(p))
+	if now := time.Now(); now.Sub(c.last) >= 150*time.Millisecond {
+		c.last = now
+		c.progress("downloading", c.done, c.total)
+	}
+	return len(p), nil
 }
 
 // DownloadAsset fetches the file `name` of release `version` to dest and checks it against the release's SHA256SUMS. A file
-// whose hash is missing or wrong is deleted and never run.
-func DownloadAsset(ctx context.Context, c *http.Client, version, name, dest string) error {
+// whose hash is missing or wrong is deleted and never run. progress may be nil.
+func DownloadAsset(ctx context.Context, c *http.Client, version, name, dest string, progress Progress) error {
+	if progress == nil {
+		progress = func(string, int64, int64) {}
+	}
+	progress("downloading", 0, 0)
 	sr, err := get(ctx, c, ReleaseURL(version, "SHA256SUMS"))
 	if err != nil {
 		return err
@@ -76,8 +101,17 @@ func DownloadAsset(ctx context.Context, c *http.Client, version, name, dest stri
 		return err
 	}
 	h := sha256.New()
-	_, cerr := io.Copy(io.MultiWriter(f, h), io.LimitReader(res.Body, 200<<20))
+	total := res.ContentLength
+	if total < 0 {
+		total = 0
+	}
+	cnt := &counter{total: total, progress: progress}
+	_, cerr := io.Copy(io.MultiWriter(f, h, cnt), io.LimitReader(res.Body, 200<<20))
 	f.Close()
+	if cerr == nil {
+		progress("downloading", cnt.done, total)
+		progress("checking", cnt.done, total)
+	}
 	if cerr != nil {
 		os.Remove(dest)
 		return cerr

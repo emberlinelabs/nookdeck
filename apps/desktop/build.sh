@@ -20,6 +20,7 @@ case "${1:-}" in "") out="$def" ;; /*|[A-Za-z]:*) out="$1" ;; *) out="$PWD/$1" ;
 cd "$here"
 mkdir -p internal/core/assets cmd/nookdeck-tray/assets "$out"
 cp ../shared/strings.json internal/core/assets/strings.json
+cp ../shared/icons/linux/app-128.png internal/core/assets/app-128.png
 cp ../shared/icons/windows/tray-*.ico ../shared/icons/windows/app.ico cmd/nookdeck-tray/assets/
 cp ../shared/icons/linux/tray-*-48.png cmd/nookdeck-tray/assets/
 version="${NOOKDECK_VERSION:-$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' ../../package.json | head -n1)}"

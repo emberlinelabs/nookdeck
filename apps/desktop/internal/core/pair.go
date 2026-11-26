@@ -27,8 +27,17 @@ type PairServer struct {
 	TrayCommand string
 	// OnUpdateChoice gets the answer of the "new version" window (install, later, skip, download) for the version it showed.
 	OnUpdateChoice func(version, choice string)
-	upMu           sync.Mutex
-	update         *UpdateDialog
+	// OnOpenURL opens an https link of the update window (release notes, the release page) in the default browser.
+	OnOpenURL func(url string)
+	// Notes returns the latest release's body for "What's new" (default FetchReleaseNotes; tests set a fake).
+	Notes    func(ctx context.Context) (string, error)
+	upMu     sync.Mutex
+	update   *UpdateDialog // waiting for an answer
+	shown    *UpdateDialog // the last one shown (notes and progress outlive the answer)
+	state    UpdateState
+	notesFor string
+	notes    *notesReply
+	alive    map[string]time.Time // version -> last heartbeat of an open update window
 	token          string
 	ln             net.Listener
 	srv            *http.Server
@@ -57,8 +66,84 @@ func (p *PairServer) TrayURL() string { return p.URL() + "tray" }
 func (p *PairServer) ShowUpdate(d UpdateDialog) string {
 	p.upMu.Lock()
 	p.update = &d
+	p.shown = &d
+	if !p.state.Active() { // a finished or failed run is not shown again; a running one is (the window opens on its progress)
+		p.state = UpdateState{}
+	}
 	p.upMu.Unlock()
 	return p.URL() + "update"
+}
+
+// WindowOpen reports whether an update window for version is open now (it pinged in the last 5 s).
+func (p *PairServer) WindowOpen(version string) bool {
+	p.upMu.Lock()
+	defer p.upMu.Unlock()
+	t, ok := p.alive[version]
+	return ok && time.Since(t) < 5*time.Second
+}
+
+// UpdateState is where an update started from the window is: Stage "" (not started), "downloading" (Done and Total bytes; Total
+// 0 = unknown), "checking", "installing" (Password: the system may ask for it, Linux), "done" or "error" (Error says why).
+type UpdateState struct {
+	Stage    string `json:"stage"`
+	Version  string `json:"version,omitempty"`
+	Done     int64  `json:"done,omitempty"`
+	Total    int64  `json:"total,omitempty"`
+	Password bool   `json:"password,omitempty"`
+	Error    string `json:"error,omitempty"`
+}
+
+// Active: an update is downloading, checking or installing.
+func (s UpdateState) Active() bool {
+	return s.Stage == "downloading" || s.Stage == "checking" || s.Stage == "installing"
+}
+
+// SetUpdateState is what the update window shows while it installs (polled by the page).
+func (p *PairServer) SetUpdateState(s UpdateState) {
+	p.upMu.Lock()
+	p.state = s
+	p.upMu.Unlock()
+}
+
+// UpdateProgress adapts SetUpdateState to DownloadAsset's progress callback.
+func (p *PairServer) UpdateProgress(version string) Progress {
+	return func(stage string, done, total int64) {
+		p.SetUpdateState(UpdateState{Stage: stage, Version: version, Done: done, Total: total})
+	}
+}
+
+type notesReply struct {
+	Sections []NoteSection `json:"sections"`
+	More     bool          `json:"more"`
+	Page     string        `json:"page"`
+}
+
+// notesFor fetches and keeps the notes of the version shown (once per version; a failed fetch is tried again next time).
+func (p *PairServer) releaseNotes(ctx context.Context, d UpdateDialog) (*notesReply, error) {
+	p.upMu.Lock()
+	if p.notes != nil && p.notesFor == d.Version+"|"+d.Current {
+		n := p.notes
+		p.upMu.Unlock()
+		return n, nil
+	}
+	p.upMu.Unlock()
+	fetch := p.Notes
+	if fetch == nil {
+		fetch = func(ctx context.Context) (string, error) { return FetchReleaseNotes(ctx, &http.Client{Timeout: 10 * time.Second}) }
+	}
+	body, err := fetch(ctx)
+	if err != nil {
+		return nil, err
+	}
+	secs, more := NotesSince(body, d.Current, d.Version, 3)
+	n := &notesReply{Sections: secs, More: more, Page: ReleasePage(d.Version)}
+	if n.Sections == nil {
+		n.Sections = []NoteSection{}
+	}
+	p.upMu.Lock()
+	p.notes, p.notesFor = n, d.Version+"|"+d.Current
+	p.upMu.Unlock()
+	return n, nil
 }
 
 func (p *PairServer) shownUpdate() *UpdateDialog {
@@ -127,6 +212,68 @@ func (p *PairServer) Handler() http.Handler {
 		w.Header().Set("content-type", "text/html; charset=utf-8")
 		w.Header().Set("cache-control", "no-store")
 		w.Write([]byte(UpdatePage(p.lang, *d)))
+	})
+	// the update window pings every 2 s: the tray does not open a second window for a version that has one, and a window whose
+	// tray is gone closes itself (it cannot reach this any more)
+	mux.HandleFunc(prefix+"update/alive", func(w http.ResponseWriter, r *http.Request) {
+		v := r.URL.Query().Get("v")
+		if v == "" || len(v) > 40 {
+			http.Error(w, "no version", 400)
+			return
+		}
+		p.upMu.Lock()
+		if p.alive == nil {
+			p.alive = map[string]time.Time{}
+		}
+		p.alive[v] = time.Now()
+		p.upMu.Unlock()
+		w.WriteHeader(204)
+	})
+	mux.HandleFunc(prefix+"update/icon.png", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "image/png")
+		w.Header().Set("cache-control", "max-age=3600")
+		w.Write(AppIcon)
+	})
+	mux.HandleFunc(prefix+"update/notes", func(w http.ResponseWriter, r *http.Request) {
+		p.upMu.Lock()
+		d := p.shown
+		p.upMu.Unlock()
+		if d == nil {
+			http.NotFound(w, r)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+		defer cancel()
+		n, err := p.releaseNotes(ctx, *d)
+		w.Header().Set("content-type", "application/json")
+		w.Header().Set("cache-control", "no-store")
+		if err != nil {
+			w.WriteHeader(502)
+			json.NewEncoder(w).Encode(map[string]string{"error": "unreachable"})
+			return
+		}
+		json.NewEncoder(w).Encode(n)
+	})
+	mux.HandleFunc(prefix+"update/progress", func(w http.ResponseWriter, r *http.Request) {
+		p.upMu.Lock()
+		s := p.state
+		p.upMu.Unlock()
+		w.Header().Set("content-type", "application/json")
+		w.Header().Set("cache-control", "no-store")
+		json.NewEncoder(w).Encode(s)
+	})
+	mux.HandleFunc(prefix+"update/open", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			URL string `json:"url"`
+		}
+		if r.Method != "POST" || json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body) != nil || !SafeLink(body.URL) {
+			http.Error(w, "bad link", 400)
+			return
+		}
+		if p.OnOpenURL != nil {
+			go p.OnOpenURL(body.URL)
+		}
+		w.WriteHeader(204)
 	})
 	mux.HandleFunc(prefix+"update/choice", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {

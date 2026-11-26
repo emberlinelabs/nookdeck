@@ -48,7 +48,7 @@ func TestUpdateAsk(t *testing.T) {
 func TestUpdatePage(t *testing.T) {
 	d := UpdateDialog{Version: "0.6.0", Current: "0.5.3"}
 	p := UpdatePage("en", d)
-	for _, s := range []string{"Nookdeck 0.6.0 is available", "You have 0.5.3", "Install and restart", "Later", "Skip this version", `"choice":"install"`} {
+	for _, s := range []string{"Nookdeck 0.6.0 is available", "You have 0.5.3.", "Install and restart", "Later", "Skip this version", `"choice":"install"`} {
 		if !strings.Contains(p, s) {
 			t.Errorf("missing %q", s)
 		}

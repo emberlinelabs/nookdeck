@@ -20,8 +20,11 @@ enum SelfUpdater {
         return SelfUpdate.replaceable(bundlePath: bundlePath) && fm.isWritableFile(atPath: parent) && fm.isWritableFile(atPath: bundlePath)
     }
 
-    /// Everything up to the swap. On success the staged app is ready and the caller quits the app.
-    static func prepare(_ r: AppRelease, log: URL) async throws {
+    enum Step { case downloading(Int64, Int64), checking }
+
+    /// Everything up to the swap. On success the staged app is ready and the caller quits the app. `step` reports the
+    /// download progress and the start of the checks; cancelling the task stops the download and removes the work dir.
+    static func prepare(_ r: AppRelease, log: URL, step: @escaping @Sendable (Step) -> Void = { _ in }) async throws {
         guard canReplace() else { throw Failure.notReplaceable(bundlePath) }
         let fm = FileManager.default
         let dir = fm.temporaryDirectory.appendingPathComponent("nookdeck-update-\(UUID().uuidString)")
@@ -34,11 +37,12 @@ enum SelfUpdater {
         guard (shaResp as? HTTPURLResponse)?.statusCode == 200, let want = SelfUpdate.expectedDigest(String(decoding: shaData, as: UTF8.self)) else {
             throw Failure.step("Nookdeck.dmg.sha256")
         }
-        let (tmp, resp) = try await URLSession.shared.download(from: r.dmg)
+        // the download lands in the work dir directly, so every failure (and Cancel) below removes it
         let dmg = dir.appendingPathComponent("Nookdeck.dmg")
-        // URLSession leaves the downloaded file to us: move it into the work dir first so every failure below removes it
-        do { try fm.moveItem(at: tmp, to: dmg) } catch { try? fm.removeItem(at: tmp); throw error }
-        guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw Failure.step("Nookdeck.dmg") }
+        let resp = try await ProgressDownload.run(r.dmg, to: dmg) { got, total in step(.downloading(got, total)) }
+        try Task.checkCancellation()
+        guard resp.statusCode == 200 else { throw Failure.step("Nookdeck.dmg: HTTP \(resp.statusCode)") }
+        step(.checking)
         let got = SHA256.hash(data: try Data(contentsOf: dmg, options: .mappedIfSafe)).map { String(format: "%02x", $0) }.joined()
         guard got == want else { throw Failure.verify("checksum") }
 

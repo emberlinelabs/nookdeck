@@ -221,29 +221,33 @@ func updateNow() {
 	defer setBusy("")
 	dir, err := os.MkdirTemp("", "nookdeck-update-")
 	if err != nil {
-		notice(t("error.updateFailed", "error", err.Error()))
+		updateFailed(latest, err.Error())
 		return
 	}
 	defer os.RemoveAll(dir)
 	file := filepath.Join(dir, name)
-	if err := core.DownloadAsset(ctx, &http.Client{Timeout: 10 * time.Minute}, latest, name, file); err != nil {
-		notice(t("error.updateFailed", "error", err.Error()))
+	if err := core.DownloadAsset(ctx, &http.Client{Timeout: 10 * time.Minute}, latest, name, file, updateProgress(latest)); err != nil {
+		updateFailed(latest, err.Error())
 		return
 	}
 	// apt runs as root from a polkit prompt: the file must be readable by the "_apt" user, so the folder is opened up
 	os.Chmod(dir, 0o755)
 	os.Chmod(file, 0o644)
 	setBusy("update.installing")
+	updateState(core.UpdateState{Stage: "installing", Version: latest, Password: true}) // pkexec shows the desktop's password prompt
 	argv := core.InstallCommand(kind, file)
 	logf("running %v", argv)
 	if out, code := run(ctx, argv[0], argv[1:]...); code != 0 {
 		logf("install failed (%d): %s", code, out)
 		if code == 126 || code == 127 { // the prompt was dismissed, or pkexec could not run
+			updateState(core.UpdateState{Stage: "error", Version: latest, Error: "cancelled"})
 			return
 		}
-		notice(t("error.updateFailed", "error", lastLine(out)))
+		updateFailed(latest, lastLine(out))
 		return
 	}
+	updateState(core.UpdateState{Stage: "done", Version: latest})
+	time.Sleep(800 * time.Millisecond) // one poll of the window, so "Installed" is on screen before the app restarts
 	restartTo = trayExe()
 	systray.Quit()
 }

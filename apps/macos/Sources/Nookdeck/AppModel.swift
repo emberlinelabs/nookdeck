@@ -180,44 +180,100 @@ final class AppModel: ObservableObject {
 
     static let skippedKey = "skippedAppUpdate"
 
-    /// The alert: install and restart, later (asks again next launch) or skip this version. A copy that cannot replace
-    /// itself (run from the dmg, a translocated copy, a folder we may not write) offers the download page instead.
-    func promptAppUpdate(_ r: AppRelease) {
-        let auto = SelfUpdater.canReplace()
-        let a = NSAlert()
-        a.messageText = t("update.alert.title", ["version": r.version])
-        a.informativeText = auto ? t("update.alert.body", ["current": appVersion])
-                                 : t("update.alert.manualBody", ["current": appVersion, "path": SelfUpdater.bundlePath])
-        a.addButton(withTitle: t(auto ? "update.alert.install" : "update.alert.download"))
-        a.addButton(withTitle: t("update.alert.later"))
-        a.addButton(withTitle: t("update.alert.skip"))
-        NSApp.activate(ignoringOtherApps: true)
-        switch a.runModal() {
-        case .alertFirstButtonReturn: if auto { Task { await installAppUpdate() } } else { openReleasePage() }
-        case .alertThirdButtonReturn: UserDefaults.standard.set(r.version, forKey: Self.skippedKey)
-        default: break
-        }
-    }
+    private var updateWindow: UpdateWindow?
 
-    /// Downloads and checks the new app, then quits; the swap script puts it in place and opens it again.
+    /// The update window: what is new, then Install and restart, Later (asks again next launch) or Skip this version. A
+    /// copy that cannot replace itself (run from the dmg, a translocated copy, a folder we may not write) offers the
+    /// download page instead.
+    func promptAppUpdate(_ r: AppRelease) { showUpdate(r, start: false) }
+
+    /// The menu item: the same window, straight to the install.
     func installAppUpdate() async {
-        guard let r = appRelease, busy == nil else { return }
+        guard let r = appRelease else { return }
         guard SelfUpdater.canReplace() else { openReleasePage(); return }
+        showUpdate(r, start: true)
+    }
+
+    private func showUpdate(_ r: AppRelease, start: Bool) {
+        if let w = updateWindow {
+            w.show()
+            if start, w.flow.stage == .prompt { beginInstall(w) }
+            return
+        }
+        let auto = SelfUpdater.canReplace()
+        let notes = ReleaseNotes.newer(r.notes, current: appVersion, upTo: r.version)
+        let flow = UpdateFlow(release: r, current: appVersion, auto: auto,
+                              manualNote: auto ? nil : t("update.alert.manualBody", ["current": appVersion, "path": SelfUpdater.bundlePath]),
+                              notes: notes.shown, moreNotes: notes.more)
+        let w = UpdateWindow(flow: flow, title: t("update.progress.title")) { [weak self] k, v in self?.t(k, v) ?? k }
+        updateWindow = w
+        flow.onInstall = { [weak self, weak w] in
+            guard let self, let w else { return }
+            if flow.auto { self.beginInstall(w) } else { self.openReleasePage(); self.closeUpdate() }
+        }
+        flow.onLater = { [weak self] in self?.closeUpdate() }
+        flow.onSkip = { [weak self] in UserDefaults.standard.set(r.version, forKey: Self.skippedKey); self?.closeUpdate() }
+        flow.onClose = { [weak self] in self?.closeUpdate() }
+        flow.onOpenPage = { [weak self] in self?.openReleasePage(); self?.closeUpdate() }
+        w.show()
+        if start { beginInstall(w) }
+    }
+
+    private func closeUpdate() {
+        updateWindow?.close()
+        updateWindow = nil
+        if busy == "status.updatingApp" { busy = nil }
+    }
+
+    /// Downloads and checks the new app with its progress in the window, then quits; the swap script puts it in place
+    /// and opens it again. Cancel (while downloading) stops and removes the download; a failure stays in the window.
+    private func beginInstall(_ w: UpdateWindow) {
+        guard busy == nil else { NSSound.beep(); return }
         busy = "status.updatingApp"
-        defer { busy = nil }
-        do {
-            try await SelfUpdater.prepare(r, log: config.logsDir.appendingPathComponent("app-update.log"))
-            NSApp.terminate(nil)
-        } catch SelfUpdater.Failure.verify(let detail) {
-            error = t("error.appUpdateVerify", ["detail": detail])
-        } catch SelfUpdater.Failure.step(let detail) {
-            error = t("error.updateFailed", ["error": detail])
-        } catch {
-            self.error = t("error.updateFailed", ["error": error.localizedDescription])
+        let flow = w.flow
+        let r = flow.release
+        flow.stage = .downloading(received: 0, total: 0)
+        let log = config.logsDir.appendingPathComponent("app-update.log")
+        let job = Task { () -> Error? in
+            do {
+                try await SelfUpdater.prepare(r, log: log) { step in
+                    Task { @MainActor in
+                        // only forward: a late progress tick never pulls the window back from a later step
+                        guard case .downloading = flow.stage else { return }
+                        switch step {
+                        case .downloading(let got, let total): flow.stage = .downloading(received: got, total: total)
+                        case .checking: flow.stage = .checking
+                        }
+                    }
+                }
+                return nil
+            } catch { return error }
+        }
+        flow.onCancel = { job.cancel() }
+        Task { [weak self] in
+            let failure = await job.value
+            guard let self else { return }
+            if job.isCancelled { self.closeUpdate(); return }
+            guard let failure else {
+                flow.stage = .installing
+                try? await Task.sleep(nanoseconds: 700_000_000) // let the last step show before the app goes away
+                NSApp.terminate(nil)
+                return
+            }
+            let msg: String
+            switch failure {
+            case SelfUpdater.Failure.verify(let detail): msg = self.t("error.appUpdateVerify", ["detail": detail])
+            case SelfUpdater.Failure.step(let detail): msg = self.t("error.updateFailed", ["error": detail])
+            case SelfUpdater.Failure.notReplaceable(let path): msg = self.t("update.alert.manualBody", ["current": self.appVersion, "path": path])
+            default: msg = self.t("error.updateFailed", ["error": failure.localizedDescription])
+            }
+            flow.stage = .failed(msg)
+            self.busy = nil
         }
     }
 
-    func openReleasePage() { NSWorkspace.shared.open(URL(string: "https://github.com/howznguyen/nookdeck/releases/latest")!) }
+    static let releasePage = UpdateView.releasePage
+    func openReleasePage() { NSWorkspace.shared.open(Self.releasePage) }
 
     func updateNow() async { await run("status.restarting", errorKey: "error.updateFailed") { try await service.updateAgent() } }
 }

@@ -5,9 +5,13 @@ public struct AppRelease: Equatable {
     public let version: String
     public let dmg: URL
     public let sha256: URL
+    /// the release body: the whole release notes file (ReleaseNotes picks the sections newer than the running app)
+    public let notes: String
+    /// the release page on GitHub (html_url); nil when the JSON has none
+    public let page: URL?
 
-    public init(version: String, dmg: URL, sha256: URL) {
-        self.version = version; self.dmg = dmg; self.sha256 = sha256
+    public init(version: String, dmg: URL, sha256: URL, notes: String = "", page: URL? = nil) {
+        self.version = version; self.dmg = dmg; self.sha256 = sha256; self.notes = notes; self.page = page
     }
 
     /// Reads GitHub's `releases/latest` JSON. Nil when it is not newer than `current` or misses Nookdeck.dmg or its .sha256.
@@ -19,7 +23,8 @@ public struct AppRelease: Equatable {
             if let n = a["name"] as? String, let s = a["browser_download_url"] as? String, let u = URL(string: s) { urls[n] = u }
         }
         guard let dmg = urls["Nookdeck.dmg"], let sha = urls["Nookdeck.dmg.sha256"] else { return nil }
-        return AppRelease(version: Version.bare(tag), dmg: dmg, sha256: sha)
+        return AppRelease(version: Version.bare(tag), dmg: dmg, sha256: sha, notes: (o["body"] as? String) ?? "",
+                          page: (o["html_url"] as? String).flatMap(URL.init(string:)))
     }
 }
 

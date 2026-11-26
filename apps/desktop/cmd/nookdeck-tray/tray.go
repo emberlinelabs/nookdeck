@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -167,7 +168,7 @@ func onReady() {
 			case <-mUpdate.ClickedCh:
 				go checkUpdate(true)
 			case <-mUpdateNow.ClickedCh:
-				go updateNow()
+				go updateFromMenu()
 			case <-mLogin.ClickedCh:
 				on := !mLogin.Checked()
 				if err := setLoginItem(on); err != nil {
@@ -341,6 +342,7 @@ func pairServer() (*core.PairServer, error) {
 		}
 		configurePair(p)
 		p.OnUpdateChoice = updateChoice
+		p.OnOpenURL = openURL
 		pair = p
 	}
 	return pair, nil
@@ -384,7 +386,7 @@ func checkUpdate(user bool) {
 	if u.Available {
 		render()
 		if u.Latest != nil && updateAsk().ShouldAsk(*u.Latest, user) {
-			showUpdate(u)
+			showUpdate(u, user)
 		}
 		return
 	}
@@ -409,15 +411,85 @@ func updateAsk() *core.UpdateAsk {
 
 // showUpdate opens the "new version" window: Install and restart, Later, Skip this version. An install that cannot replace itself
 // (selfUpdate) offers the download page instead.
-func showUpdate(u core.Update) {
+func showUpdate(u core.Update, user bool) {
 	p, err := pairServer()
 	if err != nil {
 		logf("update window: %v", err)
 		return
 	}
+	// the agent's check is cached for a day; GitHub may already have a newer release. Ask the agent again then, so the window's
+	// title and its notes name the same version (the notes only cover current < version <= offered anyway).
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if rel, err := core.FetchLatestRelease(ctx, &http.Client{Timeout: 10 * time.Second}); err == nil {
+		body := rel.Body
+		p.Notes = func(context.Context) (string, error) { return body, nil } // one GitHub call for the window
+		if core.NeedsRecheck(*u.Latest, rel.Tag) {
+			u2, err := client().Update(ctx, true)
+			if err == nil && u2.Error == "" && u2.Available && u2.Latest != nil && core.Newer(*u2.Latest, *u.Latest) {
+				logf("update: the agent offered %s, GitHub has %s; re-checked: %s", *u.Latest, rel.Tag, *u2.Latest)
+				state.mu.Lock()
+				state.update = u2
+				state.mu.Unlock()
+				render()
+				if !user && !updateAsk().ShouldAsk(*u2.Latest, false) {
+					return // skipped, or already asked in this run
+				}
+				u = u2
+			} else {
+				logf("update: re-check kept %s (GitHub %s): %v", *u.Latest, rel.Tag, err)
+			}
+		}
+	} else {
+		p.Notes = nil // the window fetches them itself
+	}
+	if p.WindowOpen(*u.Latest) {
+		logf("update %s: its window is already open", *u.Latest)
+		return
+	}
 	ok, where := selfUpdate()
 	logf("update %s available: asking (self-update %v)", *u.Latest, ok)
-	openAppWindow(p.ShowUpdate(core.UpdateDialog{Version: *u.Latest, Current: u.Current, Manual: !ok, Path: where}), 540, 300)
+	openAppWindow(p.ShowUpdate(core.UpdateDialog{Version: *u.Latest, Current: u.Current, Manual: !ok, Path: where}), 560, 540)
+}
+
+// updateFromMenu is "Update now" in the menu: the update window opens on its progress view, then the update runs.
+func updateFromMenu() {
+	state.mu.Lock()
+	u := state.update
+	state.mu.Unlock()
+	if u.Latest == nil {
+		return
+	}
+	if ok, _ := selfUpdate(); ok {
+		if p, err := pairServer(); err == nil {
+			p.SetUpdateState(core.UpdateState{Stage: "downloading", Version: *u.Latest})
+			openAppWindow(p.ShowUpdate(core.UpdateDialog{Version: *u.Latest, Current: u.Current}), 560, 540)
+		}
+	}
+	updateNow()
+}
+
+// updateState shows an update step in the update window (when the page server runs).
+func updateState(s core.UpdateState) {
+	pairMu.Lock()
+	p := pair
+	pairMu.Unlock()
+	if p != nil {
+		p.SetUpdateState(s)
+	}
+}
+
+// updateProgress feeds the download progress to the update window.
+func updateProgress(version string) core.Progress {
+	return func(stage string, done, total int64) {
+		updateState(core.UpdateState{Stage: stage, Version: version, Done: done, Total: total})
+	}
+}
+
+// updateFailed shows the error in the update window and as a notice (the window may have been closed).
+func updateFailed(version, msg string) {
+	updateState(core.UpdateState{Stage: "error", Version: version, Error: msg})
+	notice(t("error.updateFailed", "error", msg))
 }
 
 func updateChoice(v, choice string) {

@@ -369,7 +369,10 @@ func TestDownloadInstaller(t *testing.T) {
 			rt := ts.Client()
 			rt.Transport = rewrite{ts.URL, http.DefaultTransport}
 			dest := filepath.Join(t.TempDir(), InstallerName)
-			err := DownloadInstaller(context.Background(), rt, "0.5.0", dest)
+			var steps []string
+			err := DownloadInstaller(context.Background(), rt, "0.5.0", dest, func(stage string, done, total int64) {
+				steps = append(steps, fmt.Sprintf("%s %d/%d", stage, done, total))
+			})
 			if tc.wantErr == "" {
 				if err != nil {
 					t.Fatal(err)
@@ -377,7 +380,15 @@ func TestDownloadInstaller(t *testing.T) {
 				if b, _ := os.ReadFile(dest); string(b) != string(data) {
 					t.Error("content")
 				}
+				// starts at 0, ends with every byte of the known size, then the checksum step
+				n := len(data)
+				if len(steps) < 3 || steps[0] != "downloading 0/0" || steps[len(steps)-2] != fmt.Sprintf("downloading %d/%d", n, n) || steps[len(steps)-1] != fmt.Sprintf("checking %d/%d", n, n) {
+					t.Errorf("progress %v", steps)
+				}
 				return
+			}
+			if len(steps) > 0 && strings.HasPrefix(steps[len(steps)-1], "checking") && tc.name != "wrong hash" {
+				t.Errorf("no checking step for %s: %v", tc.name, steps)
 			}
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("want %q, got %v", tc.wantErr, err)
