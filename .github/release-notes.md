@@ -1,3 +1,12 @@
+## Nookdeck 0.5.3
+
+Upgrading: run the install command below again, or `nookdeck update`, or use **Check for updates** in the app.
+
+- Fixed: an iPhone on iOS 15 or 16 could stay on **Disconnected / Waiting for layout** when the deck has many app icons or uploaded images. Big icon sets now reach the phone in parts.
+- **Report a problem** (manage page > About) builds one report for a GitHub issue: version, system, permission checks, phones, connection drops and the end of the error log. Personal details (home folder, computer name, IP addresses, PIN, tokens) are masked, and you see the report before anything is sent.
+- **`nookdeck phone-check`** opens a test page for a phone that cannot connect and tells why (message size, compression, close code). The output is saved to `~/.nookdeck/logs/phone-check.log`.
+- When the phone loses the connection, the deck now shows the reason code next to "disconnected".
+
 ## Nookdeck 0.5.2
 
 Upgrading: run the install command below again, or `nookdeck update`, or use **Check for updates** in the app.
