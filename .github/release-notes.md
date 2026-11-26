@@ -26,6 +26,8 @@ Upgrading: use **Install and restart** in the app, run the install command below
 
 - Windows and Linux: **Lock computer** sent the macOS shortcut (on Windows it opened Quick Assist). It now locks the computer.
 - The Screenshot button did nothing on Windows and on Macs where another app owns the screenshot shortcuts.
+- Windows: the agent could run in an empty console window (when Windows Terminal is the default terminal), and closing it stopped Nookdeck. It now starts with no window at all.
+- Windows: an update no longer opens a second setup window; the update window shows every step and installs silently.
 - Each GitHub release now shows only its own notes.
 
 ## Nookdeck 0.6.1
