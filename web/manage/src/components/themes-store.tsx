@@ -32,7 +32,9 @@ function PackShot({ layout, pack, choice, pageId, fallback }: { layout: Layout; 
   const themed = useMemo(() => (pack.installed && pp && !pp.empty ? { ...layout, theme: themeWithPack(layout.theme, pack, choice) } : null), [layout, pack, choice, pp]);
   if (themed && pp) return <ScreenThumb layout={themed} pageId={pp.page.id} label={t("{name} on your screen", { name: pack.name })} />;
   const v = pack.variants.find((x) => x.id === choice.variant) ?? pack.variants[0];
-  if (fallback && pack.installed) return <img src={fileUrl(pack.id, fallback)} alt="" loading="lazy" className="aspect-[844/390] w-full rounded-[10px] border object-cover" />;
+  // the chosen variant's picture first; a pack that is not installed only has the registry's https pictures
+  const pic = v?.preview ?? fallback;
+  if (pic && (pack.installed || /^https:\/\//.test(pic))) return <img src={fileUrl(pack.id, pic)} alt="" loading="lazy" className="aspect-[844/390] w-full rounded-[10px] border object-cover" />;
   return v ? <PresetThumb theme={{ ...(packLook(pack, v.id, choice.options) as Theme) }} /> : <span className="aspect-[844/390] w-full rounded-lg border bg-muted" />;
 }
 
@@ -137,6 +139,11 @@ function PackSheet({ pack, layout, applied, onClose, busy, onInstall, onApply, o
         {pack.description && <p className="text-[13.5px]">{pack.description}</p>}
         {pack.hasCss && <Alert tone="warning">{t("This theme adds its own styling (CSS). It cannot run code. You can always switch it off with safe mode or remove it.")}</Alert>}
 
+        {!pack.installed && (pack.preview ?? pack.variants[0]?.preview) && (
+          <section aria-label={t("Preview")} className="flex flex-col gap-2">
+            <PackShot layout={layout} pack={pack} choice={shown} fallback={pack.preview} />
+          </section>
+        )}
         {pack.installed && (
           <section aria-label={t("Preview")} className="flex flex-col gap-2">
             <PackShot layout={layout} pack={pack} pageId={screenId} choice={shown} fallback={pack.preview} />
