@@ -2,7 +2,7 @@ import { userHome } from "./home";
 import { accessSync, constants as fsConstants, existsSync, readFileSync, statSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 
-import { join } from "node:path";
+import { join, posix } from "node:path";
 import { t } from "./i18n";
 import { platform as osPlatform } from "./platform";
 import { idleSeconds as winIdle, windowStation as winStation } from "./platform/win32/ffi";
@@ -309,7 +309,7 @@ function linuxSessionItem(p: Probes, env: Record<string, string | undefined>, se
 const YDOTOOL_TMP_SOCKET = "/tmp/.ydotool_socket";
 /** Where the ydotool 1.x client looks for ydotoold (its own order): $YDOTOOL_SOCKET, else $XDG_RUNTIME_DIR/.ydotool_socket, else /tmp. */
 export const ydotoolSocket = (env: Record<string, string | undefined>): string =>
-  env.YDOTOOL_SOCKET || (env.XDG_RUNTIME_DIR ? join(env.XDG_RUNTIME_DIR, ".ydotool_socket") : YDOTOOL_TMP_SOCKET);
+  env.YDOTOOL_SOCKET || (env.XDG_RUNTIME_DIR ? posix.join(env.XDG_RUNTIME_DIR, ".ydotool_socket") : YDOTOOL_TMP_SOCKET);
 
 async function linuxInput(p: Probes, os: OsRelease, env: Record<string, string | undefined>): Promise<DoctorItem> {
   const { linuxInputBackend, ydotoolGeneration } = await import("./platform/linux-input");

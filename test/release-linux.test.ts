@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readFileSync as readRaw } from "node:fs";
 import { join } from "node:path";
 import { assetName } from "../src/update";
 
 // spec linux-support L1 / AC-9: the release workflow builds and publishes the Linux agent and runs the tests on Linux
 const root = join(import.meta.dir, "..");
+// a Windows checkout may turn LF into CRLF: compare the text, not the line endings
+const readFileSync = (p: string, enc: "utf8") => readRaw(p, enc).replace(/\r\n/g, "\n");
 const wf = readFileSync(join(root, ".github", "workflows", "release.yml"), "utf8");
 /** The text of one job: from "  <name>:" to the next job at the same indent. */
 const job = (name: string): string => {
@@ -75,7 +77,7 @@ describe("Linux packages", () => {
     expect(desktop).toContain("Icon=dev.nookdeck.app\n");
     expect(desktop).toContain("Type=Application\n");
   });
-  test("package-linux.sh: fills in nfpm.yaml, names the files as L7 and the tray updater expect, and builds the tarball", () => {
+  test.skipIf(process.platform === "win32")("package-linux.sh: fills in nfpm.yaml, names the files as L7 and the tray updater expect, and builds the tarball", () => {
     const { mkdtempSync, writeFileSync, chmodSync, mkdirSync, existsSync } = require("node:fs") as typeof import("node:fs");
     const { tmpdir } = require("node:os") as typeof import("node:os");
     const dir = mkdtempSync(join(tmpdir(), "nd-pkg-"));
