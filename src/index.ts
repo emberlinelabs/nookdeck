@@ -117,6 +117,11 @@ if (argv[0] === "pair") {
   console.log(plain ? `PIN\t${info.pin}` : `  PIN             ${info.pin}`);
   process.exit(0);
 }
+// `nookdeck phone-check [--port N] [--agent-port N]`: a test page for a phone that stays on "Disconnected" (WebSocket sizes, deflate, close codes).
+if (argv[0] === "phone-check") {
+  const { runPhoneCheck } = await import("./phone-check");
+  await runPhoneCheck(argv.slice(1));
+}
 // `nookdeck qr <text>`: prints a QR code (the setup scripts use it for the pairing URL). Silent when stdout is not a terminal.
 if (argv[0] === "qr") {
   const text = argv[1];
@@ -288,7 +293,7 @@ if (argv[0] === "update") {
   process.exit(0);
 }
 if (argv[0] === "help" || argv.includes("--help") || argv.includes("-h")) {
-  console.log("Usage: nookdeck [--port N]\n       nookdeck mcp [--port N]   MCP server (stdio) to arrange the deck with an AI\n       nookdeck service install|uninstall|status|restart [--port N]   run in the background at login (macOS, Windows)\n       nookdeck hooks repoint|remove   re-point or remove the Claude/Codex hooks\n       nookdeck doctor [--open <id>] [--request <id>] [--json]   check OS permissions (asks the running agent)\n       nookdeck install [--port N] [--yes] [--force] [--open]   put this program in its stable place and start it at login (for Homebrew)\n       nookdeck update [--version X] [--check]   install the latest release (or only check)\n       nookdeck --version\n       --no-qr   do not print the pairing QR code at start\n       nookdeck qr <text>   print a QR code in the terminal\n\nEnv: NOOKDECK_PORT, NOOKDECK_HOME");
+  console.log("Usage: nookdeck [--port N]\n       nookdeck mcp [--port N]   MCP server (stdio) to arrange the deck with an AI\n       nookdeck service install|uninstall|status|restart [--port N]   run in the background at login (macOS, Windows)\n       nookdeck hooks repoint|remove   re-point or remove the Claude/Codex hooks\n       nookdeck doctor [--open <id>] [--request <id>] [--json]   check OS permissions (asks the running agent)\n       nookdeck install [--port N] [--yes] [--force] [--open]   put this program in its stable place and start it at login (for Homebrew)\n       nookdeck update [--version X] [--check]   install the latest release (or only check)\n       nookdeck --version\n       --no-qr   do not print the pairing QR code at start\n       nookdeck phone-check   test page for a phone stuck on Disconnected (also saved to ~/.nookdeck/logs/phone-check.log)\n       nookdeck qr <text>   print a QR code in the terminal\n\nEnv: NOOKDECK_PORT, NOOKDECK_HOME");
   process.exit(0);
 }
 
