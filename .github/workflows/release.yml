@@ -425,8 +425,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # only this version's notes (plus Install and Files): the file keeps every version, a release shows its own
+          sh scripts/release-body.sh "$GITHUB_REF_NAME" > release-body.md
+          grep -q "^## Nookdeck ${GITHUB_REF_NAME#v}" release-body.md || { echo "no notes for $GITHUB_REF_NAME in .github/release-notes.md"; exit 1; }
           gh release create "$GITHUB_REF_NAME" dist/nookdeck-darwin-arm64 dist/nookdeck-darwin-x64 dist/nookdeck-windows-x64.exe dist/nookdeck-linux-x64 dist/nookdeck-linux-arm64 dist/nookdeck-darwin-arm64.gz dist/nookdeck-darwin-x64.gz dist/nookdeck-windows-x64.exe.gz dist/nookdeck-linux-x64.gz dist/nookdeck-linux-arm64.gz dist/phonedesk-darwin-arm64 dist/phonedesk-darwin-x64 dist/phonedesk-windows-x64.exe dist/phonedesk-darwin-arm64.gz dist/phonedesk-darwin-x64.gz dist/phonedesk-windows-x64.exe.gz dist/nookdeck-demo.tgz dist/SHA256SUMS $(ls dist/Nookdeck.dmg dist/Nookdeck.dmg.sha256 dist/Nookdeck-Setup.exe dist/nookdeck_*.deb dist/nookdeck-*.rpm dist/nookdeck-linux-*.tar.gz 2>/dev/null) \
-            --repo "$GITHUB_REPOSITORY" --title "Nookdeck $GITHUB_REF_NAME" --notes-file .github/release-notes.md --generate-notes
+            --repo "$GITHUB_REPOSITORY" --title "Nookdeck $GITHUB_REF_NAME" --notes-file release-body.md --generate-notes
 
   # manual runs only: every asset in one artifact, SHA256SUMS completed the way `publish` does it. Creates no release and no tag.
   dry-run-bundle:
