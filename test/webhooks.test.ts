@@ -57,6 +57,18 @@ describe("PushStore", () => {
     expect(s.get("temp")?.value).toBe(1);
     s.close();
   });
+  test("a timer that fires before the clock says the value is due tries again (the value still expires)", async () => {
+    let t = 0;
+    const events: [string, any][] = [];
+    const s = new PushStore((k, v) => events.push([k, v?.value]), () => t);
+    s.set("k", 1, { ttl: 0.03 });
+    await Bun.sleep(50); // the first timer fired, but the clock has not moved: not due yet
+    expect(s.get("k")?.value).toBe(1);
+    t += 30;
+    await Bun.sleep(30); // the retry fires on time
+    expect(events.at(-1)).toEqual(["k", undefined]);
+    s.close();
+  });
   test("a new value replaces the ttl", async () => {
     let t = 0;
     const s = new PushStore(undefined, () => t);

@@ -83,7 +83,13 @@ export class PushStore {
 
   private expire(key: string) {
     const v = this.map.get(key);
-    if (v?.expiresAt && v.expiresAt <= this.now()) { this.map.delete(key); this.timers.delete(key); this.onChange(key, undefined); }
+    if (!v?.expiresAt) return;
+    const left = v.expiresAt - this.now();
+    if (left <= 0) { this.map.delete(key); this.timers.delete(key); this.onChange(key, undefined); return; }
+    // a timer can fire a little before the clock says the value is due: try again, or it would never expire
+    const t = setTimeout(() => this.expire(key), left + 1);
+    (t as any).unref?.();
+    this.timers.set(key, t);
   }
 
   get(key: string): PushValue | undefined {
