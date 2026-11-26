@@ -1,0 +1,85 @@
+# Nookdeck .deb and .rpm (spec linux-support L7, L9). scripts/package-linux.sh fills in the ${NFPM_*} values.
+# No system service and no maintainer scripts: the tray app copies the agent to ~/.nookdeck/bin and sets up the
+# per-user service on its first start (spec desktop-apps A2), so `nookdeck update` never needs root.
+name: nookdeck
+arch: ${NFPM_ARCH}
+platform: linux
+version: ${NFPM_VERSION}
+release: "1"
+section: utils
+priority: optional
+maintainer: Nookdeck <nookdeck@users.noreply.github.com>
+vendor: Nookdeck
+homepage: https://nookdeck.app
+license: MIT
+description: |
+  Control this computer from your phone.
+  A deck of tiles on your phone (apps, hotkeys, typing, media, volume, Claude Code
+  approvals) that drives this computer over the local network. The tray app sets up
+  the Nookdeck agent for each user on first start.
+contents:
+  - src: ${NFPM_TRAY}
+    dst: /usr/bin/nookdeck-tray
+    file_info: { mode: 0755 }
+  - src: ${NFPM_AGENT}
+    dst: /usr/lib/nookdeck/nookdeck
+    file_info: { mode: 0755 }
+  - src: ${NFPM_ROOT}/packaging/linux/dev.nookdeck.app.desktop
+    dst: /usr/share/applications/dev.nookdeck.app.desktop
+    file_info: { mode: 0644 }
+  - src: ${NFPM_ICONS}/app-22.png
+    dst: /usr/share/icons/hicolor/22x22/apps/dev.nookdeck.app.png
+    file_info: { mode: 0644 }
+  - src: ${NFPM_ICONS}/app-24.png
+    dst: /usr/share/icons/hicolor/24x24/apps/dev.nookdeck.app.png
+    file_info: { mode: 0644 }
+  - src: ${NFPM_ICONS}/app-32.png
+    dst: /usr/share/icons/hicolor/32x32/apps/dev.nookdeck.app.png
+    file_info: { mode: 0644 }
+  - src: ${NFPM_ICONS}/app-48.png
+    dst: /usr/share/icons/hicolor/48x48/apps/dev.nookdeck.app.png
+    file_info: { mode: 0644 }
+  - src: ${NFPM_ICONS}/app-64.png
+    dst: /usr/share/icons/hicolor/64x64/apps/dev.nookdeck.app.png
+    file_info: { mode: 0644 }
+  - src: ${NFPM_ICONS}/app-128.png
+    dst: /usr/share/icons/hicolor/128x128/apps/dev.nookdeck.app.png
+    file_info: { mode: 0644 }
+  - src: ${NFPM_ICONS}/app-256.png
+    dst: /usr/share/icons/hicolor/256x256/apps/dev.nookdeck.app.png
+    file_info: { mode: 0644 }
+  - src: ${NFPM_ICONS}/app.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/dev.nookdeck.app.svg
+    file_info: { mode: 0644 }
+  - src: ${NFPM_ROOT}/LICENSE
+    dst: /usr/share/doc/nookdeck/copyright
+    file_info: { mode: 0644 }
+    packager: deb
+  - src: ${NFPM_ROOT}/LICENSE
+    dst: /usr/share/licenses/nookdeck/LICENSE
+    file_info: { mode: 0644 }
+    packager: rpm
+# Everything the agent calls is optional: a missing tool turns off one feature and `nookdeck doctor` names the package.
+overrides:
+  deb:
+    recommends:
+      - gnome-shell-extension-appindicator
+      - xdotool
+      - ydotool
+      - playerctl
+      - pulseaudio-utils
+      - libsecret-tools
+  rpm:
+    recommends:
+      - gnome-shell-extension-appindicator
+      - xdotool
+      - ydotool
+      - playerctl
+      - pulseaudio-utils
+      - libsecret
+deb:
+  fields:
+    Bugs: https://github.com/howznguyen/nookdeck/issues
+rpm:
+  group: Applications/System
+  summary: Control this computer from your phone

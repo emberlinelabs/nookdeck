@@ -66,12 +66,15 @@ export async function latestTag(o: LookupOptions = {}): Promise<string> {
   throw new Error(`could not reach GitHub to find the latest release (${why}). Check your connection, or pick one with: nookdeck update --version <x.y.z>`);
 }
 
-/** The release asset for this computer. */
-export function assetName(): string {
-  const a = arch();
-  if (platform.id === "darwin") return `nookdeck-darwin-${a === "arm64" ? "arm64" : "x64"}`;
-  if (platform.id === "win32") return "nookdeck-windows-x64.exe";
-  throw new Error(`there is no Nookdeck release for ${platform.id} yet`);
+/** The release asset for this computer (or for `os` / `cpu`, as Node names them). */
+export function assetName(os: string = platform.id, cpu: string = arch()): string {
+  if (os === "darwin") return `nookdeck-darwin-${cpu === "arm64" ? "arm64" : "x64"}`;
+  if (os === "win32") return "nookdeck-windows-x64.exe";
+  if (os === "linux") {
+    if (cpu === "x64" || cpu === "arm64") return `nookdeck-linux-${cpu}`;
+    throw new Error(`there is no Nookdeck release for Linux on ${cpu} (only x64 and arm64)`);
+  }
+  throw new Error(`there is no Nookdeck release for ${os} yet`);
 }
 
 export function sumFor(sums: string, name: string): string | null {

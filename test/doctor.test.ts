@@ -93,8 +93,8 @@ describe("Accessibility and Automation", () => {
     const none = await run({ apps: ["com.apple.Music"] });
     expect(none.by("automation-spotify")).toMatchObject({ status: "n/a", detail: "Spotify is not installed" });
   });
-  test("not macOS: n/a everywhere that is macOS-only", async () => {
-    const { by } = await run({ platform: "linux", outputs: {} });
+  test("not macOS: n/a everywhere that is macOS-only (Linux has its own items: doctor-linux.test.ts)", async () => {
+    const { by } = await run({ platform: "freebsd", outputs: {} });
     for (const id of ["accessibility", "automation-music", "keychain-claude", "local-network", "firewall", "signature"]) expect(by(id).status).toBe("n/a");
   });
 });
@@ -222,8 +222,15 @@ describe("text output and language", () => {
     const i18n = require("node:fs").readFileSync(join(import.meta.dir, "..", "src", "i18n.ts"), "utf8") as string;
     const keys = [...src.matchAll(/\bt\("((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]!).concat([...src.matchAll(/why: "([^"]+)"/g)].map((m) => m[1]!));
     expect(keys.length).toBeGreaterThan(50);
-    const missing = keys.filter((k) => !i18n.includes(`"${k.replace(/"/g, '\\"')}":`));
-    expect(missing).toEqual([]);
+    // each language table on its own: a key present in vi only must not hide a missing zh line
+    const table = (name: string, next: string) => i18n.slice(i18n.indexOf(`const ${name}: Record`), i18n.indexOf(next));
+    const tables = { vi: table("vi", "const zh: Record"), zh: table("zh", "const DICTS") };
+    expect(tables.vi.length).toBeGreaterThan(1000);
+    expect(tables.zh.length).toBeGreaterThan(1000);
+    for (const [lang, body] of Object.entries(tables)) {
+      const missing = keys.filter((k) => !body.includes(`"${k.replace(/"/g, '\\"')}":`));
+      expect({ lang, missing }).toEqual({ lang, missing: [] });
+    }
   });
   test("requestable ids", () => {
     expect(D.describeRequest("accessibility")).toEqual({ id: "accessibility", kind: "accessibility" });
@@ -351,7 +358,7 @@ describe("GET /api/doctor and the CLI", () => {
     const before = k.asked.ax;
     const req = await cli(["--request", "accessibility"]);
     expect(req.exitCode).toBe(0);
-    expect(req.stdout.toString()).toMatch(/Asked (macOS|Windows)/);
+    expect(req.stdout.toString()).toMatch(/Asked (macOS|Windows|Linux)/); // the label of the OS the test runs on
     expect(k.asked.ax).toBe(before + 1);
     const open = await cli(["--open", "agent"]); // no pane for this one: nothing is opened
     expect(open.exitCode).toBe(1);

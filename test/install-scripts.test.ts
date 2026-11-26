@@ -13,6 +13,11 @@ setDefaultTimeout(90_000);
 // directory the binary touches is inside the sandbox: never the real ~/.nookdeck, ~/.claude or ~/Library/LaunchAgents.
 const root = join(import.meta.dir, "..");
 const mac = process.platform === "darwin";
+const linux = process.platform === "linux";
+/** setup.sh / uninstall.sh run on macOS and Linux; what is launchd-, codesign- or PhoneDesk-specific stays macOS-only */
+const unix = mac || linux;
+const osTag = mac ? "darwin" : "linux";
+const fetching = (gz: boolean) => new RegExp(`Fetching nookdeck-${osTag}-(arm64|x64)${gz ? "\\.gz" : ""} \\(\\d+ MB\\)`);
 const sandbox = mkdtempSync(join(tmpdir(), "pd-inst-"));
 const spawned: number[] = [];
 afterAll(() => { for (const pid of spawned) try { process.kill(pid); } catch { /* gone */ } });
@@ -20,20 +25,20 @@ afterAll(() => { for (const pid of spawned) try { process.kill(pid); } catch { /
 const sha = (f: string) => createHash("sha256").update(readFileSync(f)).digest("hex");
 const bunPath = process.execPath;
 
-/** A "release": nookdeck-darwin-arm64/x64 are wrappers that run this checkout's real CLI, plus SHA256SUMS. */
+/** A "release": nookdeck-<os>-arm64/x64 are wrappers that run this checkout's real CLI, plus SHA256SUMS. */
 function makeRelease(opts: { tamper?: boolean; omit?: boolean; gz?: "good" | "bad-sum" | "no-file" | "bad-content"; variant?: string } = {}) {
   const dir = mkdtempSync(join(sandbox, "release-"));
   const lines: string[] = [];
   for (const arch of ["arm64", "x64"]) {
-    const f = join(dir, `nookdeck-darwin-${arch}`);
+    const f = join(dir, `nookdeck-${osTag}-${arch}`);
     writeFileSync(f, `#!/bin/bash\nexec "${bunPath}" "${join(root, "src", "index.ts")}" "$@"\n${opts.variant ? `# ${opts.variant}\n` : ""}`);
     chmodSync(f, 0o755);
-    lines.push(`${opts.tamper ? "0".repeat(64) : sha(f)}  nookdeck-darwin-${arch}`);
+    lines.push(`${opts.tamper ? "0".repeat(64) : sha(f)}  nookdeck-${osTag}-${arch}`);
     if (opts.gz) {
       const g = `${f}.gz`;
       // "bad-content": a valid, correctly summed gzip whose content is not the listed binary
       writeFileSync(g, gzipSync(opts.gz === "bad-content" ? Buffer.from("#!/bin/bash\necho nookdeck 9.9.9\n") : readFileSync(f)));
-      lines.push(`${opts.gz === "bad-sum" ? "0".repeat(64) : sha(g)}  nookdeck-darwin-${arch}.gz`);
+      lines.push(`${opts.gz === "bad-sum" ? "0".repeat(64) : sha(g)}  nookdeck-${osTag}-${arch}.gz`);
       if (opts.gz === "no-file") rmSync(g);
     }
   }
@@ -52,7 +57,7 @@ function env(home: string, release: string, extra: Record<string, string> = {}) 
   return {
     PATH: process.env.PATH!, TMPDIR: sandbox, SHELL: "/bin/zsh", // the PATH step picks the rc file from $SHELL: pin it so CI (bash) matches
     HOME: join(home, "fake-home"), // anything that falls back to $HOME stays in the sandbox too
-    NOOKDECK_INSTALL_HOME: home, NOOKDECK_RELEASE_BASE: release, NOOKDECK_LAUNCHCTL: "echo",
+    NOOKDECK_INSTALL_HOME: home, NOOKDECK_RELEASE_BASE: release, NOOKDECK_LAUNCHCTL: "echo", NOOKDECK_SYSTEMCTL: "echo",
     ...extra,
   };
 }
@@ -60,13 +65,13 @@ const sh = (script: string, args: string[], e: Record<string, string>) => Bun.sp
 const out = (r: ReturnType<typeof sh>) => r.stdout.toString() + r.stderr.toString();
 const newHome = () => { const h = mkdtempSync(join(sandbox, "home-")); mkdirSync(join(h, "fake-home"), { recursive: true }); return h; };
 
-describe.skipIf(!mac)("setup.sh: compressed assets", () => {
+describe.skipIf(!unix)("setup.sh: compressed assets", () => {
   const run = (release: string, home = newHome()) => ({ home, r: sh("setup.sh", ["--yes", "--no-autostart", "--no-start", "--no-open"], env(home, release)) });
   test("a release with gzip assets: downloads the .gz with its size, verifies it, unpacks, verifies the binary too", () => {
     const { home, r } = run(makeRelease({ gz: "good" }));
     const text = out(r);
     expect(r.exitCode, text).toBe(0);
-    expect(text).toMatch(/Fetching nookdeck-darwin-(arm64|x64)\.gz \(\d+ MB\)/);
+    expect(text).toMatch(fetching(true));
     expect(text.match(/checksum ok/g)?.length).toBe(2); // the .gz, then the unpacked binary
     expect(existsSync(join(home, ".nookdeck", "bin", "nookdeck"))).toBe(true);
   });
@@ -100,7 +105,7 @@ describe.skipIf(!mac)("setup.sh: compressed assets", () => {
       const r = await Bun.spawn(["bash", join(root, "setup.sh"), "--yes", "--no-autostart", "--no-start", "--no-open"], { env: env(home, `http://127.0.0.1:${port}`), stdout: "pipe", stderr: "pipe", stdin: new Blob([""]) });
       const text = (await new Response(r.stdout).text()) + (await new Response(r.stderr).text());
       expect(await r.exited, text).toBe(0);
-      expect(text).toMatch(/Fetching nookdeck-darwin-(arm64|x64)\.gz \(\d+ MB\)/);
+      expect(text).toMatch(fetching(true));
       expect(text).toContain("resuming from where it stopped");
       expect(hits.some((h) => h.startsWith("HEAD ") && h.includes(".gz"))).toBe(true);
       expect(hits.some((h) => /GET .*\.gz bytes=\d+-/.test(h))).toBe(true);
@@ -112,7 +117,7 @@ describe.skipIf(!mac)("setup.sh: compressed assets", () => {
     const text = out(r);
     expect(r.exitCode, text).toBe(0);
     expect(text).not.toContain(".gz");
-    expect(text).toMatch(/Fetching nookdeck-darwin-(arm64|x64) \(\d+ MB\)/);
+    expect(text).toMatch(fetching(false));
     expect(text.match(/checksum ok/g)?.length).toBe(1);
   });
   test("the .gz is listed but cannot be downloaded: falls back to the plain binary", () => {
@@ -135,7 +140,7 @@ describe.skipIf(!mac)("setup.sh: compressed assets", () => {
   });
 });
 
-describe.skipIf(!mac)("setup.sh", () => {
+describe.skipIf(!unix)("setup.sh", () => {
   test("downloads, verifies, installs, starts the agent, prints the phone URL and PIN; running it again updates", async () => {
     const home = newHome();
     const release = makeRelease();
@@ -182,7 +187,7 @@ describe.skipIf(!mac)("setup.sh", () => {
     expect(existsSync(join(home, ".nookdeck", "bin", ".nookdeck.new"))).toBe(false);
   }, 120_000);
 
-  test("autostart: the launchd plist is written under the install home (launchctl is echo); --no-start leaves the agent off", () => {
+  test.skipIf(!mac)("autostart: the launchd plist is written under the install home (launchctl is echo); --no-start leaves the agent off", () => {
     const home = newHome();
     const release = makeRelease();
     const r = sh("setup.sh", ["--yes", "--no-start", "--no-open", "--port", "7533"], env(home, release));
@@ -273,7 +278,7 @@ describe.skipIf(!mac)("uninstall.sh", () => {
   }, 120_000);
 });
 
-describe.skipIf(!mac)("setup.sh: finding the latest release when GitHub misbehaves", () => {
+describe.skipIf(!unix)("setup.sh: finding the latest release when GitHub misbehaves", () => {
   // a local stand-in for github.com + api.github.com + the release downloads
   function githubStandIn(opts: { failFirst?: number; redirectWorks?: boolean; apiTag?: string | null; status?: number }) {
     const release = makeRelease({ gz: "good" });
@@ -346,7 +351,7 @@ describe.skipIf(!mac)("setup.sh: finding the latest release when GitHub misbehav
 
 });
 
-describe.skipIf(!mac)("setup.sh / uninstall.sh: PATH and the port check", () => {
+describe.skipIf(!unix)("setup.sh / uninstall.sh: PATH and the port check", () => {
   const base = ["--yes", "--no-autostart", "--no-open"];
   test("PATH: the marked line goes into the shell rc files, once; uninstall removes it and keeps the rest", () => {
     const home = newHome();
@@ -388,7 +393,8 @@ describe.skipIf(!mac)("setup.sh / uninstall.sh: PATH and the port check", () => 
     expect(existsSync(join(home, ".bash_profile"))).toBe(false);
   });
   test("a listener on the port: setup says who holds it and stops before starting anything", async () => {
-    if (Bun.spawnSync(["which", "lsof"], { env: { PATH: process.env.PATH!, HOME: join(sandbox, "fake-home") } }).exitCode !== 0) return; // HOME: sandbox
+    const which = (t: string) => Bun.spawnSync(["which", t], { env: { PATH: process.env.PATH!, HOME: join(sandbox, "fake-home") } }).exitCode === 0; // HOME: sandbox
+    if (!which("lsof") && !which("ss")) return;
     const holder = Bun.listen({ hostname: "127.0.0.1", port: 0, socket: { data() {} } });
     try {
       const home = newHome();
@@ -412,7 +418,7 @@ describe.skipIf(!mac)("setup.sh / uninstall.sh: PATH and the port check", () => 
   }, 120_000);
 });
 
-describe.skipIf(!mac)("setup.sh: running it again does not redo what is done", () => {
+describe.skipIf(!unix)("setup.sh: running it again does not redo what is done", () => {
   const sum = (t: string) => /Program\s+(.+)\n\s*PATH\s+(.+)\n\s*Service\s+(.+)/.exec(t)?.slice(1, 4).map((x) => x.trim());
   test("same release, agent running: no download, no questions, the same agent keeps running, summary says 'already set'", async () => {
     const home = newHome();
@@ -449,7 +455,7 @@ describe.skipIf(!mac)("setup.sh: running it again does not redo what is done", (
     expect(sum(out(r3))?.[0]).toMatch(/^updated/);
     spawned.push(Number(readFileSync(pidfile, "utf8")));
   }, 150_000);
-  test("the launchd service: kept when it runs this program on this port; rewritten when the port changes", () => {
+  test.skipIf(!mac)("the launchd service: kept when it runs this program on this port; rewritten when the port changes", () => {
     const home = newHome();
     const release = makeRelease();
     const args = ["--yes", "--no-open", "--no-start"];
@@ -634,6 +640,117 @@ describe.skipIf(!mac)("setup.sh: signature and the port of our own agent", () =>
   });
 });
 
+describe.skipIf(!unix)("uninstall.sh: the tray app's login entry", () => {
+  const entry = (home: string) => join(home, ".config", "autostart", "nookdeck-tray.desktop");
+  const put = (home: string, text: string) => { mkdirSync(join(home, ".config", "autostart"), { recursive: true }); writeFileSync(entry(home), text); };
+  test("removed when its Exec starts nookdeck-tray; a dry run only lists it", () => {
+    const home = newHome();
+    put(home, "[Desktop Entry]\nType=Application\nName=Nookdeck\nExec=/usr/bin/nookdeck-tray\nIcon=dev.nookdeck.app\n");
+    const dry = sh("uninstall.sh", ["--dry-run"], env(home, ""));
+    expect(dry.exitCode, out(dry)).toBe(0);
+    expect(out(dry)).toContain("the tray app's login entry");
+    expect(existsSync(entry(home))).toBe(true);
+    const u = sh("uninstall.sh", ["--yes"], env(home, ""));
+    expect(u.exitCode, out(u)).toBe(0);
+    expect(out(u)).toContain("removed the tray app's login entry");
+    expect(existsSync(entry(home))).toBe(false);
+  });
+  test("a file of the same name that starts something else is left alone", () => {
+    const home = newHome();
+    put(home, "[Desktop Entry]\nType=Application\nName=My script\nExec=/home/me/bin/my-script\n");
+    const u = sh("uninstall.sh", ["--yes"], env(home, ""));
+    expect(u.exitCode, out(u)).toBe(0);
+    expect(out(u)).not.toContain("tray app's login entry");
+    expect(existsSync(entry(home))).toBe(true);
+  });
+});
+
+describe.skipIf(!linux)("setup.sh / uninstall.sh on Linux", () => {
+  const flags = ["--yes", "--no-autostart", "--no-start", "--no-open"];
+  test("picks nookdeck-linux-<arch> and says Linux, never Mac", () => {
+    const r = sh("setup.sh", flags, env(newHome(), makeRelease()));
+    const text = out(r);
+    expect(r.exitCode, text).toBe(0);
+    expect(text).toContain("installer for Linux");
+    expect(text).toMatch(/Linux on (x86_64|aarch64|arm64) .*nookdeck-linux-(x64|arm64)/);
+    expect(text).not.toMatch(/\bMac\b|macOS/);
+  });
+  test("a dry run names the systemd user service", () => {
+    const r = sh("setup.sh", ["--dry-run", "--yes"], env(newHome(), makeRelease()));
+    expect(r.exitCode, out(r)).toBe(0);
+    expect(out(r)).toContain("would register the systemd user service nookdeck.service");
+  });
+  test("bash: the PATH line goes into ~/.bashrc (what a terminal window reads), and uninstall takes it out again", () => {
+    const home = newHome();
+    const e = env(home, makeRelease(), { SHELL: "/bin/bash" });
+    const r = sh("setup.sh", flags, e);
+    expect(r.exitCode, out(r)).toBe(0);
+    expect(readFileSync(join(home, ".bashrc"), "utf8")).toContain('.nookdeck/bin:$PATH" # nookdeck');
+    expect(existsSync(join(home, ".bash_profile"))).toBe(false);
+    const u = sh("uninstall.sh", ["--yes"], e);
+    expect(u.exitCode, out(u)).toBe(0);
+    expect(readFileSync(join(home, ".bashrc"), "utf8")).not.toContain(".nookdeck/bin");
+  });
+  test("program gone, no systemd: the agent the autostart entry started is stopped (only if /proc says it is ours), autostart.sh goes", async () => {
+    const home = newHome();
+    const data = join(home, ".nookdeck"), bin = join(data, "bin", "nookdeck"), autoDir = join(home, ".config", "autostart");
+    mkdirSync(data, { recursive: true }); mkdirSync(autoDir, { recursive: true });
+    writeFileSync(join(autoDir, "nookdeck.desktop"), "[Desktop Entry]\nExec=/bin/sh " + join(data, "autostart.sh") + "\n");
+    writeFileSync(join(data, "autostart.sh"), "#!/bin/sh\nexec env '" + bin + "'\n");
+    // stands in for the agent: its command line is the (now deleted) program
+    const agent = Bun.spawn(["bash", "-c", `exec -a "${bin}" sleep 60`]);
+    // a stale pid file must never kill a stranger
+    const stranger = Bun.spawn(["sleep", "60"]);
+    try {
+      await Bun.sleep(200);
+      writeFileSync(join(data, "service.pid"), `${agent.pid}\n`);
+      const u = sh("uninstall.sh", ["--yes"], env(home, ""));
+      expect(u.exitCode, out(u)).toBe(0);
+      expect(out(u)).toContain(`stopped the agent started at login (pid ${agent.pid})`);
+      expect(await Promise.race([agent.exited.then(() => "gone"), Bun.sleep(3000).then(() => "alive")])).toBe("gone");
+      for (const f of [join(data, "autostart.sh"), join(data, "service.pid"), join(autoDir, "nookdeck.desktop")]) expect(existsSync(f)).toBe(false);
+
+      const home2 = newHome();
+      mkdirSync(join(home2, ".nookdeck"), { recursive: true });
+      writeFileSync(join(home2, ".nookdeck", "service.pid"), `${stranger.pid}\n`);
+      const u2 = sh("uninstall.sh", ["--yes"], env(home2, ""));
+      expect(u2.exitCode, out(u2)).toBe(0);
+      expect(out(u2)).not.toContain("stopped the agent started at login");
+      expect(stranger.exitCode).toBeNull();
+      expect(existsSync(join(home2, ".nookdeck", "service.pid"))).toBe(false);
+    } finally { agent.kill(); stranger.kill(); }
+  });
+  test("uninstall with the program already gone stops and removes the unit and the autostart entry", () => {
+    const home = newHome();
+    const unitDir = join(home, ".config", "systemd", "user"), autoDir = join(home, ".config", "autostart");
+    mkdirSync(unitDir, { recursive: true }); mkdirSync(autoDir, { recursive: true });
+    writeFileSync(join(unitDir, "nookdeck.service"), "[Service]\nExecStart=/x/nookdeck\n");
+    writeFileSync(join(autoDir, "nookdeck.desktop"), "[Desktop Entry]\n");
+    mkdirSync(join(home, ".nookdeck"), { recursive: true });
+    const log = join(home, "systemctl.log");
+    writeFileSync(join(home, "sc"), `#!/bin/bash\necho "$*" >> "${log}"\n`); chmodSync(join(home, "sc"), 0o755);
+    const u = sh("uninstall.sh", ["--yes"], env(home, "", { NOOKDECK_SYSTEMCTL: join(home, "sc") }));
+    expect(u.exitCode, out(u)).toBe(0);
+    expect(out(u)).toContain("uninstaller for Linux");
+    expect(existsSync(join(unitDir, "nookdeck.service"))).toBe(false);
+    expect(existsSync(join(autoDir, "nookdeck.desktop"))).toBe(false);
+    expect(readFileSync(log, "utf8")).toContain("disable --now nookdeck.service");
+    expect(readFileSync(log, "utf8")).toContain("daemon-reload");
+  });
+});
+
+describe("setup.sh: the Linux branch (static, every system)", () => {
+  const text = readFileSync(join(root, "setup.sh"), "utf8");
+  test("Linux assets, the systemd unit, xdg-open only in a desktop session, never a bare open", () => {
+    expect(text).toContain('asset="nookdeck-linux-$want"');
+    expect(text).toContain("unit_name=nookdeck.service");
+    expect(text).toContain("systemd/user}/$unit_name");
+    expect(text).toMatch(/have xdg-open && \[ -n "\$\{DISPLAY:-\}\$\{WAYLAND_DISPLAY:-\}" \]/);
+    expect(text).not.toMatch(/\bthen open "http/);
+    expect(text).toContain('fail "this installer is for macOS and Linux only"');
+  });
+});
+
 describe("setup.ps1: the same port rule (static)", () => {
   const ps = readFileSync(join(root, "setup.ps1"), "utf8").replace(/\r\n/g, "\n");
   test("our own program on the port is stopped and the rest of setup goes on; migrate runs in two steps", () => {
@@ -644,7 +761,7 @@ describe("setup.ps1: the same port rule (static)", () => {
   });
 });
 
-describe.skipIf(!mac)("installers: the anonymous install count", () => {
+describe.skipIf(!unix)("installers: the anonymous install count", () => {
   const URL_ = "http://analytics.test/api/event";
   /** A fake `curl` first on PATH: logs each call (one line) and exits with `code`, after `sleep` seconds. */
   function fakeCurl(code = 0, sleep = 0) {
@@ -670,7 +787,7 @@ describe.skipIf(!mac)("installers: the anonymous install count", () => {
     expect(out(r)).toContain("Sends an anonymous install count to nookdeck.app (opt out: NOOKDECK_NO_ANALYTICS=1)");
     await waitFor(c.log, 2);
     const [a, b] = bodies(c.log);
-    expect(a).toMatchObject({ name: "install_started", os: "macos", installer: "setup.sh" });
+    expect(a).toMatchObject({ name: "install_started", os: mac ? "macos" : "linux", installer: "setup.sh" });
     expect(a!.arch).toMatch(/^(arm64|x64)$/);
     expect(a!.os_version).toMatch(/^\d+(\.\d+)*$/);
     expect(b).toMatchObject({ name: "install_finished", mode: "fresh", installer: "setup.sh" });
@@ -767,7 +884,7 @@ describe.skipIf(!mac)("installers: the anonymous install count", () => {
     const r = sh("uninstall.sh", ["--yes"], withUrl(home, "", c));
     expect(r.exitCode, out(r)).toBe(0);
     await waitFor(c.log, 1);
-    expect(bodies(c.log)[0]).toMatchObject({ name: "uninstall_finished", os: "macos", installer: "uninstall.sh" });
+    expect(bodies(c.log)[0]).toMatchObject({ name: "uninstall_finished", os: mac ? "macos" : "linux", installer: "uninstall.sh" });
   });
 });
 

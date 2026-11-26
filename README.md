@@ -10,7 +10,7 @@
   <a href="https://github.com/howznguyen/nookdeck/releases"><img alt="Release" src="https://img.shields.io/github/v/release/howznguyen/nookdeck?color=22d3ee&label=release"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-22d3ee"></a>
   <a href="https://github.com/howznguyen/nookdeck/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/howznguyen/nookdeck?style=flat&color=22d3ee"></a>
-  <img alt="macOS and Windows" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows-0b0d10">
+  <img alt="macOS, Windows and Linux" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-0b0d10">
 </p>
 
 <p align="center"><b>English</b> · <a href="README.vi.md">Tiếng Việt</a> · <a href="README.zh.md">中文</a></p>
@@ -18,6 +18,7 @@
 <p align="center">
   <a href="https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck.dmg"><b>Download for Mac</b></a> ·
   <a href="https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck-Setup.exe"><b>Windows</b></a> ·
+  <a href="https://github.com/howznguyen/nookdeck/releases/latest"><b>Linux</b></a> ·
   <a href="https://nookdeck.app/themes"><b>Live theme previews</b></a> ·
   <a href="https://nookdeck.app">nookdeck.app</a>
 </p>
@@ -26,12 +27,12 @@
   <a href="https://macgrove.app/apps/nookdeck"><img src="https://macgrove.app/badge/nookdeck.svg" alt="Featured on MacGrove" width="263" height="32" /></a>
 </p>
 
-Turn an old phone or tablet into a Stream Deck-style control panel and dashboard for your Mac or Windows PC.
+Turn an old phone or tablet into a Stream Deck-style control panel and dashboard for your Mac, Windows PC or Linux computer.
 **It runs in the phone's browser, so iPhones, iPads and Android phones all work, even an old iPhone stuck on iOS 12.**
 Nookdeck is a small agent on your computer that serves the touch panel over your Wi-Fi: no app on the phone, no
 account, no cloud.
 
-> **Status:** early (0.x). macOS is the main target, Windows is experimental. Builds are not signed with a Developer ID or notarized: see [Install](#install).
+> **Status:** early (0.x). macOS is the main target, Windows and Linux are experimental. Builds are not signed with a Developer ID or notarized: see [Install](#install).
 
 <p align="center"><img src="docs/images/demo.gif" alt="A 16-second tour with demo data: pages, AI quotas, keys, Home Assistant and a Claude Code question." width="820"></p>
 
@@ -80,7 +81,7 @@ An MCP server lets an AI assistant arrange the layout for you. Runs on macOS, an
 
 ## Install
 
-You need a **Mac** (macOS 13 or later) or a **Windows 10/11 PC**, and a **phone or tablet on the same Wi-Fi**. Nothing
+You need a **Mac** (macOS 13 or later), a **Windows 10/11 PC** or a **Linux computer** ([experimental](docs/install.md#on-linux-experimental)), and a **phone or tablet on the same Wi-Fi**. Nothing
 is installed on the phone. It takes about 2 minutes.
 
 ### 1. Install on the computer
@@ -114,6 +115,27 @@ curl -fsSL https://nookdeck.app/scripts/install | bash
 ```powershell
 irm https://nookdeck.app/scripts/install.ps1 | iex
 ```
+
+**On Linux** (experimental)
+
+On Ubuntu or Debian, download `nookdeck_<version>_amd64.deb` (`_arm64.deb` on ARM) from the [latest release](https://github.com/howznguyen/nookdeck/releases/latest) and install it from the folder you saved it in:
+
+```sh
+sudo apt install ./nookdeck_*_amd64.deb
+```
+
+Then open **Nookdeck** from the app menu. On its first start the app sets Nookdeck up for your user and puts an icon in the tray. If you prefer no app, the Mac line above works on Linux too (no `sudo`):
+
+```sh
+curl -fsSL https://nookdeck.app/scripts/install | bash
+```
+
+What to know on Linux:
+
+- It is meant for Ubuntu 22.04 and 24.04 and Debian 12 and 13, on x86_64 or ARM64. Fedora (`.rpm`) is best effort.
+- Keys and typing use `xdotool` on X11. On Wayland they need `ydotool` and write access to `/dev/uinput`: run `nookdeck doctor`, it shows the fix for your system.
+- Debian with GNOME shows no tray icons until you install and turn on the AppIndicator extension (`gnome-shell-extension-appindicator`), then log out and back in. Ubuntu has it on already. Everything also works from the manage page and the `nookdeck` command.
+- Other ways (`.rpm`, a tarball) and the details: [docs/install.md](docs/install.md#on-linux-experimental).
 
 Direct link, if `nookdeck.app` is blocked on your network: replace `https://nookdeck.app/scripts/install` with `https://raw.githubusercontent.com/howznguyen/nookdeck/main/setup.sh` (Windows: `https://raw.githubusercontent.com/howznguyen/nookdeck/main/setup.ps1`).
 
@@ -174,17 +196,18 @@ Coming from PhoneDesk? Nookdeck is its new name: an update moves your layout, ph
 - **Update:** run the same install line again. Your layout and paired phones are kept.
 - **Remove (Mac):** `curl -fsSL https://nookdeck.app/scripts/uninstall | bash`. Your data is kept; add `-s -- --purge` after `bash` to delete it too.
 - **Remove (Windows):** `irm https://nookdeck.app/scripts/uninstall.ps1 | iex`.
+- **Remove (Linux):** the same line as on a Mac. If you installed the `.deb`, also run `sudo apt remove nookdeck`.
 
 <details>
 <summary>More installer options and details</summary>
 
 - The installer downloads the right file from the [latest release](https://github.com/howznguyen/nookdeck/releases/latest), checks
   its SHA-256 against `SHA256SUMS` and refuses on a mismatch, installs it for your user only (no `sudo`, no
-  administrator), starts it at sign-in (a launchd agent on macOS, a Task Scheduler task on Windows) and adds it to your PATH.
+  administrator), starts it at sign-in (a launchd agent on macOS, a Task Scheduler task on Windows, a systemd user service on Linux) and adds it to your PATH.
 - Mac options go after `bash -s --`: `--yes` (no questions), `--version 0.1.1`, `--port 7421`, `--no-autostart`,
   `--no-open`, `--no-path`, `--dry-run`. On Windows set environment variables before the line, for example
   `$env:NOOKDECK_PORT=7421; irm … | iex` (see the top of [setup.ps1](setup.ps1)).
-- Files: the program is `~/.nookdeck/bin/nookdeck` on macOS and `%LOCALAPPDATA%\Nookdeck\bin\nookdeck.exe` on
+- Files: the program is `~/.nookdeck/bin/nookdeck` on macOS and Linux, and `%LOCALAPPDATA%\Nookdeck\bin\nookdeck.exe` on
   Windows; your data is in `~/.nookdeck`; logs are in `~/.nookdeck/logs`.
 - Background service: `nookdeck service install|uninstall|status|restart`.
 - Signing: the binaries are signed ad hoc, not with an Apple Developer ID or a Windows certificate. The installers handle
@@ -208,7 +231,7 @@ Coming from PhoneDesk? Nookdeck is its new name: an update moves your layout, ph
 
 ## Install from source
 
-Requirements: macOS 13+ (Apple silicon or Intel), or Windows 10/11 x64 (experimental). Linux is not tested yet.
+Requirements: macOS 13+ (Apple silicon or Intel), Windows 10/11 x64 (experimental) or Linux x86_64/ARM64 (experimental).
 
 From source (needs [Bun](https://bun.sh) 1.3+):
 
@@ -270,6 +293,15 @@ Updates are ad-hoc signed, so macOS may ask again after an update: remove the ol
 | PowerShell helper | Now Playing, volume, app icons and the process list use a small Windows PowerShell 5.1 helper |
 | SmartScreen | A downloaded `nookdeck.exe` carrying the internet mark triggers warnings; the installer removes it |
 
+**On Linux** (experimental) there are no permission prompts. `nookdeck doctor` checks the tools Nookdeck calls and prints the command that fixes each one; it never changes your system by itself:
+
+| Check | Why it matters |
+|---|---|
+| Service | Nookdeck runs as a systemd user service (`nookdeck service status`, logs in `~/.nookdeck/logs`), or from an autostart entry where there is no systemd user session |
+| Keys and typing | X11: `xdotool`. Wayland: `ydotool` (version 1.x also needs `ydotoold` running) and write access to `/dev/uinput`, through the `input` group or a udev rule |
+| Media and volume | Now Playing uses `playerctl`, volume uses `pactl` (`pulseaudio-utils`, also works with PipeWire) |
+| Firewall | When `ufw` is active, the phone cannot connect until the port is allowed: doctor shows the `sudo ufw allow` line |
+
 ## AI layout assistant (MCP)
 
 Nookdeck ships an MCP server, so Claude Code (or any MCP client) can arrange your deck in plain language: "add a page with my dev tools", "put Spotify next to the clock". It talks to the running agent, so start Nookdeck first.
@@ -278,7 +310,7 @@ Register it once, with the path the installer used:
 
 | Installed with | Command |
 |---|---|
-| `setup.sh` (macOS) | `claude mcp add nookdeck -- ~/.nookdeck/bin/nookdeck mcp` |
+| `setup.sh` (macOS, Linux) | `claude mcp add nookdeck -- ~/.nookdeck/bin/nookdeck mcp` |
 | `setup.ps1` (Windows) | `claude mcp add nookdeck -- "%LOCALAPPDATA%\Nookdeck\bin\nookdeck.exe" mcp` |
 | Built from source | `claude mcp add nookdeck -- /full/path/to/dist/nookdeck mcp` |
 

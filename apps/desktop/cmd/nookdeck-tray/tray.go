@@ -1,0 +1,417 @@
+//go:build windows || linux
+
+// Nookdeck in the tray, for Windows and Linux: an app that controls the Nookdeck agent (specs desktop-apps A1-A7, linux-support
+// L6-L9). The agent keeps running as its per-user service (a scheduled task, a systemd user unit or an autostart entry), so quitting
+// this app never stops the phone panel. This file is the part both systems share; main_<os>.go and sys_<os>.go are the rest.
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"fyne.io/systray"
+	"github.com/howznguyen/nookdeck/apps/desktop/internal/core"
+)
+
+var version = "dev"
+
+var (
+	lang   string
+	logMu  sync.Mutex
+	logOut *os.File
+)
+
+func logf(format string, args ...any) {
+	logMu.Lock()
+	defer logMu.Unlock()
+	if logOut != nil {
+		fmt.Fprintf(logOut, time.Now().Format("2006-01-02 15:04:05 ")+format+"\n", args...)
+	}
+}
+
+func openLog() {
+	p := filepath.Join(paths().SvcDir(), "tray.log")
+	os.MkdirAll(filepath.Dir(p), 0o755)
+	if st, err := os.Stat(p); err == nil && st.Size() > 256<<10 {
+		os.Remove(p)
+	}
+	logOut, _ = os.OpenFile(p, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+}
+
+// setupOnce installs or adopts the agent (A2), then runs the system's own follow-up (Windows: the firewall rule). It returns the
+// exit code for --setup.
+func setupOnce(tray bool) int {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	res := core.EnsureAgent(ctx, paths(), bundledAgent(), ops())
+	logf("setup: %s exe=%s port=%d version=%q err=%v", res.Action, res.Exe, res.Port, strings.TrimSpace(res.Version), res.Err)
+	if res.Err != nil {
+		if !tray {
+			messageBox(core.T(lang, "app.name"), core.T(lang, "error.setupFailed", "error", res.Err.Error()), false)
+		}
+		return 1
+	}
+	afterSetup(ctx, res.Exe)
+	state.mu.Lock()
+	state.exe, state.port = res.Exe, res.Port
+	state.mu.Unlock()
+	return 0
+}
+
+// ---------- state shared between the poller and the menu ----------
+
+var state struct {
+	mu        sync.Mutex
+	exe       string
+	port      int
+	phones    int
+	st        core.State
+	busy      string // a status key while Start/Stop/Restart/setup run
+	update    core.Update
+	checking  bool
+	unreach   bool
+}
+
+func client() *core.Client {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if state.port == 0 {
+		state.port = 7420
+	}
+	return core.NewClient(state.port)
+}
+
+func agentExe() string {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if state.exe == "" {
+		state.exe = paths().Exe()
+	}
+	return state.exe
+}
+
+func manageURL() string { return client().ManageURL() }
+
+// ---------- the menu (A6) ----------
+
+var (
+	mStatus, mPhones, mPair, mManage, mToggle, mRestart, mUpdate, mUpdateNow, mLogin *systray.MenuItem
+	mHelp, mDoctor, mLogs, mDocs, mSite, mVersion, mQuit                           *systray.MenuItem
+	mStar, mKofi                                                                   *systray.MenuItem
+	pair                                                                           *core.PairServer
+)
+
+func t(key string, vars ...string) string { return core.T(lang, key, vars...) }
+
+func onReady() {
+	state.st = core.StateStopped
+	systray.SetIcon(icon(core.StateStopped))
+	systray.SetTooltip(t("tray.tooltip.stopped"))
+	mStatus = systray.AddMenuItem(t("status.settingUp"), "")
+	mStatus.Disable()
+	mPhones = systray.AddMenuItem(core.Phones(lang, 0), "")
+	mPhones.Disable()
+	systray.AddSeparator()
+	mPair = systray.AddMenuItem(t("menu.pair"), "")
+	mManage = systray.AddMenuItem(t("menu.openManage"), "")
+	systray.AddSeparator()
+	mToggle = systray.AddMenuItem(t("menu.stop"), "")
+	mRestart = systray.AddMenuItem(t("menu.restart"), "")
+	systray.AddSeparator()
+	mUpdate = systray.AddMenuItem(t("menu.checkUpdates"), "")
+	mUpdateNow = systray.AddMenuItem(t("menu.updateNow"), "")
+	mUpdateNow.Hide()
+	mLogin = systray.AddMenuItemCheckbox(t("menu.openAtLogin"), "", loginItemEnabled())
+	mHelp = systray.AddMenuItem(t("menu.help"), "")
+	mDoctor = mHelp.AddSubMenuItem(t("menu.help.permissions"), "")
+	mLogs = mHelp.AddSubMenuItem(t("menu.help.logs"), "")
+	mDocs = mHelp.AddSubMenuItem(t("menu.help.docs"), "")
+	mSite = mHelp.AddSubMenuItem(t("menu.help.website"), "")
+	systray.AddSeparator()
+	mStar = systray.AddMenuItem(t("menu.star"), "")
+	mKofi = systray.AddMenuItem(t("menu.kofi"), "")
+	systray.AddSeparator()
+	mVersion = systray.AddMenuItem(t("menu.version", "version", version), "")
+	mVersion.Disable()
+	mQuit = systray.AddMenuItem(t("menu.quit"), t("menu.quit.hint"))
+
+	go func() { // install or adopt first, then poll
+		setBusy("status.settingUp")
+		if setupOnce(true) != 0 {
+			notice(t("error.setupFailed", "error", "see tray.log"))
+		}
+		setBusy("")
+		close(agentReady)
+		poll()
+		tick := time.NewTicker(5 * time.Second)
+		for range tick.C {
+			poll()
+		}
+	}()
+	go func() {
+		for {
+			select {
+			case <-mPair.ClickedCh:
+				go openPair()
+			case <-mManage.ClickedCh:
+				openURL(manageURL())
+			case <-mToggle.ClickedCh:
+				go toggle()
+			case <-mRestart.ClickedCh:
+				go control("restart", "status.restarting", "error.restartFailed")
+			case <-mUpdate.ClickedCh:
+				go checkUpdate(true)
+			case <-mUpdateNow.ClickedCh:
+				go updateNow()
+			case <-mLogin.ClickedCh:
+				on := !mLogin.Checked()
+				if err := setLoginItem(on); err != nil {
+					notice(t("error.loginItemFailed", "error", err.Error()))
+				} else if on {
+					mLogin.Check()
+				} else {
+					mLogin.Uncheck()
+				}
+			case <-mDoctor.ClickedCh:
+				openDoctor()
+			case <-mLogs.ClickedCh:
+				openFolder(paths().LogDir())
+			case <-mDocs.ClickedCh:
+				openURL("https://github.com/howznguyen/nookdeck#readme")
+			case <-mSite.ClickedCh:
+				openURL("https://nookdeck.app")
+			case <-mStar.ClickedCh:
+				openURL("https://github.com/howznguyen/nookdeck")
+			case <-mKofi.ClickedCh:
+				openURL("https://ko-fi.com/howznguyen")
+			case <-mQuit.ClickedCh:
+				if pair != nil {
+					pair.Close()
+				}
+				systray.Quit()
+				return
+			}
+		}
+	}()
+	go func() { time.Sleep(20 * time.Second); checkUpdate(false); for range time.Tick(6 * time.Hour) { checkUpdate(false) } }()
+	platformReady()
+}
+
+func notice(text string) { logf("notice: %s", text); go messageBox(t("app.name"), text, false) }
+
+func setBusy(key string) {
+	state.mu.Lock()
+	state.busy = key
+	state.mu.Unlock()
+	render()
+}
+
+// poll asks the agent (cheap: the device list) and the Task Scheduler only when the agent does not answer.
+func poll() {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	c := client()
+	ds, err := c.Devices(ctx)
+	reachable := err == nil
+	var doc *core.Doctor
+	if reachable {
+		if d, err := c.Doctor(ctx); err == nil {
+			doc = &d
+		}
+	}
+	running := false
+	if !reachable {
+		running = serviceRunning(ctx)
+	}
+	state.mu.Lock()
+	state.st = core.StateOf(reachable, running, doc)
+	state.unreach = !reachable
+	state.phones = core.Online(ds)
+	state.mu.Unlock()
+	render()
+}
+
+// render shows the state: tray icon and tooltip, the status line, the phone count and the labels of Start/Stop.
+func render() {
+	state.mu.Lock()
+	st, phones, busy, up, unreach := state.st, state.phones, state.busy, state.update, state.unreach
+	state.mu.Unlock()
+	if mStatus == nil {
+		return
+	}
+	line := map[core.State]string{core.StateRunning: "status.running", core.StateStopped: "status.stopped", core.StateAttention: "status.needsPermission"}[st]
+	if st == core.StateAttention && unreach {
+		line = "status.unreachable" // the task runs but nothing answers: starting up or crashed
+	}
+	if busy != "" {
+		line = busy
+	}
+	mStatus.SetTitle("● " + t(line))
+	systray.SetIcon(icon(st))
+	systray.SetTooltip(t("tray.tooltip." + string(st)))
+	mPhones.SetTitle(core.Phones(lang, phones))
+	if st == core.StateStopped {
+		mToggle.SetTitle(t("menu.start"))
+		mRestart.Disable()
+	} else {
+		mToggle.SetTitle(t("menu.stop"))
+		mRestart.Enable()
+	}
+	if busy != "" {
+		mToggle.Disable()
+		mRestart.Disable()
+	} else {
+		mToggle.Enable()
+	}
+	if up.Available && up.Latest != nil {
+		mUpdate.SetTitle(t("menu.updateAvailable", "version", *up.Latest))
+		mUpdateNow.SetTitle(t("menu.installUpdate", "version", *up.Latest))
+		mUpdateNow.Show()
+	}
+}
+
+func toggle() {
+	state.mu.Lock()
+	stopped := state.st == core.StateStopped
+	state.mu.Unlock()
+	if stopped {
+		control("start", "status.starting", "error.startFailed")
+	} else {
+		control("stop", "status.stopping", "error.stopFailed")
+	}
+}
+
+// control runs `nookdeck service <verb>`; Start/Stop/Restart are the agent's own commands, the same as in a terminal.
+func control(verb, busyKey, errKey string) {
+	setBusy(busyKey)
+	defer func() { setBusy(""); poll() }()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if out, code := run(ctx, agentExe(), "service", verb); code != 0 {
+		// an agent from before start/stop existed: do it through the system (Task Scheduler, systemctl)
+		switch verb {
+		case "stop":
+			stopService(ctx, agentExe())
+			return
+		case "start":
+			if startService(ctx) {
+				return
+			}
+		}
+		notice(t(errKey, "error", strings.TrimSpace(out)))
+	}
+}
+
+// agentReady is closed once the first setup (install, update or adopt) has finished, whatever its result.
+var agentReady = make(chan struct{})
+
+var pairMu sync.Mutex
+
+// pairServer starts the local page server (pairing, and on Linux the "turn the tray on" page) once.
+func pairServer() (*core.PairServer, error) {
+	pairMu.Lock()
+	defer pairMu.Unlock()
+	if pair == nil {
+		p, err := core.StartPairServer(client(), lang)
+		if err != nil {
+			return nil, err
+		}
+		configurePair(p)
+		p.OnUpdateChoice = updateChoice
+		pair = p
+	}
+	return pair, nil
+}
+
+func openPair() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	state.mu.Lock()
+	stopped := state.st == core.StateStopped
+	state.mu.Unlock()
+	if stopped {
+		notice(t("pair.notRunning"))
+		return
+	}
+	if _, err := pairServer(); err != nil {
+		notice(t("error.generic", "error", err.Error()))
+		return
+	}
+	go beforePair(ctx)
+	openAppWindow(pair.URL(), 460, 760)
+}
+
+func checkUpdate(user bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if user {
+		mUpdate.SetTitle(t("menu.checking"))
+	}
+	u, err := client().Update(ctx, user)
+	if err != nil || u.Error != "" {
+		if user {
+			mUpdate.SetTitle(t("menu.checkUpdates"))
+			notice(t("error.updateCheckFailed"))
+		}
+		return
+	}
+	state.mu.Lock()
+	state.update = u
+	state.mu.Unlock()
+	if u.Available {
+		render()
+		if u.Latest != nil && updateAsk().ShouldAsk(*u.Latest, user) {
+			showUpdate(u)
+		}
+		return
+	}
+	mUpdateNow.Hide()
+	if user {
+		notice(t("menu.upToDate", "version", u.Current))
+	}
+	mUpdate.SetTitle(t("menu.checkUpdates"))
+}
+
+
+var (
+	askOnce sync.Once
+	asker   *core.UpdateAsk
+)
+
+// updateAsk remembers which versions were asked about in this run, and the skipped one (in ~/.nookdeck).
+func updateAsk() *core.UpdateAsk {
+	askOnce.Do(func() { asker = &core.UpdateAsk{SkipFile: filepath.Join(paths().DataDir(), "tray-update-skip")} })
+	return asker
+}
+
+// showUpdate opens the "new version" window: Install and restart, Later, Skip this version. An install that cannot replace itself
+// (selfUpdate) offers the download page instead.
+func showUpdate(u core.Update) {
+	p, err := pairServer()
+	if err != nil {
+		logf("update window: %v", err)
+		return
+	}
+	ok, where := selfUpdate()
+	logf("update %s available: asking (self-update %v)", *u.Latest, ok)
+	openAppWindow(p.ShowUpdate(core.UpdateDialog{Version: *u.Latest, Current: u.Current, Manual: !ok, Path: where}), 540, 300)
+}
+
+func updateChoice(v, choice string) {
+	logf("update %s: %s", v, choice)
+	switch choice {
+	case "install":
+		updateNow()
+	case "download":
+		openURL(core.ReleasePage(v))
+	case "skip":
+		if err := updateAsk().Skip(v); err != nil {
+			logf("skip %s: %v", v, err)
+		}
+	}
+}

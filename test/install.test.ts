@@ -79,7 +79,7 @@ describe("nookdeck install", () => {
     expect(readFileSync(r.stable, "utf8")).toBe("bin-0.3.0");
   });
 
-  test("the stable copy itself, a custom port, a failing step, a source run and Linux", async () => {
+  test("the stable copy itself, a custom port, a failing step, a source run and another OS", async () => {
     // running from the stable path: no copy, still migrate + service install
     const home = tmp();
     const stable = stablePath({ platform: "darwin", home });
@@ -92,11 +92,22 @@ describe("nookdeck install", () => {
     // a failing service install is an error with the program's own words
     const bad = deps({ run: async (argv) => (argv.includes("service") ? { code: 1, out: "launchctl bootstrap failed" } : { code: 0, out: "" }) });
     await expect(runInstall(bad.d, { yes: true })).rejects.toThrow("service install failed (1): launchctl bootstrap failed");
-    // from source / on Linux: refused, nothing written
+    // from source / on an OS without a service: refused, nothing written
     const src = deps({ execPath: "/Users/me/.bun/bin/bun" });
     expect((await runInstall(src.d, { yes: true })).status).toBe("refused");
     expect(existsSync(join(src.home, ".nookdeck"))).toBe(false);
-    expect((await runInstall(deps({ platform: "linux" }).d, { yes: true })).status).toBe("refused");
+    expect((await runInstall(deps({ platform: "freebsd" }).d, { yes: true })).status).toBe("refused");
+  });
+
+  test("Linux: the same stable place as macOS, then migrate and service install from it", async () => {
+    const dl = join(tmp(), "nookdeck-linux-x64");
+    writeFileSync(dl, "bin-0.3.1");
+    chmodSync(dl, 0o755);
+    const { d, home, runs } = deps({ platform: "linux", execPath: dl });
+    const r = await runInstall(d, { yes: true });
+    const stable = join(home, ".nookdeck", "bin", "nookdeck");
+    expect(r).toEqual({ status: "installed", stable });
+    expect(runs).toEqual([[stable, "migrate", "--no-service"], [stable, "service", "install"]]);
   });
 
   test("asks on a terminal unless --yes; 'no' changes nothing", async () => {

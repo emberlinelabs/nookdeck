@@ -51,3 +51,16 @@ magick "$tmp/16.png" "$tmp/24.png" "$tmp/32.png" "$tmp/48.png" "$tmp/64.png" "$t
 rm -rf "$tmp"
 rsvg-convert -w 512 -h 512 src/app-icon-win.svg -o app-512.png
 echo "icons built"
+
+# ---- Linux (apps/desktop on Linux, and the .deb/.rpm: hicolor/<N>x<N>/apps/dev.nookdeck.app.png and scalable/apps/dev.nookdeck.app.svg) ----
+# The app icon at the hicolor sizes, plus the SVG. The tray state icons are PNG per size, embedded in the tray app: "light" = for
+# a light panel (dark glyph), "dark" = for a dark panel (white glyph, GNOME's top bar).
+mkdir -p linux
+for n in 22 24 32 48 64 128 256; do rsvg-convert -w $n -h $n src/app-icon.svg -o "linux/app-$n.png"; done
+cp src/app-icon.svg linux/app.svg
+for s in running stopped attention; do
+  for n in 22 24 32 48; do
+    rsvg-convert -w $n -h $n "src/glyph-$s-black.svg" -o "linux/tray-light-$s-$n.png"
+    rsvg-convert -w $n -h $n "src/glyph-$s-white.svg" -o "linux/tray-dark-$s-$n.png"
+  done
+done

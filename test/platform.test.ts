@@ -466,7 +466,7 @@ describe("win32 service (Task Scheduler)", () => {
     expect(st).toMatchObject({ installed: true, running: false, plist: r.plist });
     expect(S.formatStatus(st)).toContain("Launcher: ");
     await S.serviceUninstall(deps);
-    await expect(S.serviceInstall({ ...deps, platform: "linux" })).rejects.toThrow("only available on macOS and Windows");
+    await expect(S.serviceInstall({ ...deps, platform: "freebsd" })).rejects.toThrow("only available on macOS, Windows and Linux");
   });
 });
 

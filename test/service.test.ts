@@ -161,8 +161,8 @@ describe("service commands (launchctl faked)", () => {
     expect((await S.serviceUninstall(deps)).removed).toBe(false);
   });
 
-  test("not macOS: a clear error (unless NOOKDECK_LAUNCHCTL is set)", async () => {
-    await expect(S.serviceInstall(fake({ platform: "linux" }).deps)).rejects.toThrow("only available on macOS");
+  test("another OS: a clear error (unless NOOKDECK_LAUNCHCTL is set); Linux has its own tests (service-linux.test.ts)", async () => {
+    await expect(S.serviceInstall(fake({ platform: "freebsd" }).deps)).rejects.toThrow("only available on macOS, Windows and Linux");
   });
 });
 
@@ -175,7 +175,8 @@ describe.skipIf(WIN)("the real CLI with NOOKDECK_LAUNCHCTL=echo", () => {
     const v = JSON.parse(readFileSync(join(import.meta.dir, "..", "package.json"), "utf8")).version;
     expect(r.stdout.toString().trim()).toMatch(new RegExp(`^nookdeck ${v.replace(/\\./g, "\\\\.")}( \\([0-9a-f]+(-dirty)?\\))?$`));
   });
-  test("service install / status / restart / uninstall", () => {
+  // launchd only: on Linux the same CLI runs the systemd code (service-linux.test.ts covers it with NOOKDECK_SYSTEMCTL=echo)
+  test.skipIf(process.platform !== "darwin")("service install / status / restart / uninstall", () => {
     const dir = mkdtempSync(join(tmpdir(), "pd-cli-"));
     const env = { NOOKDECK_HOME: join(dir, "data"), NOOKDECK_LAUNCH_AGENTS_DIR: join(dir, "LA"), NOOKDECK_LAUNCHCTL: "echo", NOOKDECK_CLAUDE_DIR: join(dir, "c"), NOOKDECK_CODEX_DIR: join(dir, "x") };
     const inst = run(["service", "install", "--port", "7511"], env);
@@ -188,7 +189,7 @@ describe.skipIf(WIN)("the real CLI with NOOKDECK_LAUNCHCTL=echo", () => {
     expect(run(["service", "uninstall"], env).exitCode).toBe(0);
     expect(existsSync(plist)).toBe(false);
     expect(run(["service", "bogus"], env).exitCode).toBe(2);
-  });
+  }, 30_000); // six CLI starts: slow on a busy machine
 });
 
 describe.skipIf(WIN)("the CLI never touches the real Claude/Codex config of another instance", () => {
@@ -203,7 +204,9 @@ describe.skipIf(WIN)("the CLI never touches the real Claude/Codex config of anot
     writeFileSync(claude, JSON.stringify({ hooks: { PermissionRequest: [{ hooks: [{ type: "command", command: other, timeout: 60 }] }] } }));
     writeFileSync(codex, JSON.stringify({ hooks: { PermissionRequest: [{ hooks: [{ type: "command", command: other.replace("claude", "codex"), timeout: 60 }] }] } }));
     const bytes = [readFileSync(claude, "utf8"), readFileSync(codex, "utf8")];
-    const env: Record<string, string> = { PATH: process.env.PATH!, HOME: fakeHome, NOOKDECK_HOME: join(dir, "data"), NOOKDECK_LAUNCH_AGENTS_DIR: join(dir, "LA"), NOOKDECK_LAUNCHCTL: "echo" };
+    // on Linux the same command is the systemd one: a fake systemctl and its own unit and autostart folders, never the real user manager
+    const env: Record<string, string> = { PATH: process.env.PATH!, HOME: fakeHome, NOOKDECK_HOME: join(dir, "data"), NOOKDECK_LAUNCH_AGENTS_DIR: join(dir, "LA"), NOOKDECK_LAUNCHCTL: "echo",
+      NOOKDECK_SYSTEMCTL: "echo", NOOKDECK_SYSTEMD_DIR: join(dir, "systemd-user"), NOOKDECK_AUTOSTART_DIR: join(dir, "autostart"), NOOKDECK_TEST_SANDBOX: "1" };
     const run = (args: string[]) => Bun.spawnSync(["bun", join(import.meta.dir, "..", "src", "index.ts"), ...args], { env, stdout: "pipe", stderr: "pipe" });
     const inst = run(["service", "install", "--port", "7482"]);
     expect(inst.exitCode).toBe(0);

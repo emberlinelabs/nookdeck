@@ -10,7 +10,7 @@
   <a href="https://github.com/howznguyen/nookdeck/releases"><img alt="Release" src="https://img.shields.io/github/v/release/howznguyen/nookdeck?color=22d3ee&label=release"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-22d3ee"></a>
   <a href="https://github.com/howznguyen/nookdeck/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/howznguyen/nookdeck?style=flat&color=22d3ee"></a>
-  <img alt="macOS and Windows" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows-0b0d10">
+  <img alt="macOS、Windows 和 Linux" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-0b0d10">
 </p>
 
 <p align="center"><a href="README.md">English</a> · <a href="README.vi.md">Tiếng Việt</a> · <b>中文</b></p>
@@ -18,6 +18,7 @@
 <p align="center">
   <a href="https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck.dmg"><b>下载 Mac 版</b></a> ·
   <a href="https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck-Setup.exe"><b>Windows</b></a> ·
+  <a href="https://github.com/howznguyen/nookdeck/releases/latest"><b>Linux</b></a> ·
   <a href="https://nookdeck.app/zh/themes"><b>在线预览主题</b></a> ·
   <a href="https://nookdeck.app/zh">nookdeck.app</a>
 </p>
@@ -26,11 +27,11 @@
   <a href="https://macgrove.app/apps/nookdeck"><img src="https://macgrove.app/badge/nookdeck.svg" alt="Featured on MacGrove" width="263" height="32" /></a>
 </p>
 
-把旧手机或平板变成 Stream Deck 风格的控制面板和仪表盘，用来控制你的 Mac 或 Windows 电脑。
+把旧手机或平板变成 Stream Deck 风格的控制面板和仪表盘，用来控制你的 Mac、Windows 或 Linux 电脑。
 **它运行在手机浏览器里，所以 iPhone、iPad 和 Android 都能用，连停留在 iOS 12 的旧 iPhone 也可以。**
 Nookdeck 是电脑上的一个小型 agent，通过 Wi-Fi 提供触控面板：手机上无需安装 app，不需要账号，也不用云服务。
 
-> **状态：** 早期版本（0.x）。macOS 是主要目标平台，Windows 为实验性支持。安装包没有使用 Developer ID 签名，也没有经过公证：见[安装](#安装)。
+> **状态：** 早期版本（0.x）。macOS 是主要目标平台，Windows 和 Linux 为实验性支持。安装包没有使用 Developer ID 签名，也没有经过公证：见[安装](#安装)。
 
 <p align="center"><img src="docs/images/demo.gif" alt="16 秒演示（演示数据）：页面、AI 额度、按键、Home Assistant 和一个 Claude Code 提问。" width="820"></p>
 
@@ -79,7 +80,7 @@ Nookdeck 是电脑上的一个小型 agent，通过 Wi-Fi 提供触控面板：�
 
 ## 安装
 
-你需要一台 **Mac**（macOS 13 或更高版本）或 **Windows 10/11 电脑**，以及一台连接**同一 Wi-Fi 的手机或平板**。手机上不需要安装任何东西。大约需要 2 分钟。
+你需要一台 **Mac**（macOS 13 或更高版本）、**Windows 10/11 电脑**或 **Linux 电脑**（[实验性](docs/install.md#on-linux-experimental)），以及一台连接**同一 Wi-Fi 的手机或平板**。手机上不需要安装任何东西。大约需要 2 分钟。
 
 ### 1. 在电脑上安装
 
@@ -112,6 +113,27 @@ curl -fsSL https://nookdeck.app/scripts/install | bash
 ```powershell
 irm https://nookdeck.app/scripts/install.ps1 | iex
 ```
+
+**在 Linux 上**（实验性）
+
+在 Ubuntu 或 Debian 上，从[最新发布版](https://github.com/howznguyen/nookdeck/releases/latest)下载 `nookdeck_<版本号>_amd64.deb`（ARM 机器下载 `_arm64.deb`），然后在文件所在目录安装：
+
+```sh
+sudo apt install ./nookdeck_*_amd64.deb
+```
+
+之后从应用菜单打开 **Nookdeck**。第一次启动时，应用会为当前用户安装好 Nookdeck，并在系统托盘显示图标。如果不想用应用，上面 Mac 的那行命令在 Linux 上同样可用（不需要 `sudo`）：
+
+```sh
+curl -fsSL https://nookdeck.app/scripts/install | bash
+```
+
+Linux 上需要注意：
+
+- 面向 Ubuntu 22.04、24.04 和 Debian 12、13，x86_64 或 ARM64 机器。Fedora（`.rpm` 包）只尽力支持。
+- 在 X11 上，按键和输入文字通过 `xdotool` 实现。在 Wayland 上需要 `ydotool`，并且要能写入 `/dev/uinput`：运行 `nookdeck doctor`，它会给出适合你系统的修复命令。
+- 使用 GNOME 的 Debian 默认不显示托盘图标，需要安装并启用 AppIndicator 扩展（`gnome-shell-extension-appindicator`），然后注销再重新登录。Ubuntu 已默认启用。所有功能也都可以通过管理页面和 `nookdeck` 命令使用。
+- 其他安装方式（`.rpm`、tarball 压缩包）和详细说明：[docs/install.md](docs/install.md#on-linux-experimental)。
 
 直接链接，如果你的网络无法访问 `nookdeck.app`：把 `https://nookdeck.app/scripts/install` 换成 `https://raw.githubusercontent.com/howznguyen/nookdeck/main/setup.sh`（Windows：`https://raw.githubusercontent.com/howznguyen/nookdeck/main/setup.ps1`）。
 
@@ -169,13 +191,14 @@ irm https://nookdeck.app/scripts/install.ps1 | iex
 - **更新：** 再运行一遍同样的安装命令。你的布局和已配对的手机会保留。
 - **卸载（Mac）：** `curl -fsSL https://nookdeck.app/scripts/uninstall | bash`。数据会保留；在 `bash` 后加上 `-s -- --purge` 可一并删除。
 - **卸载（Windows）：** `irm https://nookdeck.app/scripts/uninstall.ps1 | iex`。
+- **卸载（Linux）：** 使用和 Mac 相同的命令。如果安装过 `.deb` 包，再运行 `sudo apt remove nookdeck`。
 
 <details>
 <summary>更多安装选项和细节</summary>
 
-- 安装程序会从[最新发布版](https://github.com/howznguyen/nookdeck/releases/latest)下载对应文件，用 `SHA256SUMS` 校验其 SHA-256，不一致就拒绝安装；只为当前用户安装（不需要 `sudo` 或管理员权限），登录时自动启动（macOS 使用 launchd agent，Windows 使用任务计划程序任务），并加入你的 PATH。
+- 安装程序会从[最新发布版](https://github.com/howznguyen/nookdeck/releases/latest)下载对应文件，用 `SHA256SUMS` 校验其 SHA-256，不一致就拒绝安装；只为当前用户安装（不需要 `sudo` 或管理员权限），登录时自动启动（macOS 使用 launchd agent，Windows 使用任务计划程序任务，Linux 使用 systemd 用户服务），并加入你的 PATH。
 - Mac 选项写在 `bash -s --` 之后：`--yes`（不提问）、`--version 0.1.1`、`--port 7421`、`--no-autostart`、`--no-open`、`--no-path`、`--dry-run`。在 Windows 上，在命令前设置环境变量，例如 `$env:NOOKDECK_PORT=7421; irm … | iex`（见 [setup.ps1](setup.ps1) 顶部）。
-- 文件：程序在 macOS 上是 `~/.nookdeck/bin/nookdeck`，在 Windows 上是 `%LOCALAPPDATA%\Nookdeck\bin\nookdeck.exe`；数据在 `~/.nookdeck`；日志在 `~/.nookdeck/logs`。
+- 文件：程序在 macOS 和 Linux 上是 `~/.nookdeck/bin/nookdeck`，在 Windows 上是 `%LOCALAPPDATA%\Nookdeck\bin\nookdeck.exe`；数据在 `~/.nookdeck`；日志在 `~/.nookdeck/logs`。
 - 后台服务：`nookdeck service install|uninstall|status|restart`。
 - 签名：二进制文件使用临时签名（ad hoc），没有 Apple Developer ID 或 Windows 证书。安装程序会处理这一点；用浏览器下载的文件在 macOS 上可能需要 `xattr -d com.apple.quarantine <file>`，在 Windows SmartScreen 中需要点击「更多信息 → 仍要运行」。
 - Windows 已知问题：输入文字的按键可能产生错误字符。打开 app、快捷键、媒体和音量功能正常。
@@ -196,7 +219,7 @@ irm https://nookdeck.app/scripts/install.ps1 | iex
 
 ## 从源码安装
 
-要求：macOS 13+（Apple silicon 或 Intel），或 Windows 10/11 x64（实验性）。Linux 尚未测试。
+要求：macOS 13+（Apple silicon 或 Intel）、Windows 10/11 x64（实验性）或 Linux x86_64/ARM64（实验性）。
 
 从源码构建（需要 [Bun](https://bun.sh) 1.3+）：
 
@@ -254,6 +277,15 @@ nookdeck doctor --request accessibility  # 让 macOS 列出 nookdeck（会显示
 | PowerShell 辅助程序 | 正在播放、音量、app 图标和进程列表使用一个小型 Windows PowerShell 5.1 辅助程序 |
 | SmartScreen | 带有互联网标记的已下载 `nookdeck.exe` 会触发警告；安装程序会移除该标记 |
 
+**在 Linux 上**（实验性）没有权限弹窗。`nookdeck doctor` 会检查 Nookdeck 用到的工具，并为每一项打印修复命令；Nookdeck 不会自己改动系统：
+
+| 检查项 | 为什么重要 |
+|---|---|
+| 后台服务 | Nookdeck 以 systemd 用户服务运行（`nookdeck service status`，日志在 `~/.nookdeck/logs`）；没有 systemd 用户会话时，改用自动启动（autostart）项 |
+| 按键和输入文字 | X11：`xdotool`。Wayland：`ydotool`（1.x 版本还需要运行 `ydotoold`），并能写入 `/dev/uinput`，可通过 `input` 用户组或 udev 规则实现 |
+| 媒体和音量 | 正在播放使用 `playerctl`，音量使用 `pactl`（`pulseaudio-utils` 包，PipeWire 下也能用） |
+| 防火墙 | `ufw` 开启时，放行端口之前手机无法连接：doctor 会给出 `sudo ufw allow` 命令 |
+
 ## AI 布局助手（MCP）
 
 Nookdeck 自带 MCP 服务器，因此 Claude Code（或任何 MCP 客户端）可以用自然语言排布你的面板：「添加一个放我开发工具的页面」、「把 Spotify 放在时钟旁边」。它与正在运行的 agent 通信，所以请先启动 Nookdeck。
@@ -262,7 +294,7 @@ Nookdeck 自带 MCP 服务器，因此 Claude Code（或任何 MCP 客户端）�
 
 | 安装方式 | 命令 |
 |---|---|
-| `setup.sh`（macOS） | `claude mcp add nookdeck -- ~/.nookdeck/bin/nookdeck mcp` |
+| `setup.sh`（macOS、Linux） | `claude mcp add nookdeck -- ~/.nookdeck/bin/nookdeck mcp` |
 | `setup.ps1`（Windows） | `claude mcp add nookdeck -- "%LOCALAPPDATA%\Nookdeck\bin\nookdeck.exe" mcp` |
 | 从源码构建 | `claude mcp add nookdeck -- /full/path/to/dist/nookdeck mcp` |
 

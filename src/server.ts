@@ -124,6 +124,8 @@ export interface StartOptions {
   sounds?: SoundLibrary;
   /** How sound player processes are started (tests: a fake; never plays audio). */
   soundSpawn?: SpawnFn;
+  /** Which player programs exist (tests: so the Linux player does not depend on paplay/aplay being installed). */
+  soundWhich?: (name: string) => string | null;
   /** tests: the MagicDNS name, the interface table and the mDNS check */
   tailnetName?: () => Promise<string | null>;
   interfaces?: () => NodeJS.Dict<import("node:os").NetworkInterfaceInfo[]>;
@@ -249,7 +251,7 @@ export async function startServer(opts: StartOptions = {}) {
   const broadcastLayout = () => { const frames = layoutFrames(layout, layoutAssets); for (const ws of sockets) { try { for (const f of frames) ws.send(f); } catch {} } };
   let catalogGz: Uint8Array | undefined;
   const sounds = opts.sounds ?? new SoundLibrary();
-  const player = new SoundPlayer({ spawn: opts.soundSpawn, onChange: (ids) => broadcast({ type: "sounds-playing", ids }) });
+  const player = new SoundPlayer({ spawn: opts.soundSpawn, which: opts.soundWhich, onChange: (ids) => broadcast({ type: "sounds-playing", ids }) });
   const history = new LayoutHistory(opts.layoutHistoryDir);
   // the layout in force is always the newest history entry (so the first undo has something to go back to)
   await history.push(layout).catch(() => {});

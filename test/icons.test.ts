@@ -54,7 +54,7 @@ describe.skipIf(WIN)("apps", () => {
   const make = () => {
     const f = fakeMac(apps as any);
     let t = 1000;
-    const icons = new Icons({ home: tmp("pd-home-"), dirs: [f.root, join(f.root, "missing")], run: f.run, now: () => t });
+    const icons = new Icons({ appCatalog: null, home: tmp("pd-home-"), dirs: [f.root, join(f.root, "missing")], run: f.run, now: () => t });
     return { ...f, icons, advance: (ms: number) => { t += ms; } };
   };
 
@@ -77,7 +77,7 @@ describe.skipIf(WIN)("apps", () => {
       "Odd.app": { CFBundleIdentifier: "com.apple.SomethingNew", CFBundleName: "Odd" },
       "Mine.app": { CFBundleIdentifier: "com.apple.mine", CFBundleName: "Mine", LSApplicationCategoryType: "public.app-category.games" },
     } as any);
-    const icons = new Icons({ home: tmp("pd-home-"), dirs: [f.root], run: f.run });
+    const icons = new Icons({ appCatalog: null, home: tmp("pd-home-"), dirs: [f.root], run: f.run });
     const by = Object.fromEntries((await icons.listApps()).map((a) => [a.bundleId, a.category]));
     expect(by).toEqual({
       "com.x.code": "public.app-category.developer-tools", "com.x.plain": null, "com.x.weird": null,
@@ -93,9 +93,9 @@ describe.skipIf(WIN)("apps", () => {
       "Dock.app": { CFBundleIdentifier: "com.apple.dock", CFBundleName: "Dock" },
       "Declared.app": { CFBundleIdentifier: "com.apple.decl", CFBundleName: "Decl", LSApplicationCategoryType: "public.app-category.games" },
     } as any);
-    const sys = new Icons({ home: tmp("pd-home-"), dirs: [f.root], systemDirs: [f.root], run: f.run });
+    const sys = new Icons({ appCatalog: null, home: tmp("pd-home-"), dirs: [f.root], systemDirs: [f.root], run: f.run });
     expect(Object.fromEntries((await sys.listApps()).map((a) => [a.bundleId, a.category]))).toEqual({ "com.apple.finder": "system", "com.apple.dock": "system", "com.apple.decl": "public.app-category.games" });
-    const normal = new Icons({ home: tmp("pd-home-"), dirs: [f.root], systemDirs: [], run: f.run });
+    const normal = new Icons({ appCatalog: null, home: tmp("pd-home-"), dirs: [f.root], systemDirs: [], run: f.run });
     expect((await normal.listApps()).find((a) => a.bundleId === "com.apple.finder")!.category).toBe("public.app-category.utilities");
     const { SYSTEM_APP_DIRS } = await import("../src/icons");
     expect(SYSTEM_APP_DIRS).toEqual(["/System/Library/CoreServices", "/System/Library/CoreServices/Applications"]);
@@ -140,7 +140,7 @@ describe.skipIf(WIN)("uploaded images", () => {
   test("PNG and JPEG are accepted, shrunk to <= 128 px, stored as <16hex>.png; get and delete", async () => {
     const f = fakeMac({}, { dims: [800, 400] });
     const home = tmp("pd-home-");
-    const icons = new Icons({ home, run: f.run });
+    const icons = new Icons({ appCatalog: null, home, run: f.run });
     const id = await icons.saveUpload(PNG);
     expect(id).toMatch(/^[0-9a-f]{16}$/);
     expect(statSync(join(home, "icons", `${id}.png`)).isFile()).toBe(true);
@@ -157,12 +157,12 @@ describe.skipIf(WIN)("uploaded images", () => {
   });
   test("small images are not enlarged", async () => {
     const f = fakeMac({}, { dims: [64, 48] });
-    await new Icons({ home: tmp("pd-home-"), run: f.run }).saveUpload(PNG);
+    await new Icons({ appCatalog: null, home: tmp("pd-home-"), run: f.run }).saveUpload(PNG);
     const convert = f.calls.filter((c) => c[0] === "sips" && c[1] !== "-g")[0]!;
     expect(convert).not.toContain("-Z");
   });
   test("rejects wrong magic bytes, empty and oversized", async () => {
-    const icons = new Icons({ home: tmp("pd-home-"), run: fakeMac({}).run });
+    const icons = new Icons({ appCatalog: null, home: tmp("pd-home-"), run: fakeMac({}).run });
     await expect(icons.saveUpload(new TextEncoder().encode("<svg onload=x>"))).rejects.toThrow("PNG or JPEG");
     await expect(icons.saveUpload(new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0, 0, 0]))).rejects.toThrow("PNG or JPEG");
     await expect(icons.saveUpload(new Uint8Array())).rejects.toThrow("empty");
@@ -173,7 +173,7 @@ describe.skipIf(WIN)("uploaded images", () => {
   });
   test("a failing sips leaves nothing behind", async () => {
     const home = tmp("pd-home-");
-    const icons = new Icons({ home, run: async () => { throw new Error("sips: boom"); } });
+    const icons = new Icons({ appCatalog: null, home, run: async () => { throw new Error("sips: boom"); } });
     await expect(icons.saveUpload(PNG)).rejects.toThrow("boom");
     const { readdirSync } = await import("node:fs");
     expect(readdirSync(join(home, "icons"))).toEqual([]);
@@ -189,7 +189,7 @@ describe.skipIf(WIN)("layout assets", () => {
 
   test("only what the phone lacks: catalog svg, app img, upload img", async () => {
     const f = fakeMac({ "Zed.app": { CFBundleIdentifier: "dev.zed.Zed", CFBundleIconFile: "app" } });
-    const icons = new Icons({ home: tmp("pd-home-"), dirs: [f.root], run: f.run, catalog: async () => catalog });
+    const icons = new Icons({ appCatalog: null, home: tmp("pd-home-"), dirs: [f.root], run: f.run, catalog: async () => catalog });
     const id = await icons.saveUpload(PNG);
     const a = await icons.layoutAssets(layoutOf(builtin, brand, alias, "zz-new-icon", "app:dev.zed.Zed", `img:${id}`, "app:com.none", "img:0123456789abcdef", "🙂", undefined, "not-anywhere"));
     expect(Object.keys(a).sort()).toEqual(["app:dev.zed.Zed", `img:${id}`, "zz-new-icon"].sort());
@@ -198,21 +198,21 @@ describe.skipIf(WIN)("layout assets", () => {
     expect(a[`img:${id}`]!.img).toBe(`data:image/png;base64,${Buffer.from(PNG).toString("base64")}`);
   });
   test("entries that only exist filled are sent as variant F", async () => {
-    const icons = new Icons({ home: tmp("pd-home-"), run: fakeMac({}).run, catalog: async () => catalog });
+    const icons = new Icons({ appCatalog: null, home: tmp("pd-home-"), run: fakeMac({}).run, catalog: async () => catalog });
     expect(await icons.layoutAssets(layoutOf("zz-filled-only"))).toEqual({ "zz-filled-only": { svg: "<path d='M2 2'/>", variant: "F" } });
   });
   test("lobe: brand marks are sent with their viewBox and brand flag", async () => {
     const cat = JSON.stringify({ icons: {}, brands: { ace: { vb: "0 0 24 24", body: "<path d='M0'/>", color: false }, rainbow: { vb: "0 0 32 32", body: "<g/>", color: true } } });
-    const icons = new Icons({ home: tmp("pd-home-"), run: fakeMac({}).run, catalog: async () => cat });
+    const icons = new Icons({ appCatalog: null, home: tmp("pd-home-"), run: fakeMac({}).run, catalog: async () => cat });
     expect(await icons.layoutAssets(layoutOf("lobe:ace", "lobe:rainbow", "lobe:nope", "lobe:BAD!"))).toEqual({
       "lobe:ace": { svg: "<path d='M0'/>", vb: "0 0 24 24", brand: true },
       "lobe:rainbow": { svg: "<g/>", vb: "0 0 32 32", brand: true, color: true },
     });
   });
   test("works without a catalog; budget skips extras and logs", async () => {
-    const none = new Icons({ home: tmp("pd-home-"), run: fakeMac({}).run });
+    const none = new Icons({ appCatalog: null, home: tmp("pd-home-"), run: fakeMac({}).run });
     expect(await none.layoutAssets(layoutOf("zz-new-icon"))).toEqual({});
-    const icons = new Icons({ home: tmp("pd-home-"), run: fakeMac({}).run, catalog: async () => JSON.stringify({ icons: { aa1: { O: "x".repeat(100) }, aa2: { O: "y".repeat(100) } } }) });
+    const icons = new Icons({ appCatalog: null, home: tmp("pd-home-"), run: fakeMac({}).run, catalog: async () => JSON.stringify({ icons: { aa1: { O: "x".repeat(100) }, aa2: { O: "y".repeat(100) } } }) });
     const warn = console.warn;
     const warned: string[] = [];
     console.warn = (m: string) => warned.push(m);

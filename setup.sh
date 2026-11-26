@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Nookdeck for macOS: one command to fetch, verify, install and start it.
+# Nookdeck for macOS and Linux: one command to fetch, verify, install and start it.
 #
 # Usage
 #   curl -fsSL https://raw.githubusercontent.com/howznguyen/nookdeck/main/setup.sh | bash
@@ -12,24 +12,33 @@
 #       --version X.Y.Z install that release, not the newest                     NOOKDECK_VERSION
 #       --force         reinstall even if this release is already in place       NOOKDECK_FORCE=1
 #       --port N        port for the agent (default 7420)
-#       --no-autostart  skip the launchd login service
+#       --no-autostart  skip the login service (launchd on macOS, systemd on Linux)
 #       --no-start      place the program only, do not launch it
 #       --no-open       do not open the manage page afterwards
 #       --no-path       leave PATH alone (default: ~/.local/bin symlink, else one
-#                       marked line in ~/.zshrc / ~/.bash_profile)
+#                       marked line in ~/.zshrc / ~/.bash_profile, ~/.bashrc on Linux)
 #       --dry-run       fetch and verify, say what would change, change nothing
 #       --no-analytics  send no anonymous install count (NOOKDECK_NO_ANALYTICS=1 or DO_NOT_TRACK=1 do the same)
 #   -h, --help          show this text
 #
 # Test hooks (not for everyday use)
-#   NOOKDECK_RELEASE_BASE   folder or URL holding nookdeck-darwin-<arch> and SHA256SUMS
+#   NOOKDECK_RELEASE_BASE   folder or URL holding nookdeck-<darwin|linux>-<arch> and SHA256SUMS
 #   NOOKDECK_INSTALL_HOME   install below this directory instead of $HOME
 #   NOOKDECK_GITHUB_URL / NOOKDECK_API_URL   point the "newest release" lookup at a local server
 #   NOOKDECK_RETRY_SECONDS  scales the pause between lookup rounds
+#   NOOKDECK_LAUNCHCTL      the launchctl to call (macOS; the tests use echo)
+#   NOOKDECK_SYSTEMCTL      the command that stands for `systemctl --user` (Linux; the tests use echo)
+#   NOOKDECK_SYSTEMD_DIR / NOOKDECK_AUTOSTART_DIR   where the Linux unit / autostart entry live
 set -euo pipefail
 
 REPO="howznguyen/nookdeck"
 STAGES=6
+# macOS and Linux share this script; every difference hangs off $os
+case "$(uname -s)" in
+  Darwin) os=darwin; os_label=macOS; machine="this Mac"; a_os=macos; curl_hint="It ships with macOS; check your PATH." ;;
+  Linux) os=linux; os_label=Linux; machine="this computer"; a_os=linux; curl_hint="Install it with your package manager (for example: sudo apt install curl)." ;;
+  *) os=other; os_label="macOS and Linux"; machine="this computer"; a_os=other; curl_hint="Install curl." ;;
+esac
 yes=0; version="${NOOKDECK_VERSION:-}"; version="${version#v}"; port=7420
 autostart=1; start=1; open_page=1; dry=0; add_path=1; force=0
 if [ "${NOOKDECK_FORCE:-}" = 1 ]; then force=1; fi
@@ -63,7 +72,7 @@ track() { # track NAME [key=value ...]
   [ "$analytics" = 1 ] || return 0
   command -v curl >/dev/null 2>&1 || return 0
   local body kv k v ev="$1"
-  body="{\"name\":\"$(a_clean "$1")\",\"os\":\"macos\",\"os_version\":\"$(a_clean "$a_osver")\",\"arch\":\"$(a_clean "$a_arch")\",\"installer\":\"${a_installer:-setup.sh}\""
+  body="{\"name\":\"$(a_clean "$1")\",\"os\":\"$a_os\",\"os_version\":\"$(a_clean "$a_osver")\",\"arch\":\"$(a_clean "$a_arch")\",\"installer\":\"${a_installer:-setup.sh}\""
   shift
   for kv in "$@"; do
     k="${kv%%=*}"; v="${kv#*=}"
@@ -85,7 +94,7 @@ reason_code() { # a short code for a failure message: never the message itself (
     *"does not run"*) echo not_runnable ;;
     *"is taken by"*) echo port_taken ;;
     *cancelled*) echo cancelled ;;
-    *"macOS-only"*) echo unsupported_os ;;
+    *"macOS-only"*|*"macOS and Linux only"*) echo unsupported_os ;;
     *root*) echo root ;;
     *) echo error ;;
   esac
@@ -98,8 +107,8 @@ fail() { # fail "what failed" ["why / what to try"]
   exit 1
 }
 banner() {
-  printf '\n%s  ╭──────╮%s\n%s  │ ◉  ▭ │%s  %sNookdeck%s\n%s  ╰──────╯%s  %sinstaller for macOS%s\n' \
-    "$C_BRAND" "$C_OFF" "$C_BRAND" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BRAND" "$C_OFF" "$C_DIM" "$C_OFF"
+  printf '\n%s  ╭──────╮%s\n%s  │ ◉  ▭ │%s  %sNookdeck%s\n%s  ╰──────╯%s  %sinstaller for %s%s\n' \
+    "$C_BRAND" "$C_OFF" "$C_BRAND" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BRAND" "$C_OFF" "$C_DIM" "$os_label" "$C_OFF"
 }
 have() { command -v "$1" >/dev/null 2>&1; }
 cleanup() { if [ -n "$tmp" ] && [ -d "$tmp" ]; then rm -rf "$tmp"; fi; }
@@ -138,7 +147,8 @@ if [ "$a_want" = 1 ] && [ "$dry" = 0 ]; then
   if [ -n "${NOOKDECK_ANALYTICS_URL:-}" ] || { [ -z "${NOOKDECK_RELEASE_BASE:-}" ] && [ -z "${NOOKDECK_INSTALL_HOME:-}" ] && [ -z "${NOOKDECK_TEST_SANDBOX:-}" ]; }; then analytics=1; fi
 fi
 if [ "$analytics" = 1 ]; then
-  a_osver="$(sw_vers -productVersion 2>/dev/null || true)"
+  if [ "$os" = linux ]; then a_osver="$(sed -n 's/^VERSION_ID="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' /etc/os-release 2>/dev/null | head -n1 || true)"
+  else a_osver="$(sw_vers -productVersion 2>/dev/null || true)"; fi
   case "$(uname -m)" in arm64|aarch64) a_arch=arm64 ;; *) a_arch=x64 ;; esac
 fi
 
@@ -189,7 +199,7 @@ http_get() { # http_get URL-OR-PATH DEST   (https only, unless the base was set 
   local src="$1" dest="$2"
   case "$src" in
     http://*|https://*)
-      have curl || fail "curl is missing" "It ships with macOS; check your PATH."
+      have curl || fail "curl is missing" "$curl_hint"
       if [ "$base_is_custom" = 1 ]; then
         curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors --proto '=http,https' -A nookdeck-setup -o "$dest" "$src" || return 1
       else
@@ -217,7 +227,7 @@ http_get_big() { # http_get_big URL-OR-PATH DEST
     http://*|https://*) ;;
     *) http_get "$src" "$dest"; return ;;
   esac
-  have curl || fail "curl is missing" "It ships with macOS; check your PATH."
+  have curl || fail "curl is missing" "$curl_hint"
   if [ -t 2 ]; then bar=--progress-bar; fi
   if [ "$base_is_custom" = 1 ]; then proto=(--proto '=http,https'); else proto=(--proto '=https' --proto-redir '=https'); fi
   while [ "$tries" -lt 5 ]; do
@@ -243,11 +253,22 @@ log_dir="$data_dir/logs"
 pidfile="$data_dir/agent.pid"
 agents_dir="${NOOKDECK_LAUNCH_AGENTS_DIR:-$home_dir/Library/LaunchAgents}"
 plist="$agents_dir/dev.nookdeck.agent.plist"
+# Linux: the login service is a systemd user unit, or an XDG autostart entry where there is no systemd user session.
+# $plist names the service file on both systems, so the "is it ours" checks below are the same.
+if [ -n "${NOOKDECK_INSTALL_HOME:-}" ]; then config_dir="$home_dir/.config"; else config_dir="${XDG_CONFIG_HOME:-$home_dir/.config}"; fi
+autostart_file="${NOOKDECK_AUTOSTART_DIR:-$config_dir/autostart}/nookdeck.desktop"
+# the unit is nookdeck.service; a dev sandbox label (NOOKDECK_SERVICE_LABEL, as the program reads it) names its own
+unit_name=nookdeck.service
+case "${NOOKDECK_SERVICE_LABEL:-}" in ''|dev.nookdeck.agent) ;; *) if printf '%s' "$NOOKDECK_SERVICE_LABEL" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{2,80}$'; then unit_name="$NOOKDECK_SERVICE_LABEL.service"; fi ;; esac
+if [ "$os" = linux ]; then plist="${NOOKDECK_SYSTEMD_DIR:-$config_dir/systemd/user}/$unit_name"; fi
+# the same contract as the program's own service code: the command line that stands for `systemctl --user`
+read -r -a systemctl_user <<<"${NOOKDECK_SYSTEMCTL:-systemctl --user}"
 marker="$bin_dir/.release"
 # A relocated install (tests) keeps every file the program touches inside it.
 child_env=(NOOKDECK_HOME="$data_dir" PHONEDESK_HOME="$data_dir") # the second one is for a 0.1.x program, which only knows the old name
 if [ -n "${NOOKDECK_INSTALL_HOME:-}" ]; then
   child_env+=(NOOKDECK_LAUNCH_AGENTS_DIR="$agents_dir" NOOKDECK_CLAUDE_DIR="${NOOKDECK_CLAUDE_DIR:-$home_dir/.claude}" NOOKDECK_CODEX_DIR="${NOOKDECK_CODEX_DIR:-$home_dir/.codex}")
+  if [ "$os" = linux ]; then child_env+=(XDG_CONFIG_HOME="$config_dir"); fi
 fi
 run_bin() { env "${child_env[@]}" "$@"; }
 
@@ -279,18 +300,35 @@ stable_signature() {
 
 port_owner() {
   local pid
-  have lsof || return 0
-  pid="$(lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -n 1)"
+  if have lsof; then
+    pid="$(lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -n 1)"
+  elif have ss; then
+    # Linux without lsof: ss names the pid only for our own processes
+    local line; line="$(ss -Hltnp "sport = :$1" 2>/dev/null | head -n 1)"
+    [ -n "$line" ] || return 0
+    pid="$(printf '%s' "$line" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p')"
+    if [ -z "$pid" ]; then printf 'unknown\t%s\n' "a program of another user"; return 0; fi
+  else return 0; fi
   [ -n "$pid" ] || return 0
   printf '%s\t%s\n' "$pid" "$(ps -p "$pid" -o command= 2>/dev/null | cut -c1-120)"
 }
 
 # ================================================================ phase 1: detect_platform
 detect_platform() {
-  stage 1 "Checking this Mac"
-  [ "$(uname -s)" = Darwin ] || fail "this installer is macOS-only for now" "You are on $(uname -s)."
+  stage 1 "Checking $machine"
+  [ "$os" != other ] || fail "this installer is for macOS and Linux only" "You are on $(uname -s). On Windows, use setup.ps1 (see the README)."
   local arch want
   arch="$(uname -m)"
+  if [ "$os" = linux ]; then
+    case "$arch" in
+      x86_64|amd64) want=x64 ;;
+      aarch64|arm64) want=arm64 ;;
+      *) fail "unsupported processor: $arch" "Nookdeck for Linux is built for x86_64 and arm64." ;;
+    esac
+    asset="nookdeck-linux-$want"
+    good "Linux on $arch ${C_DIM}→ $asset${C_OFF}"
+    return 0
+  fi
   case "$arch" in
     arm64) want=arm64 ;;
     x86_64)
@@ -336,7 +374,7 @@ resolve_release() {
   if [ -n "$version" ]; then
     tag="v$version"
   else
-    have curl || fail "curl is missing" "It ships with macOS; check your PATH."
+    have curl || fail "curl is missing" "$curl_hint"
     # GitHub answers 5xx now and then; latest_tag retries and falls back to the API.
     tag="$(latest_tag)" || fail "couldn't look up the latest release of $REPO" "$(cat "$tmp/lookup.why" 2>/dev/null) - check your connection and run it again, or pin a release with --version 0.1.1 (or NOOKDECK_VERSION=0.1.1)."
   fi
@@ -403,16 +441,16 @@ verify_binary() {
   sum_check "$tmp/$asset" "$tmp/SHA256SUMS" # always the binary itself, however it arrived
   raw_sha="$(hash_file "$tmp/$asset")"
   chmod 755 "$tmp/$asset"
-  if have xattr; then xattr -d com.apple.quarantine "$tmp/$asset" 2>/dev/null || true; fi
+  if [ "$os" = darwin ] && have xattr; then xattr -d com.apple.quarantine "$tmp/$asset" 2>/dev/null || true; fi
   # A release signed with a certificate keeps that signature: its designated requirement is the same for every release, which is
   # what keeps the Accessibility grant across updates. Only a program without a valid certificate signature is signed ad hoc.
-  if have codesign; then
+  if [ "$os" = darwin ] && have codesign; then
     if stable_signature "$tmp/$asset"; then good "signed by the release identity ${C_DIM}(kept as it is)${C_OFF}"
     elif codesign --force -s - "$tmp/$asset" >/dev/null 2>&1; then good "signed ad hoc for this Mac"
     else warn "codesign failed; the program may refuse to start"; fi
   fi
   new_version="$("$tmp/$asset" --version 2>/dev/null | head -n1)" || new_version=""
-  [ -n "$new_version" ] || fail "the downloaded program does not run on this Mac" "It printed no version."
+  [ -n "$new_version" ] || fail "the downloaded program does not run on $machine" "It printed no version."
   if [ "$legacy_asset" = 1 ]; then new_version="nookdeck ${new_version#phonedesk }"; fi
   good "$new_version"
 }
@@ -457,11 +495,12 @@ place_binary() {
   if [ "$up_to_date" = 0 ] && [ -n "$old_version" ]; then say "upgrading from $old_version"; fi
   if [ "$dry" = 1 ]; then
     warn "dry run: nothing was installed, started or changed"
-    if [ "$autostart" = 1 ]; then say "would register the launchd service dev.nookdeck.agent (starts at login)"; fi
+    if [ "$autostart" = 1 ] && [ "$os" = linux ]; then say "would register the systemd user service nookdeck.service (starts at login)"
+    elif [ "$autostart" = 1 ]; then say "would register the launchd service dev.nookdeck.agent (starts at login)"; fi
     say "would start Nookdeck on port $port and open http://localhost:$port/manage/"
     exit 0
   fi
-  if [ -f "$plist" ]; then svc_before=1; fi
+  if [ -f "$plist" ] || { [ "$os" = linux ] && [ -f "$autostart_file" ]; }; then svc_before=1; fi
   if [ "$up_to_date" = 1 ]; then bin_state="already set"; return 0; fi
   ask "Install Nookdeck to $bin?" y || fail "cancelled" "Nothing was installed."
   if [ -n "$old_version" ]; then bin_state="updated ($(ver_of "$old_version") -> $(ver_of "$new_version"))"; else bin_state=installed; fi
@@ -499,9 +538,12 @@ link_cli() {
   esac
   shell_name="$(basename "${SHELL:-/bin/zsh}")"
   if [ -f "$home_dir/.zshrc" ]; then files+=("$home_dir/.zshrc"); fi
-  if [ -f "$home_dir/.bash_profile" ]; then files+=("$home_dir/.bash_profile"); fi
+  # bash on Linux: terminal windows start non-login shells, which read ~/.bashrc (macOS Terminal reads ~/.bash_profile)
+  local bash_rc="$home_dir/.bash_profile"
+  if [ "$os" = linux ]; then bash_rc="$home_dir/.bashrc"; fi
+  if [ -f "$bash_rc" ]; then files+=("$bash_rc"); fi
   if [ "${#files[@]}" = 0 ]; then
-    if [ "$shell_name" = bash ]; then files+=("$home_dir/.bash_profile"); else files+=("$home_dir/.zshrc"); fi
+    if [ "$shell_name" = bash ]; then files+=("$bash_rc"); else files+=("$home_dir/.zshrc"); fi
   fi
   path_state=already
   for f in "${files[@]}"; do
@@ -522,6 +564,13 @@ link_cli() {
 service_current() {
   [ -f "$plist" ] || return 1
   [ "$(sed -n 's/^svc=//p' "$marker" 2>/dev/null)" = "$(hash_file "$plist")" ] || return 1
+  if [ "$os" = linux ]; then
+    # ExecStart= carries --port only when it is not 7420, each word quoted or not: "--port" "7421"
+    if [ "$port" = 7420 ]; then ! grep -qE -- '--port"?([ =]|$)' "$plist"
+    else grep -qE -- "--port\"?[ =]\"?$port\"?( |\$)" "$plist"; fi || return 1
+    "${systemctl_user[@]}" is-active --quiet "$unit_name" >/dev/null 2>&1
+    return
+  fi
   if [ "$port" = 7420 ]; then ! grep -qF '<string>--port</string>' "$plist"
   else grep -F -A1 '<string>--port</string>' "$plist" | grep -qF "<string>$port</string>"; fi || return 1
   "${NOOKDECK_LAUNCHCTL:-launchctl}" print "gui/$(id -u)/dev.nookdeck.agent" >/dev/null 2>&1
@@ -545,7 +594,8 @@ preflight_port() { # something else on the port would answer the health check be
   case "$cmd" in
     "$bin"*)
       say "stopping the Nookdeck agent that holds port $port (pid $pid), it is started again below"
-      "${NOOKDECK_LAUNCHCTL:-launchctl}" bootout "gui/$(id -u)/dev.nookdeck.agent" >/dev/null 2>&1 || true
+      if [ "$os" = linux ]; then "${systemctl_user[@]}" stop "$unit_name" >/dev/null 2>&1 || true
+      else "${NOOKDECK_LAUNCHCTL:-launchctl}" bootout "gui/$(id -u)/dev.nookdeck.agent" >/dev/null 2>&1 || true; fi
       kill "$pid" 2>/dev/null || true
       local i; for i in 1 2 3 4 5 6 7 8 9 10; do [ -z "$(port_owner "$port")" ] && return 0; sleep 0.5; done
       kill -9 "$pid" 2>/dev/null || true; sleep 1
@@ -632,13 +682,17 @@ summary() {
       done <<<"$lines"
       printf '  %-9s %s\n' PIN "${pin:-see the logs}" Manage "http://localhost:$port/manage/"
     else
-      printf '  %-9s %s\n' Phone "${url:-http://<this-mac>:$port}" PIN "${pin:-see the logs}" Manage "http://localhost:$port/manage/"
+      printf '  %-9s %s\n' Phone "${url:-http://<$( [ "$os" = linux ] && echo this-computer || echo this-mac )>:$port}" PIN "${pin:-see the logs}" Manage "http://localhost:$port/manage/"
     fi
     printf '%s  ───────────────────────────────────────%s\n' "$C_BRAND" "$C_OFF"
     if [ -t 1 ] && [ -n "$pin" ] && [ -n "$url" ]; then printf '\n'; "$bin" qr "$url" 2>/dev/null || true; fi
     say "On a phone on the same Wi-Fi, open the Phone address and type the PIN (or scan the code)."
-    if [ "$open_page" = 1 ] && have open && [ -z "${NOOKDECK_INSTALL_HOME:-}" ] && ! { [ "$up_to_date" = 1 ] && [ "$already_running" = 1 ]; }; then
-      if ask "Open the manage page now?" y; then open "http://localhost:$port/manage/" >/dev/null 2>&1 || true; fi
+    # macOS: open. Linux: xdg-open, and only in a desktop session (never `open`, which is openvt on some distributions)
+    local opener=""
+    if [ "$os" = darwin ] && have open; then opener=open
+    elif [ "$os" = linux ] && have xdg-open && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then opener=xdg-open; fi
+    if [ "$open_page" = 1 ] && [ -n "$opener" ] && [ -z "${NOOKDECK_INSTALL_HOME:-}" ] && ! { [ "$up_to_date" = 1 ] && [ "$already_running" = 1 ]; }; then
+      if ask "Open the manage page now?" y; then "$opener" "http://localhost:$port/manage/" >/dev/null 2>&1 || true; fi
     fi
   else
     printf '%s  ───────────────────────────────────────%s\n' "$C_BRAND" "$C_OFF"

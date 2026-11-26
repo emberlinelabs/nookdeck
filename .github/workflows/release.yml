@@ -34,9 +34,160 @@ jobs:
       - name: Test
         run: bun run test
 
+  # The same tests on Linux (spec linux-support L1, AC-9): what needs macOS or Windows skips itself.
+  test-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.12
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Test
+        run: bun run test
+
+  # the Linux agent (spec linux-support L1): x64 and arm64, built on Linux, with their gzip copies and their own sums file.
+  # `publish` puts them in SHA256SUMS; setup.sh and `nookdeck update` on Linux look for nookdeck-linux-<arch>(.gz).
+  linux-cli:
+    needs: test-linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Release version (the tag on a tag build, package.json on a manual run)
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' package.json | head -n1)"; fi
+          [ -n "$v" ] || { echo "::error::no version"; exit 1; }
+          echo "RELEASE_VERSION=$v" >> "$GITHUB_ENV"
+          echo "version $v"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.12
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build (Linux x64 + arm64)
+        run: |
+          mkdir -p dist
+          bun scripts/ensure-icons.ts
+          bun scripts/ensure-web.ts
+          # not macOS: writes the stub, so no Now Playing adapter is embedded
+          bun scripts/build-mediaremote.ts
+          bun run gen-assets
+          for arch in x64 arm64; do
+            bun build src/index.ts --compile --target="bun-linux-$arch" --outfile "dist/nookdeck-linux-$arch"
+          done
+
+      - name: The x64 binary reports the tagged version
+        run: |
+          got="$(./dist/nookdeck-linux-x64 --version)"
+          [ "${got%% (*}" = "nookdeck $RELEASE_VERSION" ] || { echo "::error::binary printed '$got'"; exit 1; }
+
+      - name: Gzip copies and their sums
+        run: |
+          cd dist
+          for f in nookdeck-linux-x64 nookdeck-linux-arm64; do gzip -9 -n -k "$f"; done
+          sha256sum nookdeck-linux-x64 nookdeck-linux-arm64 nookdeck-linux-x64.gz nookdeck-linux-arm64.gz > SHA256SUMS.linux
+          cat SHA256SUMS.linux
+          ls -l nookdeck-linux-*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-cli
+          retention-days: 3
+          path: |
+            dist/nookdeck-linux-x64
+            dist/nookdeck-linux-arm64
+            dist/nookdeck-linux-x64.gz
+            dist/nookdeck-linux-arm64.gz
+            dist/SHA256SUMS.linux
+
+  # the Linux packages (spec linux-support L7, L9): .deb and .rpm from nfpm, plus a tarball, for amd64 and arm64.
+  # Each holds the tray app (/usr/bin/nookdeck-tray) and the agent (/usr/lib/nookdeck/nookdeck); no system service.
+  # Like the Windows and macOS apps, a failure here does not hold back the CLI release (publish attaches what was built).
+  linux-packages:
+    needs: linux-cli
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Release version (the tag on a tag build, package.json on a manual run)
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' package.json | head -n1)"; fi
+          [ -n "$v" ] || { echo "::error::no version"; exit 1; }
+          echo "RELEASE_VERSION=$v" >> "$GITHUB_ENV"
+          echo "version $v"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/desktop/go.mod
+          cache-dependency-path: apps/desktop/go.sum
+
+      - name: Install nfpm
+        # nfpm needs a newer Go than the tray app may pin: GOTOOLCHAIN=auto fetches it
+        run: |
+          GOTOOLCHAIN=auto go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.49.0
+          nfpm --version
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-cli
+          path: cli
+
+      - name: Build the tray app (linux/amd64 + linux/arm64, CGO_ENABLED=0)
+        # build.sh copies the shared strings and icons into the module, runs `go test ./internal/...` (once), then go build
+        run: |
+          NOOKDECK_VERSION="$RELEASE_VERSION" sh apps/desktop/build.sh linux amd64 "$PWD/tray/amd64"
+          NOOKDECK_VERSION="$RELEASE_VERSION" SKIP_TESTS=1 sh apps/desktop/build.sh linux arm64 "$PWD/tray/arm64"
+          for arch in amd64 arm64; do test -x "tray/$arch/nookdeck-tray" && file "tray/$arch/nookdeck-tray"; done
+
+      - name: Build the packages
+        run: |
+          chmod +x cli/nookdeck-linux-x64 cli/nookdeck-linux-arm64
+          NOOKDECK_VERSION="$RELEASE_VERSION" sh scripts/package-linux.sh amd64 cli/nookdeck-linux-x64 tray/amd64/nookdeck-tray dist
+          NOOKDECK_VERSION="$RELEASE_VERSION" sh scripts/package-linux.sh arm64 cli/nookdeck-linux-arm64 tray/arm64/nookdeck-tray dist
+
+      - name: Check the .deb (contents, recommends, no maintainer scripts) and the tarball
+        run: |
+          deb="dist/nookdeck_${RELEASE_VERSION}_amd64.deb"
+          dpkg-deb -I "$deb"
+          dpkg-deb -c "$deb" | tee contents.txt
+          for p in ./usr/bin/nookdeck-tray ./usr/lib/nookdeck/nookdeck ./usr/share/applications/dev.nookdeck.app.desktop ./usr/share/icons/hicolor/scalable/apps/dev.nookdeck.app.svg; do
+            grep -q " $p$" contents.txt || { echo "::error::$p is not in the .deb"; exit 1; }
+          done
+          dpkg-deb -f "$deb" Recommends | grep -q gnome-shell-extension-appindicator
+          if dpkg-deb -f "$deb" Depends | grep -q .; then echo "::error::the .deb has hard Depends"; exit 1; fi
+          mkdir ctl && dpkg-deb -e "$deb" ctl && if ls ctl | grep -qE '^(pre|post)(inst|rm)$'; then echo "::error::the .deb has maintainer scripts"; exit 1; fi
+          tar -tzf dist/nookdeck-linux-x64.tar.gz | grep -qx 'nookdeck/agent/nookdeck'
+          tar -tzf dist/nookdeck-linux-x64.tar.gz | grep -qx 'nookdeck/nookdeck-tray'
+
+      - name: Sums of the packages
+        run: |
+          cd dist
+          sha256sum nookdeck_*_amd64.deb nookdeck_*_arm64.deb nookdeck-*.x86_64.rpm nookdeck-*.aarch64.rpm nookdeck-linux-x64.tar.gz nookdeck-linux-arm64.tar.gz > SHA256SUMS.linux-packages
+          cat SHA256SUMS.linux-packages
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          retention-days: 3
+          path: |
+            dist/nookdeck_*.deb
+            dist/nookdeck-*.rpm
+            dist/nookdeck-linux-*.tar.gz
+            dist/SHA256SUMS.linux-packages
+
   # builds, tests and signs every CLI asset, then hands them to the app jobs and to `publish` as an artifact
   release:
-    needs: test-windows
+    needs: [test-windows, test-linux]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -151,8 +302,8 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: apps/windows/go.mod
-          cache-dependency-path: apps/windows/go.sum
+          go-version-file: apps/desktop/go.mod
+          cache-dependency-path: apps/desktop/go.sum
 
       - uses: actions/download-artifact@v4
         with:
@@ -170,7 +321,7 @@ jobs:
       - name: Build the tray app (tests, then Nookdeck.exe)
         shell: bash
         run: |
-          NOOKDECK_VERSION="$RELEASE_VERSION" bash apps/windows/build.sh apps/windows/dist
+          NOOKDECK_VERSION="$RELEASE_VERSION" bash apps/desktop/build.sh apps/desktop/dist
 
       - name: Install Inno Setup
         shell: pwsh
@@ -182,15 +333,15 @@ jobs:
           $version = $env:RELEASE_VERSION
           $agent = (Resolve-Path cli/nookdeck-windows-x64.exe).Path
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          & $iscc "/DAppVersion=$version" "/DDistDir=$((Resolve-Path apps/windows/dist).Path)" "/DAgentExe=$agent" "/DSharedDir=$((Resolve-Path apps/shared).Path)" apps/windows/installer/nookdeck.iss
+          & $iscc "/DAppVersion=$version" "/DDistDir=$((Resolve-Path apps/desktop/dist).Path)" "/DAgentExe=$agent" "/DSharedDir=$((Resolve-Path apps/shared).Path)" apps/desktop/installer/nookdeck.iss
           if ($LASTEXITCODE -ne 0) { throw "iscc failed ($LASTEXITCODE)" }
-          Get-Item apps/windows/dist/Nookdeck-Setup.exe | Format-List Name, Length
+          Get-Item apps/desktop/dist/Nookdeck-Setup.exe | Format-List Name, Length
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-app
           retention-days: 3
-          path: apps/windows/dist/Nookdeck-Setup.exe
+          path: apps/desktop/dist/Nookdeck-Setup.exe
 
   # Nookdeck.dmg (spec desktop-apps A3), built by scripts/build-macos-app.ts and signed with the same release identity as the CLI
   mac-app:
@@ -243,9 +394,10 @@ jobs:
             dist/macos/Nookdeck.dmg.sha256
 
   publish:
-    # an app job that fails (red in the run) must not hold back the CLI release: whatever was built is attached
-    needs: [release, windows-app, mac-app]
-    if: ${{ !cancelled() && github.ref_type == 'tag' && needs.release.result == 'success' }}
+    # an app job that fails (red in the run) must not hold back the CLI release: whatever was built is attached.
+    # The Linux agent is a CLI asset like the others: no release without it.
+    needs: [release, linux-cli, linux-packages, windows-app, mac-app]
+    if: ${{ !cancelled() && github.ref_type == 'tag' && needs.release.result == 'success' && needs.linux-cli.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -257,9 +409,12 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Add the apps to SHA256SUMS (the tray app's updater checks Nookdeck-Setup.exe against it)
+      - name: Add the Linux agent and the apps to SHA256SUMS (the tray app's updater checks Nookdeck-Setup.exe against it)
         run: |
           cd dist
+          cat SHA256SUMS.linux >> SHA256SUMS && rm SHA256SUMS.linux
+          if [ -f SHA256SUMS.linux-packages ]; then cat SHA256SUMS.linux-packages >> SHA256SUMS && rm SHA256SUMS.linux-packages
+          else echo "::warning::the Linux packages were not built; the release goes out without them"; fi
           for f in Nookdeck.dmg Nookdeck-Setup.exe; do
             if [ -f "$f" ]; then sha256sum "$f" >> SHA256SUMS; else echo "::warning::$f was not built; the release goes out without it"; fi
           done
@@ -270,12 +425,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/nookdeck-darwin-arm64 dist/nookdeck-darwin-x64 dist/nookdeck-windows-x64.exe dist/nookdeck-darwin-arm64.gz dist/nookdeck-darwin-x64.gz dist/nookdeck-windows-x64.exe.gz dist/phonedesk-darwin-arm64 dist/phonedesk-darwin-x64 dist/phonedesk-windows-x64.exe dist/phonedesk-darwin-arm64.gz dist/phonedesk-darwin-x64.gz dist/phonedesk-windows-x64.exe.gz dist/nookdeck-demo.tgz dist/SHA256SUMS $(ls dist/Nookdeck.dmg dist/Nookdeck.dmg.sha256 dist/Nookdeck-Setup.exe 2>/dev/null) \
+          gh release create "$GITHUB_REF_NAME" dist/nookdeck-darwin-arm64 dist/nookdeck-darwin-x64 dist/nookdeck-windows-x64.exe dist/nookdeck-linux-x64 dist/nookdeck-linux-arm64 dist/nookdeck-darwin-arm64.gz dist/nookdeck-darwin-x64.gz dist/nookdeck-windows-x64.exe.gz dist/nookdeck-linux-x64.gz dist/nookdeck-linux-arm64.gz dist/phonedesk-darwin-arm64 dist/phonedesk-darwin-x64 dist/phonedesk-windows-x64.exe dist/phonedesk-darwin-arm64.gz dist/phonedesk-darwin-x64.gz dist/phonedesk-windows-x64.exe.gz dist/nookdeck-demo.tgz dist/SHA256SUMS $(ls dist/Nookdeck.dmg dist/Nookdeck.dmg.sha256 dist/Nookdeck-Setup.exe dist/nookdeck_*.deb dist/nookdeck-*.rpm dist/nookdeck-linux-*.tar.gz 2>/dev/null) \
             --repo "$GITHUB_REPOSITORY" --title "Nookdeck $GITHUB_REF_NAME" --notes-file .github/release-notes.md --generate-notes
 
   # manual runs only: every asset in one artifact, SHA256SUMS completed the way `publish` does it. Creates no release and no tag.
   dry-run-bundle:
-    needs: [release, windows-app, mac-app]
+    needs: [release, linux-cli, linux-packages, windows-app, mac-app]
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && needs.release.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -284,9 +439,11 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Add the apps to SHA256SUMS
+      - name: Add the Linux agent and the apps to SHA256SUMS
         run: |
           cd dist
+          if [ -f SHA256SUMS.linux ]; then cat SHA256SUMS.linux >> SHA256SUMS && rm SHA256SUMS.linux; else echo "::warning::the Linux agent was not built"; fi
+          if [ -f SHA256SUMS.linux-packages ]; then cat SHA256SUMS.linux-packages >> SHA256SUMS && rm SHA256SUMS.linux-packages; else echo "::warning::the Linux packages were not built"; fi
           for f in Nookdeck.dmg Nookdeck-Setup.exe; do
             if [ -f "$f" ]; then sha256sum "$f" >> SHA256SUMS; else echo "::warning::$f was not built"; fi
           done

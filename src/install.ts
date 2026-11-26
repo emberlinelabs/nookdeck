@@ -4,6 +4,7 @@
  * keys Accessibility by path), but it works from any copy. Run it again after `brew upgrade`: it replaces the stable copy and restarts.
  *
  *   macOS    ~/.nookdeck/bin/nookdeck             (the place setup.sh uses)
+ *   Linux    ~/.nookdeck/bin/nookdeck             (the same; the service is a systemd user unit)
  *   Windows  %LOCALAPPDATA%\Nookdeck\bin\nookdeck.exe   (the place setup.ps1 uses)
  *
  * The copy is byte for byte (the signature stays valid; no re-sign), replaced atomically. `migrate --no-service` and `service install`
@@ -74,7 +75,7 @@ export async function runInstall(d: InstallDeps, o: InstallOptions = {}): Promis
   // everything (the copy, the marker) is written next to `stable`: it must be an absolute path, never "" or a bare name (that would be the cwd)
   if (!d.home || !isAbsolute(stable) || !isAbsolute(dirname(stable))) return { status: "refused", stable, reason: "the install folder could not be worked out (no home folder). Nothing was changed." };
   const refuse = (reason: string): InstallResult => { d.log(reason); return { status: "refused", stable, reason }; };
-  if (d.platform !== "darwin" && d.platform !== "win32") return refuse("nookdeck install is for macOS and Windows. On Linux run `nookdeck` in a terminal.");
+  if (d.platform !== "darwin" && d.platform !== "win32" && d.platform !== "linux") return refuse("nookdeck install is for macOS, Windows and Linux. Here, run `nookdeck` in a terminal.");
   if (/^bun(\.exe)?$/i.test(basename(d.execPath))) return refuse("This copy runs from source (bun). Install a release with setup.sh / setup.ps1, or use `nookdeck service install`.");
   const sameFile = resolve(d.execPath) === resolve(stable) || (d.platform === "win32" && d.execPath.toLowerCase() === stable.toLowerCase());
   const brew = packageManaged(d.execPath);

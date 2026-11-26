@@ -48,6 +48,21 @@ describe("latestTag: retries and the API fallback", () => {
   });
 });
 
+describe("assetName: the release file for each computer", () => {
+  test("macOS, Windows and Linux on both processors; anything else says there is none", () => {
+    expect(assetName("darwin", "arm64")).toBe("nookdeck-darwin-arm64");
+    expect(assetName("darwin", "x64")).toBe("nookdeck-darwin-x64");
+    expect(assetName("win32", "x64")).toBe("nookdeck-windows-x64.exe");
+    expect(assetName("linux", "x64")).toBe("nookdeck-linux-x64");
+    expect(assetName("linux", "arm64")).toBe("nookdeck-linux-arm64");
+    expect(() => assetName("linux", "ia32")).toThrow("only x64 and arm64");
+    expect(() => assetName("freebsd", "x64")).toThrow("no Nookdeck release for freebsd");
+  });
+  test("this computer has one (the tests below use it)", () => {
+    expect(assetName()).toMatch(/^nookdeck-(darwin|linux)-(arm64|x64)$|^nookdeck-windows-x64\.exe$/);
+  });
+});
+
 describe.skipIf(win)("nookdeck update against a fake release folder", () => {
   /** A release folder with the .gz + SHA256SUMS for THIS computer's asset; the "binary" is a script that prints its version. */
   function release(version: string, o: { badSum?: boolean; noGz?: boolean } = {}) {

@@ -84,22 +84,14 @@ const WIN_MEDIA: Record<string, number> = { playpause: 179, next: 176, previous:
 const WIN_VOLUME: Record<string, number> = { mute: 173, down: 174, up: 175 };
 
 // ---------- Linux ----------
+// Keys and typing go through the session's input tool (xdotool, ydotool or wtype): src/platform/linux-keys.ts.
 
-const XDO_MODS: Record<ParsedHotkey["mods"][number], string> = { cmd: "super", ctrl: "ctrl", alt: "alt", shift: "shift" };
-const XDO_KEYS: Record<string, string> = {
-  return: "Return", tab: "Tab", space: "space", delete: "BackSpace", forwarddelete: "Delete", escape: "Escape",
-  up: "Up", down: "Down", left: "Left", right: "Right", home: "Home", end: "End", pageup: "Prior", pagedown: "Next",
-  ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`f${i + 1}`, `F${i + 1}`])),
-};
-
-function xdotoolKey(keys: string): string {
-  const { mods, key } = parseHotkey(keys);
-  return [...mods.map((m) => XDO_MODS[m]), XDO_KEYS[key] ?? key].join("+");
-}
+import { linuxHotkeyCommand, linuxTypeCommand, type LinuxInputTool } from "./platform/linux-keys";
 
 // ---------- buildCommand ----------
 
-export function buildCommand(a: Action, platform: NodeJS.Platform): string[] {
+/** `input` picks the Linux key and typing tool (default xdotool); other systems ignore it. */
+export function buildCommand(a: Action, platform: NodeJS.Platform, input: LinuxInputTool = "xdotool"): string[] {
   if (a.type === "page") throw new Error("page actions do not run OS commands");
   // The soundboard is played by the server (afplay with its own process tracking) and/or the phone, not from here.
   if (a.type === "sound" || a.type === "sound-stop") throw new Error("sound actions are handled by the sound player");
@@ -136,12 +128,12 @@ export function buildCommand(a: Action, platform: NodeJS.Platform): string[] {
     case "hotkey":
       if (isMac) throw new Error(MAC_NATIVE);
       if (isWin) return ps(`(New-Object -ComObject WScript.Shell).SendKeys('${escapePowerShell(winSendKeysHotkey(a.keys))}')`);
-      return ["xdotool", "key", "--", xdotoolKey(a.keys)];
+      return linuxHotkeyCommand(a.keys, input);
 
     case "type":
       if (isMac) throw new Error(MAC_NATIVE);
       if (isWin) return ps(`(New-Object -ComObject WScript.Shell).SendKeys('${escapePowerShell(escapeSendKeys(a.text))}')`);
-      return ["xdotool", "type", "--delay", "12", "--", a.text];
+      return linuxTypeCommand(a.text, input);
 
     case "media":
       if (isMac) throw new Error(MAC_NATIVE);

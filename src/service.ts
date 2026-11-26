@@ -2,6 +2,7 @@ import { userHome } from "./home";
 import { basename, dirname, join, resolve } from "node:path";
 
 import { chmod, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { HOME } from "./config";
 import { ASK_EVENT, ASK_MARKER, HOOK_EVENT, HOOK_MARKER, LEGACY_ASK_MARKER, LEGACY_HOOK_MARKER, hookConfigPath, uninstallAskHook, uninstallHook, type HookTool } from "./hooks-install";
 import { copyFile } from "node:fs/promises";
@@ -88,6 +89,10 @@ export interface ServiceDeps {
   winRun?: (argv: string[]) => Promise<{ code: number; out: string }>;
   /** Windows: where launch.vbs lives (default %LOCALAPPDATA%\\Nookdeck). */
   winDir?: string;
+  /** Linux: runs `systemctl --user` (or NOOKDECK_SYSTEMCTL, e.g. `echo`) with these arguments. */
+  systemctl?: (args: string[]) => Promise<{ code: number; out: string }>;
+  /** Linux without systemd (XDG autostart): starts the agent detached and gives its pid; whether a pid lives; stops it. */
+  proc?: { spawn: (argv: string[]) => number; alive: (pid: number) => boolean; kill: (pid: number) => void; cmdline: (pid: number) => string[] | null };
 }
 
 /** %LOCALAPPDATA%\Nookdeck: the launcher script of the Windows service. NOOKDECK_WIN_DIR overrides it (tests). */
@@ -120,6 +125,7 @@ export function defaultProgram(): string[] {
 
 export const realServiceDeps = (log: (l: string) => void = (l) => console.log(l)): ServiceDeps => ({
   launchctl: runLaunchctl,
+  systemctl: runSystemctl,
   uid: process.getuid?.() ?? 501,
   platform: platform.id,
   // a fake launchctl (NOOKDECK_LAUNCHCTL, tests) has no unload delay to wait for
@@ -132,7 +138,311 @@ const domain = (d: ServiceDeps) => `gui/${d.uid}`;
 const target = (d: ServiceDeps) => `${domain(d)}/${SERVICE_LABEL}`;
 
 function needMac(d: ServiceDeps) {
-  if (d.platform !== "darwin" && d.platform !== "win32" && !process.env.NOOKDECK_LAUNCHCTL) throw new Error("The background service is only available on macOS and Windows. Run `nookdeck` in a terminal instead.");
+  if (d.platform !== "darwin" && d.platform !== "win32" && d.platform !== "linux" && !process.env.NOOKDECK_LAUNCHCTL) throw new Error("The background service is only available on macOS, Windows and Linux. Run `nookdeck` in a terminal instead.");
+}
+
+// ---------- Linux: a systemd user unit, or an XDG autostart entry without systemd ----------
+
+/** $XDG_CONFIG_HOME or ~/.config */
+const xdgConfig = (): string => process.env.XDG_CONFIG_HOME || join(userHome(), ".config");
+/** Where the unit goes. NOOKDECK_SYSTEMD_DIR overrides it (tests). */
+export const systemdUserDir = (): string => process.env.NOOKDECK_SYSTEMD_DIR ?? join(xdgConfig(), "systemd", "user");
+/** Where the autostart entry goes. NOOKDECK_AUTOSTART_DIR overrides it (tests). */
+export const autostartDir = (): string => process.env.NOOKDECK_AUTOSTART_DIR ?? join(xdgConfig(), "autostart");
+/** nookdeck.service, or <label>.service for a dev sandbox label, so a sandbox never replaces the real unit */
+export const unitName = (): string => (SERVICE_LABEL === DEFAULT_SERVICE_LABEL ? "nookdeck" : SERVICE_LABEL) + ".service";
+export const unitPath = (): string => join(systemdUserDir(), unitName());
+export const autostartPath = (): string => join(autostartDir(), unitName().replace(/\.service$/, ".desktop"));
+/** the pid of an agent started from the autostart entry by `service start` / `install` (systemd keeps its own) */
+const autostartPidFile = (): string => join(HOME, "service.pid");
+
+/** A login PATH for the agent: the usual places for playerctl, ydotool, claude, codex, agy ... */
+const linuxPath = (): string => {
+  const home = process.env.HOME || userHome();
+  return `${home}/.local/bin:${home}/.bun/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin`;
+};
+
+/** One word of a systemd command line (ExecStart=): always double-quoted; `%` and `$` are not expanded. */
+const sdWord = (s: string): string => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/%/g, "%%").replace(/\$/g, "$$$$")}"`;
+/** One Environment= assignment: double-quoted, `%` escaped. systemd expands no `$` there and keeps `$$` as two characters. */
+const sdEnv = (s: string): string => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/%/g, "%%")}"`;
+
+export interface UnitOptions { args: string[]; env?: Record<string, string>; logDir?: string }
+
+/**
+ * The systemd user unit: part of the graphical session (so it has DISPLAY / WAYLAND_DISPLAY and starts with it), restarts only
+ * after a failure (a clean exit stays stopped, as with launchd), logs to ~/.nookdeck/logs.
+ */
+export function buildUnit(o: UnitOptions): string {
+  const logs = o.logDir ?? logsDir();
+  const env: Record<string, string> = { PATH: linuxPath(), ...(o.env ?? {}) };
+  return `[Unit]
+Description=Nookdeck agent
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=${o.args.map(sdWord).join(" ")}
+${Object.entries(env).map(([k, v]) => `Environment=${sdEnv(`${k}=${v}`)}`).join("\n")}
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:${join(logs, "agent.out.log").replace(/%/g, "%%")}
+StandardError=append:${join(logs, "agent.err.log").replace(/%/g, "%%")}
+
+[Install]
+WantedBy=graphical-session.target
+`;
+}
+
+const shq0 = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+
+/** The shell line the autostart entry (and `service start` without systemd) runs: env, program, logs. */
+export function autostartCommand(o: UnitOptions): string {
+  const logs = o.logDir ?? logsDir();
+  const env: Record<string, string> = { PATH: linuxPath(), ...(o.env ?? {}) };
+  return `exec env ${Object.entries(env).map(([k, v]) => shq0(`${k}=${v}`)).join(" ")} ${o.args.map(shq0).join(" ")} >>${shq0(join(logs, "agent.out.log"))} 2>>${shq0(join(logs, "agent.err.log"))}`;
+}
+
+/** The script the autostart entry runs (in the data folder), so the .desktop file only has to quote one path. */
+export const autostartScript = (): string => join(HOME, "autostart.sh");
+
+/** The script records its own pid (exec keeps it) so `service status/stop/start` also see an agent the login started. */
+export const buildAutostartScript = (o: UnitOptions): string => `#!/bin/sh\n# Nookdeck agent, started at login by the XDG autostart entry (nookdeck service install)\necho $$ >${shq0(autostartPidFile())}\n${autostartCommand(o)}\n`;
+
+/**
+ * One argument of a .desktop Exec line: double-quoted; `"`, `` ` ``, `$` and `\\` get a backslash (the quoting rule), then every
+ * backslash is doubled (the string escape the spec applies first), and `%` is `%%`.
+ */
+export const desktopArg = (s: string): string => `"${s.replace(/[\\"`$]/g, (c) => `\\${c}`).replace(/\\/g, "\\\\").replace(/%/g, "%%")}"`;
+
+/** An XDG autostart entry: the desktop starts the script at login. */
+export function buildDesktopEntry(script: string): string {
+  return `[Desktop Entry]
+Type=Application
+Name=Nookdeck agent
+Comment=Starts the Nookdeck agent at login
+Exec=/bin/sh ${desktopArg(script)}
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+`;
+}
+
+/** Inside the test suite (test/_preload.ts sets NOOKDECK_TEST_SANDBOX) the real user manager and a real detached agent are off limits. */
+const inTestSandbox = (): boolean => process.env.NOOKDECK_TEST_SANDBOX === "1";
+
+export async function runSystemctl(args: string[]): Promise<{ code: number; out: string }> {
+  if (inTestSandbox() && !process.env.NOOKDECK_SYSTEMCTL) throw new Error("test sandbox: set NOOKDECK_SYSTEMCTL (for example `echo`); a test never runs the real systemctl --user");
+  const bin = process.env.NOOKDECK_SYSTEMCTL ?? "systemctl --user";
+  try {
+    const p = Bun.spawn([...bin.split(" ").filter(Boolean), ...args], { stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+    const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
+    return { code: await p.exited, out: (out + err).trim() };
+  } catch (e: any) {
+    return { code: 127, out: String(e?.message ?? e) };
+  }
+}
+
+const realProc: NonNullable<ServiceDeps["proc"]> = {
+  spawn: (argv) => {
+    if (inTestSandbox()) throw new Error("test sandbox: a test never starts a detached agent; pass ServiceDeps.proc");
+    const p = Bun.spawn(argv, { stdin: "ignore", stdout: "ignore", stderr: "ignore", detached: true } as any);
+    p.unref();
+    return p.pid;
+  },
+  alive: (pid) => { try { process.kill(pid, 0); return true; } catch (e: any) { return e?.code === "EPERM"; } },
+  kill: (pid) => { try { process.kill(pid, "SIGTERM"); } catch { /* gone already */ } },
+  cmdline: (pid) => { try { return readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0").filter(Boolean); } catch { return null; } },
+};
+
+const sysctl = (d: ServiceDeps) => d.systemctl ?? runSystemctl;
+const procOf = (d: ServiceDeps) => d.proc ?? realProc;
+const exists = (f: string) => stat(f).then(() => true, () => false);
+
+/** A systemd user manager answers for this user (not the case over a plain ssh login without linger, in a container, ...). */
+export async function hasSystemdUser(d: ServiceDeps): Promise<boolean> {
+  return (await sysctl(d)(["show-environment"])).code === 0;
+}
+
+/**
+ * Unit or autostart entry? The unit is WantedBy graphical-session.target, which only some desktops activate: GNOME and KDE
+ * Plasma do (Ubuntu, Debian, Fedora), while XFCE, MATE, Cinnamon (Linux Mint), LXQt and i3 never do even with a systemd user
+ * manager, so a unit there would never start after a reboot. Rule: the unit only when that target is active at install time
+ * (so install from inside the desktop), otherwise the XDG autostart entry, which every desktop runs at login.
+ */
+export async function useSystemdUnit(d: ServiceDeps): Promise<boolean> {
+  if (!(await hasSystemdUser(d))) return false;
+  return (await sysctl(d)(["is-active", "graphical-session.target"])).code === 0;
+}
+
+function linuxSpec(d: ServiceDeps, port?: number): UnitOptions {
+  const args = [...d.program];
+  if (port !== undefined && port !== 7420) args.push("--port", String(port));
+  // NOOKDECK_SERVICE: the agent knows it was started by the service (doctor), as with the Windows launcher
+  const env: Record<string, string> = { NOOKDECK_SERVICE: "1" };
+  if (process.env.NOOKDECK_HOME) env.NOOKDECK_HOME = process.env.NOOKDECK_HOME;
+  if (SERVICE_LABEL !== DEFAULT_SERVICE_LABEL) env.NOOKDECK_SERVICE_LABEL = SERVICE_LABEL;
+  return { args, env };
+}
+
+/**
+ * The pid in service.pid, only when that process really is our agent: after a reboot the number can belong to any program,
+ * which must never be reported as the agent or sent SIGTERM. Ours = its command line has the agent program (or, in the instant
+ * before its exec, the autostart script).
+ */
+async function autostartPid(d: ServiceDeps): Promise<number | null> {
+  const pid = Number((await readFile(autostartPidFile(), "utf8").catch(() => "")).trim());
+  if (!Number.isInteger(pid) || pid <= 1 || !procOf(d).alive(pid)) return null;
+  const argv = procOf(d).cmdline(pid);
+  const program = d.program[d.program.length - 1]!;
+  return argv && (argv.includes(program) || argv.includes(autostartScript())) ? pid : null;
+}
+
+/** Runs the autostart script now, unless its agent already runs. */
+async function autostartStart(d: ServiceDeps): Promise<void> {
+  if (await autostartPid(d)) return;
+  if (!(await exists(autostartScript()))) throw new Error(`${autostartScript()} is missing. Run \`nookdeck service install\` again.`);
+  const pid = procOf(d).spawn(["/bin/sh", autostartScript()]);
+  await mkdir(dirname(autostartPidFile()), { recursive: true });
+  await writeFile(autostartPidFile(), `${pid}\n`);
+}
+
+async function autostartStop(d: ServiceDeps): Promise<void> {
+  const pid = await autostartPid(d);
+  if (pid) procOf(d).kill(pid);
+  await rm(autostartPidFile(), { force: true });
+}
+
+async function linuxInstall(d: ServiceDeps, port?: number): Promise<{ plist: string; loaded: boolean }> {
+  const spec = linuxSpec(d, port);
+  await mkdir(logsDir(), { recursive: true, mode: 0o700 });
+  const sc = sysctl(d);
+  if (await useSystemdUnit(d)) {
+    const file = unitPath();
+    await mkdir(dirname(file), { recursive: true });
+    const oldText = await readFile(file, "utf8").catch(() => null);
+    // an agent from an earlier autostart install holds the port: stop it first, so there are never two
+    const hadAutostart = await exists(autostartPath());
+    if (hadAutostart) await autostartStop(d);
+    await writeFile(file, buildUnit(spec), { mode: 0o644 });
+    await chmod(file, 0o644);
+    // enable for the next logins, restart (not just start) so a reinstall runs the new program and port now
+    let r = await sc(["daemon-reload"]);
+    if (r.code === 0) r = await sc(["enable", unitName()]);
+    if (r.code === 0) r = await sc(["restart", unitName()]);
+    if (r.code !== 0) {
+      let back = "";
+      if (oldText !== null) {
+        await writeFile(file, oldText, { mode: 0o644 });
+        await sc(["daemon-reload"]);
+        const b = await sc(["restart", unitName()]);
+        back = b.code === 0 ? " The previous service was started again." : ` The previous service could not be started again either (${b.code}).`;
+      } else {
+        // a first install leaves nothing behind (not even an enabled unit that would start at the next login)
+        await sc(["disable", unitName()]);
+        await rm(file, { force: true });
+        await sc(["daemon-reload"]);
+        if (hadAutostart) { await autostartStart(d).catch(() => {}); back = " The previous autostart agent was started again."; }
+      }
+      throw new Error(`systemctl --user failed (${r.code}): ${r.out || "no output"}.${back}`);
+    }
+    // the autostart entry would start a second agent at login
+    if (hadAutostart) { await rm(autostartPath(), { force: true }); await rm(autostartScript(), { force: true }); }
+    d.log(`Service installed: ${file}`);
+    return { plist: file, loaded: true };
+  }
+  // a unit from an earlier install (the desktop changed, or no graphical session now): stop and remove it first, never two agents
+  if (await exists(unitPath())) {
+    await sc(["disable", "--now", unitName()]);
+    await rm(unitPath(), { force: true });
+    await sc(["daemon-reload"]);
+  }
+  const file = autostartPath();
+  await mkdir(dirname(file), { recursive: true });
+  await mkdir(dirname(autostartScript()), { recursive: true });
+  await writeFile(autostartScript(), buildAutostartScript(spec), { mode: 0o700 });
+  await chmod(autostartScript(), 0o700);
+  await writeFile(file, buildDesktopEntry(autostartScript()), { mode: 0o644 });
+  await autostartStop(d); // a reinstall runs the new program and port now
+  await autostartStart(d);
+  d.log(`Installed an autostart entry (${file}): this desktop does not start graphical-session.target, or there is no systemd user session. The agent starts when you sign in to the desktop.`);
+  return { plist: file, loaded: true };
+}
+
+async function linuxUninstall(d: ServiceDeps): Promise<{ removed: boolean }> {
+  let removed = false;
+  if (await exists(unitPath())) {
+    const sc = sysctl(d);
+    await sc(["disable", "--now", unitName()]);
+    await rm(unitPath(), { force: true });
+    await sc(["daemon-reload"]);
+    d.log(`Service removed: ${unitPath()}`);
+    removed = true;
+  }
+  if (await exists(autostartPath())) {
+    await autostartStop(d);
+    await rm(autostartPath(), { force: true });
+    await rm(autostartScript(), { force: true });
+    d.log(`Autostart entry removed: ${autostartPath()}`);
+    removed = true;
+  }
+  if (!removed) d.log("Service was not installed.");
+  return { removed };
+}
+
+/** Which kind is installed: the systemd unit wins over an autostart entry. */
+async function linuxKind(): Promise<"systemd" | "autostart" | null> {
+  if (await exists(unitPath())) return "systemd";
+  if (await exists(autostartPath())) return "autostart";
+  return null;
+}
+
+const NOT_INSTALLED = "The service is not installed. Run `nookdeck service install`.";
+
+async function linuxCtl(d: ServiceDeps, verb: "start" | "stop" | "restart"): Promise<void> {
+  const kind = await linuxKind();
+  if (!kind) throw new Error(NOT_INSTALLED);
+  if (kind === "systemd") {
+    const r = await sysctl(d)([verb, unitName()]);
+    if (r.code !== 0) throw new Error(`systemctl --user ${verb} failed (${r.code}): ${r.out || "no output"}`);
+  } else {
+    if (verb !== "start") await autostartStop(d);
+    if (verb !== "stop") await autostartStart(d);
+  }
+  d.log(verb === "start" ? "Service started." : verb === "stop" ? "Service stopped." : "Service restarted.");
+}
+
+/** `systemctl --user show -p ActiveState -p MainPID` output -> running state and pid. */
+export function parseShow(out: string): { running: boolean; pid?: number } {
+  const state = /^ActiveState=(\S+)/m.exec(out)?.[1];
+  const pid = Number(/^MainPID=(\d+)/m.exec(out)?.[1] ?? 0);
+  return { running: state === "active" || state === "activating" || state === "reloading", ...(pid > 0 ? { pid } : {}) };
+}
+
+/** The first word of ExecStart, unquoted. */
+const unitProgram = (text: string): string | undefined => {
+  const m = /^ExecStart="((?:[^"\\]|\\.)*)"/m.exec(text);
+  return m ? m[1]!.replace(/\\(.)/g, "$1").replace(/%%/g, "%").replace(/\$\$/g, "$") : undefined;
+};
+
+async function linuxStatus(d: ServiceDeps): Promise<ServiceStatus> {
+  const kind = await linuxKind();
+  if (kind === "systemd") {
+    const text = await readFile(unitPath(), "utf8").catch(() => "");
+    const program = unitProgram(text);
+    const r = await sysctl(d)(["show", unitName(), "-p", "ActiveState", "-p", "MainPID"]);
+    return { installed: true, kind, ...(r.code === 0 ? parseShow(r.out) : { running: false }), plist: unitPath(), ...(program ? { program } : {}) };
+  }
+  if (kind === "autostart") {
+    const line = (await readFile(autostartScript(), "utf8").catch(() => "")).split("\n").find((l) => l.startsWith("exec env ")) ?? "";
+    // the words are single-quoted: env assignments (NAME=...) first, then the program
+    const words = [...line.matchAll(/'((?:[^']|'\\'')*)'/g)].map((m) => m[1]!.replace(/'\\''/g, "'"));
+    const program = words.find((w) => !/^[A-Z_][A-Z0-9_]*=/.test(w));
+    const pid = await autostartPid(d);
+    return { installed: true, kind, running: !!pid, ...(pid ? { pid } : {}), plist: autostartPath(), ...(program ? { program } : {}) };
+  }
+  return { installed: false, running: false, plist: unitPath() };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -173,6 +483,7 @@ async function loadJob(d: ServiceDeps, file: string, restart = true): Promise<{ 
 export async function serviceInstall(d: ServiceDeps, opts: { port?: number } = {}): Promise<{ plist: string; loaded: boolean }> {
   needMac(d);
   if (d.platform === "win32") return { plist: (await winInstall(winCtx(d, opts.port))).launcher, loaded: true };
+  if (d.platform === "linux") return linuxInstall(d, opts.port);
   const args = [...d.program];
   if (opts.port !== undefined && opts.port !== 7420) args.push("--port", String(opts.port));
   const env: Record<string, string> = {};
@@ -202,6 +513,7 @@ export async function serviceInstall(d: ServiceDeps, opts: { port?: number } = {
 export async function serviceUninstall(d: ServiceDeps): Promise<{ removed: boolean }> {
   needMac(d);
   if (d.platform === "win32") return winUninstall(winCtx(d));
+  if (d.platform === "linux") return linuxUninstall(d);
   const file = plistPath();
   const had = await stat(file).then(() => true, () => false);
   await unloadJob(d);
@@ -213,6 +525,7 @@ export async function serviceUninstall(d: ServiceDeps): Promise<{ removed: boole
 export async function serviceRestart(d: ServiceDeps): Promise<void> {
   needMac(d);
   if (d.platform === "win32") return winRestart(winCtx(d));
+  if (d.platform === "linux") return linuxCtl(d, "restart");
   if (!(await stat(plistPath()).then(() => true, () => false))) throw new Error("The service is not installed. Run `nookdeck service install`.");
   const r = await d.launchctl(["kickstart", "-k", target(d)]);
   if (r.code !== 0) {
@@ -227,6 +540,7 @@ export async function serviceRestart(d: ServiceDeps): Promise<void> {
 export async function serviceStop(d: ServiceDeps): Promise<void> {
   needMac(d);
   if (d.platform === "win32") return winStopService(winCtx(d));
+  if (d.platform === "linux") return linuxCtl(d, "stop");
   if (!(await stat(plistPath()).then(() => true, () => false))) throw new Error("The service is not installed. Run `nookdeck service install`.");
   await unloadJob(d); // not loaded is fine
   d.log("Service stopped.");
@@ -236,13 +550,14 @@ export async function serviceStop(d: ServiceDeps): Promise<void> {
 export async function serviceStart(d: ServiceDeps): Promise<void> {
   needMac(d);
   if (d.platform === "win32") return winStartService(winCtx(d));
+  if (d.platform === "linux") return linuxCtl(d, "start");
   if (!(await stat(plistPath()).then(() => true, () => false))) throw new Error("The service is not installed. Run `nookdeck service install`.");
   const r = await loadJob(d, plistPath(), false); // already loaded is fine: it is kicked so it runs
   if (r.code !== 0) throw new Error(`launchctl bootstrap failed (${r.code}): ${r.out || "no output"}`);
   d.log("Service started.");
 }
 
-export interface ServiceStatus { installed: boolean; running: boolean; pid?: number; plist: string; program?: string }
+export interface ServiceStatus { installed: boolean; running: boolean; pid?: number; plist: string; program?: string; /** Linux: what starts it */ kind?: "systemd" | "autostart" }
 
 /** `launchctl print` output -> running state and pid. */
 export function parsePrint(out: string): { running: boolean; pid?: number } {
@@ -254,6 +569,7 @@ export function parsePrint(out: string): { running: boolean; pid?: number } {
 export async function serviceStatus(d: ServiceDeps): Promise<ServiceStatus> {
   needMac(d);
   if (d.platform === "win32") return winStatus(winCtx(d));
+  if (d.platform === "linux") return linuxStatus(d);
   const file = plistPath();
   const text = await readFile(file, "utf8").catch(() => null);
   const program = text ? /<key>ProgramArguments<\/key>\s*<array>\s*<string>([^<]*)<\/string>/.exec(text)?.[1] : undefined;
@@ -264,7 +580,8 @@ export async function serviceStatus(d: ServiceDeps): Promise<ServiceStatus> {
 
 export function formatStatus(s: ServiceStatus): string {
   if (!s.installed) return "Service: not installed (run `nookdeck service install`)";
-  return `Service: installed, ${s.running ? `running${s.pid ? ` (pid ${s.pid})` : ""}` : "not running"}\n${s.plist.endsWith(".vbs") ? "Launcher:" : "Plist:   "} ${s.plist}${s.program ? `\nProgram: ${s.program}` : ""}`;
+  const where = s.plist.endsWith(".vbs") ? "Launcher:" : s.kind === "systemd" ? "Unit:    " : s.kind === "autostart" ? "Entry:   " : "Plist:   ";
+  return `Service: installed${s.kind ? ` (${s.kind})` : ""}, ${s.running ? `running${s.pid ? ` (pid ${s.pid})` : ""}` : "not running"}\n${where} ${s.plist}${s.program ? `\nProgram: ${s.program}` : ""}`;
 }
 
 // ---------- hooks that point at an older binary ----------

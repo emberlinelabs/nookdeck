@@ -141,7 +141,7 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
   if (o.service) {
     try {
       if (win) await migrateWindows(o, program, newHome, say, notes);
-      else await migrateLaunchd(o, program, say);
+      else if (o.platform === "darwin") await migrateLaunchd(o, program, say); // PhoneDesk never had a Linux service
     } catch (e: any) { notes.push(`service: ${String(e?.message ?? e)}`); }
   }
 

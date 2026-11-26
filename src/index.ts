@@ -133,7 +133,7 @@ if (argv.includes("--version") || argv.includes("-v") || argv[0] === "version") 
   console.log((await import("./about")).versionLine());
   process.exit(0);
 }
-// `nookdeck service install|uninstall|status|start|stop|restart [--port N]`: run the agent in the background at login (macOS launchd).
+// `nookdeck service install|uninstall|status|start|stop|restart [--port N]`: run the agent in the background at login (launchd on macOS, the Task Scheduler on Windows, a systemd user unit or an XDG autostart entry on Linux).
 if (argv[0] === "service") {
   const svc = await import("./service");
   const deps = svc.realServiceDeps();
@@ -211,7 +211,7 @@ if (argv[0] === "doctor") {
     process.exit(0);
   }
   if (argv.includes("--json")) { console.log(JSON.stringify({ ...report, source: local ? "terminal" : "agent" }, null, 2)); process.exit(0); }
-  if (local) console.log(`! No Nookdeck agent answered on port ${port}. These results are for THIS terminal app, not for the agent: macOS grants permissions per program.\n  Start Nookdeck (or \`nookdeck service install\`) and run doctor again for the real answer.\n`);
+  if (local) console.log(`! No Nookdeck agent answered on port ${port}. These results are for THIS terminal app, not for the agent${platform.id === "darwin" ? ": macOS grants permissions per program" : platform.id === "linux" ? ": the agent's desktop session and groups can differ from this terminal's" : ""}.\n  Start Nookdeck (or \`nookdeck service install\`) and run doctor again for the real answer.\n`);
   console.log(d.formatReport(report, { color: !!process.stdout.isTTY }));
   process.exit(report.items.some((i) => i.status === "missing" || i.status === "denied") ? 1 : 0);
 }
@@ -293,7 +293,7 @@ if (argv[0] === "update") {
   process.exit(0);
 }
 if (argv[0] === "help" || argv.includes("--help") || argv.includes("-h")) {
-  console.log("Usage: nookdeck [--port N]\n       nookdeck mcp [--port N]   MCP server (stdio) to arrange the deck with an AI\n       nookdeck service install|uninstall|status|restart [--port N]   run in the background at login (macOS, Windows)\n       nookdeck hooks repoint|remove   re-point or remove the Claude/Codex hooks\n       nookdeck doctor [--open <id>] [--request <id>] [--json]   check OS permissions (asks the running agent)\n       nookdeck install [--port N] [--yes] [--force] [--open]   put this program in its stable place and start it at login (for Homebrew)\n       nookdeck update [--version X] [--check]   install the latest release (or only check)\n       nookdeck --version\n       --no-qr   do not print the pairing QR code at start\n       nookdeck phone-check   test page for a phone stuck on Disconnected (also saved to ~/.nookdeck/logs/phone-check.log)\n       nookdeck qr <text>   print a QR code in the terminal\n\nEnv: NOOKDECK_PORT, NOOKDECK_HOME");
+  console.log("Usage: nookdeck [--port N]\n       nookdeck mcp [--port N]   MCP server (stdio) to arrange the deck with an AI\n       nookdeck service install|uninstall|status|restart [--port N]   run in the background at login (macOS, Windows, Linux)\n       nookdeck hooks repoint|remove   re-point or remove the Claude/Codex hooks\n       nookdeck doctor [--open <id>] [--request <id>] [--json]   check OS permissions (asks the running agent)\n       nookdeck install [--port N] [--yes] [--force] [--open]   put this program in its stable place and start it at login (for Homebrew)\n       nookdeck update [--version X] [--check]   install the latest release (or only check)\n       nookdeck --version\n       --no-qr   do not print the pairing QR code at start\n       nookdeck phone-check   test page for a phone stuck on Disconnected (also saved to ~/.nookdeck/logs/phone-check.log)\n       nookdeck qr <text>   print a QR code in the terminal\n\nEnv: NOOKDECK_PORT, NOOKDECK_HOME");
   process.exit(0);
 }
 

@@ -10,7 +10,7 @@
   <a href="https://github.com/howznguyen/nookdeck/releases"><img alt="Release" src="https://img.shields.io/github/v/release/howznguyen/nookdeck?color=22d3ee&label=release"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-22d3ee"></a>
   <a href="https://github.com/howznguyen/nookdeck/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/howznguyen/nookdeck?style=flat&color=22d3ee"></a>
-  <img alt="macOS and Windows" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows-0b0d10">
+  <img alt="macOS, Windows và Linux" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-0b0d10">
 </p>
 
 <p align="center"><a href="README.md">English</a> · <b>Tiếng Việt</b> · <a href="README.zh.md">中文</a></p>
@@ -18,6 +18,7 @@
 <p align="center">
   <a href="https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck.dmg"><b>Tải cho Mac</b></a> ·
   <a href="https://github.com/howznguyen/nookdeck/releases/latest/download/Nookdeck-Setup.exe"><b>Windows</b></a> ·
+  <a href="https://github.com/howznguyen/nookdeck/releases/latest"><b>Linux</b></a> ·
   <a href="https://nookdeck.app/vi/themes"><b>Xem trước giao diện</b></a> ·
   <a href="https://nookdeck.app/vi">nookdeck.app</a>
 </p>
@@ -26,12 +27,12 @@
   <a href="https://macgrove.app/apps/nookdeck"><img src="https://macgrove.app/badge/nookdeck.svg" alt="Featured on MacGrove" width="263" height="32" /></a>
 </p>
 
-Biến điện thoại hoặc máy tính bảng cũ thành bảng điều khiển kiểu Stream Deck và màn hình theo dõi cho Mac hoặc PC Windows.
+Biến điện thoại hoặc máy tính bảng cũ thành bảng điều khiển kiểu Stream Deck và màn hình theo dõi cho Mac, PC Windows hoặc máy Linux.
 **Chạy trên trình duyệt của điện thoại, nên iPhone, iPad hay Android đều dùng được, kể cả iPhone cũ chỉ lên được iOS 12.**
 Nookdeck là một agent nhỏ trên máy tính, phục vụ bảng cảm ứng qua Wi-Fi: không cần cài app trên điện thoại, không cần
 tài khoản, không dùng đám mây.
 
-> **Trạng thái:** bản đầu (0.x). Hỗ trợ chính là macOS, Windows đang thử nghiệm. Binary chưa ký bằng Developer ID và chưa notarize: xem [Cài đặt](#cài-đặt).
+> **Trạng thái:** bản đầu (0.x). Hỗ trợ chính là macOS, Windows và Linux đang thử nghiệm. Binary chưa ký bằng Developer ID và chưa notarize: xem [Cài đặt](#cài-đặt).
 
 <p align="center"><img src="docs/images/demo.gif" alt="Một vòng 16 giây với dữ liệu mẫu: các trang, quota AI, phím, Home Assistant và câu hỏi của Claude Code." width="820"></p>
 
@@ -80,7 +81,7 @@ trợ lý AI sắp xếp layout giúp bạn. Chạy trên macOS, và Windows 10/
 
 ## Cài đặt
 
-Bạn cần một **máy Mac** (macOS 13 trở lên) hoặc **PC Windows 10/11**, cùng một **điện thoại hoặc máy tính bảng dùng chung
+Bạn cần một **máy Mac** (macOS 13 trở lên), **PC Windows 10/11** hoặc **máy Linux** ([thử nghiệm](docs/install.md#on-linux-experimental)), cùng một **điện thoại hoặc máy tính bảng dùng chung
 Wi-Fi**. Không cần cài gì trên điện thoại. Mất khoảng 2 phút.
 
 ### 1. Cài trên máy tính
@@ -114,6 +115,27 @@ curl -fsSL https://nookdeck.app/scripts/install | bash
 ```powershell
 irm https://nookdeck.app/scripts/install.ps1 | iex
 ```
+
+**Trên Linux** (thử nghiệm)
+
+Trên Ubuntu hoặc Debian, tải file `nookdeck_<phiên bản>_amd64.deb` (máy ARM thì lấy `_arm64.deb`) ở [bản phát hành mới nhất](https://github.com/howznguyen/nookdeck/releases/latest), rồi cài từ thư mục chứa file:
+
+```sh
+sudo apt install ./nookdeck_*_amd64.deb
+```
+
+Sau đó mở **Nookdeck** trong menu ứng dụng. Lần chạy đầu, ứng dụng tự cài Nookdeck cho tài khoản của bạn và hiện biểu tượng trên khay hệ thống. Nếu không muốn dùng ứng dụng, dòng lệnh cho Mac ở trên cũng chạy được trên Linux (không cần `sudo`):
+
+```sh
+curl -fsSL https://nookdeck.app/scripts/install | bash
+```
+
+Cần biết khi dùng trên Linux:
+
+- Nhắm tới Ubuntu 22.04, 24.04 và Debian 12, 13, máy x86_64 hoặc ARM64. Fedora (gói `.rpm`) chỉ hỗ trợ ở mức cố gắng.
+- Gửi phím và gõ chữ dùng `xdotool` trên X11. Trên Wayland thì cần `ydotool` và quyền ghi vào `/dev/uinput`: chạy `nookdeck doctor`, lệnh này chỉ cách sửa cho đúng bản phân phối của bạn.
+- Debian chạy GNOME sẽ không hiện biểu tượng trên khay cho tới khi bạn cài và bật tiện ích AppIndicator (`gnome-shell-extension-appindicator`), rồi đăng xuất và đăng nhập lại. Ubuntu đã bật sẵn. Mọi thứ vẫn dùng được qua trang quản lý và lệnh `nookdeck`.
+- Các cách cài khác (`.rpm`, file nén tarball) và chi tiết: [docs/install.md](docs/install.md#on-linux-experimental).
 
 Liên kết trực tiếp, nếu mạng của bạn chặn `nookdeck.app`: thay `https://nookdeck.app/scripts/install` bằng `https://raw.githubusercontent.com/howznguyen/nookdeck/main/setup.sh` (Windows: `https://raw.githubusercontent.com/howznguyen/nookdeck/main/setup.ps1`).
 
@@ -174,17 +196,18 @@ tư & Bảo mật → Trợ năng). Windows hỏi một lần cho Nookdeck dùng
 - **Cập nhật:** chạy lại đúng dòng lệnh cài. Layout và điện thoại đã ghép đôi vẫn giữ nguyên.
 - **Gỡ (Mac):** `curl -fsSL https://nookdeck.app/scripts/uninstall | bash`. Dữ liệu được giữ lại; thêm `-s -- --purge` sau `bash` để xóa luôn.
 - **Gỡ (Windows):** `irm https://nookdeck.app/scripts/uninstall.ps1 | iex`.
+- **Gỡ (Linux):** dùng đúng dòng lệnh như trên Mac. Nếu đã cài gói `.deb` thì chạy thêm `sudo apt remove nookdeck`.
 
 <details>
 <summary>Tùy chọn khác và chi tiết bộ cài</summary>
 
 - Bộ cài tải đúng file từ [bản phát hành mới nhất](https://github.com/howznguyen/nookdeck/releases/latest), kiểm tra SHA-256
   với `SHA256SUMS` (sai là dừng), cài cho riêng người dùng của bạn (không cần `sudo` hay quyền quản trị), tự chạy khi đăng
-  nhập (launchd trên macOS, Task Scheduler trên Windows) và thêm vào PATH.
+  nhập (launchd trên macOS, Task Scheduler trên Windows, dịch vụ systemd của người dùng trên Linux) và thêm vào PATH.
 - Tùy chọn trên Mac đặt sau `bash -s --`: `--yes` (không hỏi), `--version 0.1.1`, `--port 7421`, `--no-autostart`,
   `--no-open`, `--no-path`, `--dry-run`. Trên Windows đặt biến môi trường trước dòng lệnh, ví dụ
   `$env:NOOKDECK_PORT=7421; irm … | iex` (xem đầu file [setup.ps1](setup.ps1)).
-- Vị trí file: chương trình ở `~/.nookdeck/bin/nookdeck` (macOS) và `%LOCALAPPDATA%\Nookdeck\bin\nookdeck.exe` (Windows);
+- Vị trí file: chương trình ở `~/.nookdeck/bin/nookdeck` (macOS, Linux) và `%LOCALAPPDATA%\Nookdeck\bin\nookdeck.exe` (Windows);
   dữ liệu ở `~/.nookdeck`; log ở `~/.nookdeck/logs`.
 - Dịch vụ nền: `nookdeck service install|uninstall|status|restart`.
 - Chữ ký: file thực thi chỉ ký ad-hoc, chưa có Apple Developer ID hay chứng chỉ Windows. Bộ cài đã xử lý chuyện này; nếu tự tải
@@ -207,7 +230,7 @@ tư & Bảo mật → Trợ năng). Windows hỏi một lần cho Nookdeck dùng
 
 ## Cài từ mã nguồn
 
-Yêu cầu: macOS 13 trở lên (Apple silicon hoặc Intel), hoặc Windows 10/11 x64 (thử nghiệm). Linux chưa được thử.
+Yêu cầu: macOS 13 trở lên (Apple silicon hoặc Intel), Windows 10/11 x64 (thử nghiệm) hoặc Linux x86_64/ARM64 (thử nghiệm).
 
 Từ mã nguồn (cần [Bun](https://bun.sh) 1.3+):
 
@@ -267,6 +290,15 @@ Bản cập nhật được ký ad-hoc nên macOS có thể hỏi lại sau mỗ
 | Trình hỗ trợ PowerShell | Đang phát, âm lượng, biểu tượng app và danh sách tiến trình dùng một trình hỗ trợ Windows PowerShell 5.1 nhỏ |
 | SmartScreen | `nookdeck.exe` tải về mang dấu internet sẽ bị cảnh báo; trình cài đặt gỡ dấu này |
 
+**Trên Linux** (thử nghiệm) không có hộp thoại xin quyền. `nookdeck doctor` kiểm tra các công cụ Nookdeck cần và in ra lệnh sửa cho từng mục; Nookdeck không tự thay đổi hệ thống:
+
+| Mục | Vì sao quan trọng |
+|---|---|
+| Dịch vụ nền | Nookdeck chạy dưới dạng dịch vụ systemd của người dùng (`nookdeck service status`, log ở `~/.nookdeck/logs`), hoặc qua mục tự khởi động (autostart) nếu máy không có phiên systemd của người dùng |
+| Gửi phím và gõ chữ | X11: `xdotool`. Wayland: `ydotool` (bản 1.x cần thêm `ydotoold` đang chạy) và quyền ghi `/dev/uinput`, qua nhóm `input` hoặc một quy tắc udev |
+| Media và âm lượng | Đang phát dùng `playerctl`, âm lượng dùng `pactl` (gói `pulseaudio-utils`, chạy được cả với PipeWire) |
+| Tường lửa | Khi `ufw` đang bật, điện thoại không kết nối được cho tới khi mở cổng: doctor in ra dòng `sudo ufw allow` |
+
 ## Trợ lý AI sắp xếp layout (MCP)
 
 Nookdeck có sẵn MCP server, nên Claude Code (hoặc client MCP bất kỳ) sắp xếp được layout bằng lời: "thêm một trang công cụ lập trình", "đặt Spotify cạnh đồng hồ". MCP server nói chuyện với agent đang chạy, nên cần bật Nookdeck trước.
@@ -275,7 +307,7 @@ Nookdeck có sẵn MCP server, nên Claude Code (hoặc client MCP bất kỳ) s
 
 | Cài bằng | Lệnh |
 |---|---|
-| `setup.sh` (macOS) | `claude mcp add nookdeck -- ~/.nookdeck/bin/nookdeck mcp` |
+| `setup.sh` (macOS, Linux) | `claude mcp add nookdeck -- ~/.nookdeck/bin/nookdeck mcp` |
 | `setup.ps1` (Windows) | `claude mcp add nookdeck -- "%LOCALAPPDATA%\Nookdeck\bin\nookdeck.exe" mcp` |
 | Build từ mã nguồn | `claude mcp add nookdeck -- /đường/dẫn/đầy/đủ/dist/nookdeck mcp` |
 

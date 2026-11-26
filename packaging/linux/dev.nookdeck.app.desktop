@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Nookdeck
+GenericName=Phone control deck
+Comment=Control this computer from your phone: tiles for apps, keys, media and Claude Code
+Exec=/usr/bin/nookdeck-tray
+Icon=dev.nookdeck.app
+Terminal=false
+Categories=Utility;Network;
+Keywords=phone;deck;remote;stream deck;claude;
+StartupNotify=false

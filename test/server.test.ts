@@ -83,6 +83,7 @@ beforeAll(async () => {
       spawned.push(rec);
       return { kill: () => { rec.killed = true; finish(); }, exited };
     },
+    soundWhich: (n) => `/usr/bin/${n}`, // every player "exists": the Linux one does not depend on what is installed
     permissionTimeoutMs: 400,
     hookPaths: { claude: join(hookDir, "claude-settings.json"), codex: join(hookDir, "codex-hooks.json") },
   });
@@ -526,7 +527,7 @@ describe("icons, apps, layout assets, near-end polling, quota history", () => {
     srv = await startServer({
       port: 0, pin: "555555", mediaPollMs: 1500, hookSecret: "k", lastMediaFile: join(mkdtempSync(join(tmpdir(), "pd-lm-")), "l.json"),
       quotaHistoryFile: join(mkdtempSync(join(tmpdir(), "pd-qhs-")), "qh.json"),
-      icons: new Icons({ home: mkdtempSync(join(tmpdir(), "pd-ic-")), dirs: [appsRoot], run, catalog: async () => readFileSync(join(import.meta.dir, "..", "web", "shared", "icon-catalog.json"), "utf8") }),
+      icons: new Icons({ appCatalog: null, home: mkdtempSync(join(tmpdir(), "pd-ic-")), dirs: [appsRoot], run, catalog: async () => readFileSync(join(import.meta.dir, "..", "web", "shared", "icon-catalog.json"), "utf8") }),
       deps: { runAction: async () => {}, startStats: () => () => {}, setVolume: async () => {}, readVolume: async () => null, readMedia: async () => { reads++; return track; }, fetchArtwork: async () => undefined, topProcesses: async () => [] },
       aiSources: { claude: async () => q("claude"), codex: async () => q("codex"), antigravity: async () => q("antigravity"), sessions: async () => [] },
       hookPaths: { claude: join(hookDir, "c5.json"), codex: join(hookDir, "x5.json") },
@@ -822,7 +823,8 @@ describe("soundboard", () => {
     spawned.length = 0;
     expect((await press(a, "mac", "1")).ok).toBe(true);
     expect(spawned.length).toBe(1);
-    expect(spawned[0]!.argv.slice(0, 2)).toEqual(process.platform === "darwin" ? ["afplay", "-v"] : spawned[0]!.argv.slice(0, 2));
+    const player: Partial<Record<NodeJS.Platform, string>> = { darwin: "afplay", linux: "paplay" };
+    if (player[process.platform]) expect(spawned[0]!.argv[0]).toBe(player[process.platform]!);
     expect((await a.next((m) => m.type === "sounds-playing")).ids).toEqual([snd.id]);
     expect((await b.next((m) => m.type === "sounds-playing")).ids).toEqual([snd.id]);
 

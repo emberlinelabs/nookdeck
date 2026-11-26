@@ -1,5 +1,6 @@
 import { userHome } from "./home";
-import { existsSync } from "node:fs";
+import { accessSync, constants as fsConstants, existsSync, readFileSync, statSync } from "node:fs";
+import { networkInterfaces } from "node:os";
 
 import { join } from "node:path";
 import { t } from "./i18n";
@@ -61,6 +62,15 @@ export interface Probes {
   helperPing(): Promise<boolean>;
   fileExists(path: string): boolean;
   claudeCredentialsFile(): string;
+  /** Linux: the environment (session type, display), a file's text (/etc/os-release, /etc/ufw/ufw.conf) or null, whether a device can be written, the service, the LAN addresses. */
+  env?: Record<string, string | undefined>;
+  readText?(path: string): string | null;
+  /** Linux: can this user write /dev/uinput (ydotool)? readUinputAccess() of src/platform/linux-input.ts. */
+  uinput?(): { ok: boolean; why?: "missing" | "permission"; gid?: number; groupWritable?: boolean };
+  /** Linux: a unix socket this user can write ("ok"), one it cannot ("denied"), or none ("missing"). The ydotoold socket. */
+  socket?(path: string): "ok" | "denied" | "missing";
+  serviceStatus?(): Promise<{ installed: boolean; running: boolean; kind?: string }>;
+  addresses?(): string[];
 }
 
 export interface DoctorCtx {
@@ -234,8 +244,180 @@ async function runWindows(p: Probes, ctx: DoctorCtx): Promise<DoctorReport> {
   return { version: p.version, exe: p.exe, asService: p.asService, platform: p.platform, items };
 }
 
+// ---------- Linux (L4 and L9 of specs/linux-support) ----------
+
+export interface OsRelease { id: string; versionId: string; like: string[]; name: string }
+
+/** /etc/os-release: ID, VERSION_ID, ID_LIKE and PRETTY_NAME (quotes removed). */
+export function parseOsRelease(text: string | null): OsRelease {
+  const kv: Record<string, string> = {};
+  for (const line of (text ?? "").split("\n")) {
+    const m = /^([A-Z_]+)=(.*)$/.exec(line.trim());
+    if (m) kv[m[1]!] = m[2]!.replace(/^(["'])(.*)\1$/, "$2");
+  }
+  return { id: (kv.ID ?? "").toLowerCase(), versionId: kv.VERSION_ID ?? "", like: (kv.ID_LIKE ?? "").toLowerCase().split(/\s+/).filter(Boolean), name: kv.PRETTY_NAME ?? kv.NAME ?? "Linux" };
+}
+
+const isDebianLike = (o: OsRelease) => o.id === "debian" || o.id === "ubuntu" || o.like.includes("debian") || o.like.includes("ubuntu");
+const isFedoraLike = (o: OsRelease) => o.id === "fedora" || o.like.includes("fedora") || o.like.includes("rhel");
+
+/** The install command for a package, by distribution; the package names are Debian's, Fedora's where they differ. */
+export function installCommand(o: OsRelease, pkg: string): string {
+  if (isDebianLike(o)) return `sudo apt install ${pkg}`;
+  const fedora: Record<string, string> = { "pulseaudio-utils": "pulseaudio-utils", "libsecret-tools": "libsecret", "alsa-utils": "alsa-utils" };
+  if (isFedoraLike(o)) return `sudo dnf install ${fedora[pkg] ?? pkg}`;
+  return t("install the {pkg} package with your package manager", { pkg });
+}
+
+/**
+ * The commands that let this user write /dev/uinput (ydotool). Shown, never run by Nookdeck.
+ * - no device: load the module now and at every boot;
+ * - a group may write it (Ubuntu and Debian with an `input` rule): the user joins that group;
+ * - only root may (the default on Debian 12 and Ubuntu 22.04): a udev rule gives it to `input`, then the user joins it.
+ */
+export function uinputFix(a: { why?: "missing" | "permission"; gid?: number; groupWritable?: boolean }, groupFile: string | null): string {
+  if (a.why === "missing") return "sudo modprobe uinput && echo uinput | sudo tee /etc/modules-load.d/uinput.conf";
+  const group = a.groupWritable && a.gid !== undefined && a.gid !== 0 ? (groupFile ?? "").split("\n").map((l) => l.split(":")).find((x) => Number(x[2]) === a.gid)?.[0] : undefined;
+  if (group) return `sudo usermod -aG ${group} "$USER"`;
+  return `echo 'KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"' | sudo tee /etc/udev/rules.d/60-nookdeck-uinput.rules && sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=uinput && sudo usermod -aG input "$USER"`;
+}
+
+/** no /dev/uinput, or no way to look */
+const UINPUT_MISSING = "missing" as const;
+const NO_UINPUT = { ok: false, why: UINPUT_MISSING };
+
+async function linuxService(p: Probes): Promise<DoctorItem> {
+  const title = t("Background service");
+  const s = await p.serviceStatus?.().catch(() => null);
+  if (s?.installed && s.kind === "autostart") return { id: "service", title, status: s.running || p.asService ? "ok" : "unknown", detail: s.running || p.asService ? t("started at login by the XDG autostart entry (no systemd user session)") : t("the XDG autostart entry is installed but the agent it starts is not running"), ...(s.running || p.asService ? {} : { fix: { text: t("Run `nookdeck service start`.") } }) };
+  if (s?.installed) return s.running || p.asService
+    ? { id: "service", title, status: "ok", detail: t("running as the systemd user service (starts with your desktop session)") }
+    : { id: "service", title, status: "missing", detail: t("the systemd user service is installed but not running"), fix: { text: t("Run `nookdeck service start`, or `journalctl --user -u nookdeck` and ~/.nookdeck/logs/agent.err.log to see why it stopped.") } };
+  return { id: "service", title, status: "n/a", detail: t("not set to start at login (started from a terminal)"), fix: { text: t("Run `nookdeck service install` to start Nookdeck with your desktop session.") } };
+}
+
+function linuxSessionItem(p: Probes, env: Record<string, string | undefined>, session: string): DoctorItem {
+  const title = t("Desktop session");
+  const desktop = env.XDG_CURRENT_DESKTOP || env.DESKTOP_SESSION || "";
+  if (session === "x11" || session === "wayland") return { id: "desktop-session", title, status: "ok", detail: `${session === "x11" ? "X11" : "Wayland"}${desktop ? ` · ${desktop}` : ""}` };
+  return {
+    id: "desktop-session", title, status: "unknown", detail: t("no graphical session found (no DISPLAY or WAYLAND_DISPLAY): key presses and typing cannot reach a desktop"),
+    fix: { text: t("Start Nookdeck from your desktop session: `nookdeck service install` starts it with the desktop.") },
+  };
+}
+
+const YDOTOOL_TMP_SOCKET = "/tmp/.ydotool_socket";
+/** Where the ydotool 1.x client looks for ydotoold (its own order): $YDOTOOL_SOCKET, else $XDG_RUNTIME_DIR/.ydotool_socket, else /tmp. */
+export const ydotoolSocket = (env: Record<string, string | undefined>): string =>
+  env.YDOTOOL_SOCKET || (env.XDG_RUNTIME_DIR ? join(env.XDG_RUNTIME_DIR, ".ydotool_socket") : YDOTOOL_TMP_SOCKET);
+
+async function linuxInput(p: Probes, os: OsRelease, env: Record<string, string | undefined>): Promise<DoctorItem> {
+  const { linuxInputBackend, ydotoolGeneration } = await import("./platform/linux-input");
+  const title = t("Key presses and typing");
+  const b = linuxInputBackend(env, (n) => p.which(n));
+  if (b.session === "unknown") return { id: "input", title, status: "n/a", detail: t("no graphical session") };
+  if (!b.kind) {
+    const why = b.session === "wayland" ? t("on Wayland this needs {pkg}", { pkg: b.missing ?? "ydotool" }) : t("on X11 this needs {pkg}", { pkg: b.missing ?? "xdotool" });
+    return { id: "input", title, status: "missing", detail: t("no input tool: hotkey and typing tiles will not work ({why})", { why }), fix: { text: installCommand(os, b.missing ?? "xdotool") } };
+  }
+  if (b.kind !== "ydotool") return { id: "input", title, status: "ok", detail: t("{tool} on {session}", { tool: b.kind, session: b.session === "x11" ? "X11" : "Wayland" }) };
+  // 0.1.x writes /dev/uinput itself. In 1.x only the ydotoold daemon opens /dev/uinput and the client talks to its socket,
+  // so a daemon this user can reach is enough (even one started as root); /dev/uinput only matters when the daemon is missing.
+  const gen = ydotoolGeneration((await p.run(["ydotool", "help"])).out);
+  const label = `ydotool ${gen === "1" ? "1.x" : "0.1.x"} on Wayland`;
+  if (gen === "1") {
+    const sock = ydotoolSocket(env);
+    const s = p.socket?.(sock) ?? "missing";
+    if (s === "ok") return { id: "input", title, status: "ok", detail: t("{tool}, ydotoold answers at {path}", { tool: label, path: sock }) };
+    if (s === "denied") return {
+      id: "input", title, status: "missing", detail: t("{tool}: ydotoold runs, but this user cannot write its socket {path} (a daemon started as root keeps it to root)", { tool: label, path: sock }),
+      fix: { text: t("Run ydotoold as your user instead (`systemctl --user enable --now ydotool`), or start it with `--socket-own=$(id -u):$(id -g)`. Nookdeck never changes this itself.") },
+    };
+    if (sock !== YDOTOOL_TMP_SOCKET && (p.socket?.(YDOTOOL_TMP_SOCKET) ?? "missing") !== "missing") return {
+      id: "input", title, status: "missing", detail: t("{tool}: ydotoold listens at {other}, but ydotool looks for {path}", { tool: label, other: YDOTOOL_TMP_SOCKET, path: sock }),
+      fix: { text: t("Run ydotoold as your user (`systemctl --user enable --now ydotool`) so its socket is where ydotool looks. Nookdeck never changes this itself.") },
+    };
+  }
+  const u = p.uinput?.() ?? NO_UINPUT;
+  if (!u.ok && u.why === "missing") return {
+    id: "input", title, status: "missing", detail: t("{tool}: there is no /dev/uinput (the uinput module is not loaded), so keys cannot be sent", { tool: label }),
+    fix: { text: t("Load it now and at every start (Nookdeck never changes this itself): {cmd}", { cmd: uinputFix(u, null) }) },
+  };
+  if (!u.ok) return {
+    id: "input", title, status: "missing", detail: t("{tool}: /dev/uinput is not writable for this user, so keys cannot be sent", { tool: label }),
+    fix: { text: t("Let your user write /dev/uinput on {os} (Nookdeck never changes this itself), then log out and in: {cmd}", { os: os.name, cmd: uinputFix(u, p.readText?.("/etc/group") ?? null) }) },
+  };
+  if (gen === "1") return {
+    id: "input", title, status: "missing", detail: t("{tool}: the ydotoold daemon is not running", { tool: label }),
+    fix: { text: t("Start it for your user: `systemctl --user enable --now ydotool` when your package has that unit, otherwise run `ydotoold &` in your session.") },
+  };
+  return { id: "input", title, status: "ok", detail: t("{tool}, /dev/uinput is writable", { tool: label }) };
+}
+
+function linuxTool(p: Probes, os: OsRelease, id: string, title: string, tools: string[], pkg: string, works: string, lost: string): DoctorItem {
+  const found = tools.find((x) => p.which(x));
+  return found
+    ? { id, title, status: "ok", detail: t("{tool}: {what}", { tool: found, what: works }) }
+    : { id, title, status: "missing", detail: t("{tool} not found: {what}", { tool: tools.join(" / "), what: lost }), fix: { text: installCommand(os, pkg) } };
+}
+
+async function linuxFirewall(p: Probes, ctx: DoctorCtx): Promise<DoctorItem> {
+  const title = t("Firewall");
+  const port = ctx.instance.port;
+  const allow = `sudo ufw allow ${port}/tcp`;
+  if (!p.which("ufw") && !p.fileExists("/usr/sbin/ufw")) return { id: "firewall", title, status: "ok", detail: t("ufw is not installed: nothing blocks phones (another firewall is not checked)") };
+  const conf = p.readText?.("/etc/ufw/ufw.conf") ?? "";
+  if (!/^\s*ENABLED\s*=\s*yes/mi.test(conf)) return { id: "firewall", title, status: "ok", detail: t("ufw is off: phones can connect") };
+  // `ufw status` needs root; read it when it answers (a root shell), otherwise say what to run
+  const r = await p.run(["ufw", "status"]);
+  if (r.code === 0 && /Status:\s*active/i.test(r.out)) {
+    // this port (tcp or both protocols, not /udp), or a rule that opens every port to some source (`Anywhere  ALLOW  192.168.1.0/24`)
+    const portRule = new RegExp(`^\\s*${port}(/tcp)?\\s.*\\bALLOW\\b`, "i");
+    const everyPort = /^\s*Anywhere(\s+\(v6\))?\s+ALLOW\b/i;
+    const open = r.out.split("\n").some((l) => portRule.test(l) || everyPort.test(l));
+    return open
+      ? { id: "firewall", title, status: "ok", detail: t("ufw is on and allows port {port}", { port }) }
+      : { id: "firewall", title, status: "denied", detail: t("ufw is on and does not allow port {port}: phones cannot connect", { port }), fix: { text: t("Run (Nookdeck never changes the firewall itself): {cmd}", { cmd: allow }) } };
+  }
+  return { id: "firewall", title, status: "unknown", detail: t("ufw is on; its rules need root to read, so port {port} may be blocked", { port }), fix: { text: t("If your phone cannot connect, run (Nookdeck never changes the firewall itself): {cmd}", { cmd: allow }) } };
+}
+
+function linuxNetwork(p: Probes): DoctorItem {
+  const title = t("Network");
+  const a = p.addresses?.() ?? [];
+  if (a.length) return { id: "network", title, status: "ok", detail: t("phones on your network can reach {addr}", { addr: a.slice(0, 3).join(", ") }) };
+  return { id: "network", title, status: "missing", detail: t("no network address found: phones cannot reach this computer"), fix: { text: t("Connect to Wi-Fi or Ethernet on the same network as your phone.") } };
+}
+
+function linuxClaude(p: Probes, ctx: DoctorCtx): DoctorItem {
+  const title = t("Claude Code sign-in");
+  if (!p.fileExists(p.claudeCredentialsFile())) return { id: "keychain-claude", title, status: "missing", detail: t("no Claude Code sign-in found (the quota tile stays empty)"), fix: { text: t("Sign in to Claude Code on this computer.") } };
+  if (!ctx.claude) return { id: "keychain-claude", title, status: "unknown", detail: t("the item exists; not read yet") };
+  if (ctx.claude.pending) return { id: "keychain-claude", title, status: "unknown", detail: t("checking…") };
+  if (ctx.claude.ok || /rate.?limit|\b429\b/i.test(ctx.claude.error ?? "")) return { id: "keychain-claude", title, status: "ok", detail: t("the item exists and the last read worked") };
+  return { id: "keychain-claude", title, status: "denied", detail: t("the item exists but the last read failed: {why}", { why: ctx.claude.error ?? "?" }), fix: { text: t("Sign in to Claude Code again.") } };
+}
+
+async function runLinux(p: Probes, ctx: DoctorCtx): Promise<DoctorReport> {
+  const { linuxSession } = await import("./platform/linux-input");
+  const env = p.env ?? {};
+  const os = parseOsRelease(p.readText?.("/etc/os-release") ?? null);
+  const session = linuxSession(env);
+  const items: DoctorItem[] = [{ id: "agent", title: t("Nookdeck"), status: "ok", detail: `${p.version} · ${p.exe} · ${os.name}` }];
+  const [service, input, firewall, hookItems] = await Promise.all([linuxService(p), linuxInput(p, os, env), linuxFirewall(p, ctx), hooks(p, ctx)]);
+  items.push(
+    service, linuxSessionItem(p, env, session), input,
+    linuxTool(p, os, "media", t("Media and Now Playing"), ["playerctl"], "playerctl", t("play, pause and Now Playing work"), t("media tiles and Now Playing will not work")),
+    linuxTool(p, os, "volume", t("Volume"), ["pactl"], "pulseaudio-utils", t("the volume tile works"), t("the volume tile will not work")),
+    linuxTool(p, os, "sound", t("Sounds"), ["paplay", "aplay"], "pulseaudio-utils", t("notification sounds play"), t("notification sounds will not play")),
+    firewall, linuxNetwork(p), linuxClaude(p, ctx), ...hookItems,
+  );
+  return { version: p.version, exe: p.exe, asService: p.asService, platform: p.platform, items };
+}
+
 export async function runDoctor(p: Probes, ctx: DoctorCtx): Promise<DoctorReport> {
   if (p.platform === "win32") return runWindows(p, ctx);
+  if (p.platform === "linux") return runLinux(p, ctx);
   const items: DoctorItem[] = [];
   items.push({ id: "agent", title: t("Nookdeck"), status: "ok", detail: `${p.version} · ${p.exe}` });
   items.push({
@@ -464,6 +646,7 @@ export function realProbes(version: string): Probes {
     exe: process.execPath,
     program: defaultProgram(),
     version,
+    // Linux: the unit and the autostart script set NOOKDECK_SERVICE=1
     asService: process.env.XPC_SERVICE_NAME === SERVICE_LABEL || process.env.NOOKDECK_SERVICE === "1",
     run: async (argv) => {
       try {
@@ -493,5 +676,18 @@ export function realProbes(version: string): Probes {
     helperPing: async () => { try { return (await winHelperPing()) === "pong"; } catch { return false; } },
     fileExists: (f) => existsSync(f),
     claudeCredentialsFile: () => join(process.env.NOOKDECK_CLAUDE_DIR ?? join(userHome(), ".claude"), ".credentials.json"),
+    env: process.env,
+    readText: (f) => { try { return readFileSync(f, "utf8"); } catch { return null; } },
+    uinput: () => (platform === "linux" ? require("./platform/linux-input").readUinputAccess() : NO_UINPUT),
+    socket: (path) => {
+      try {
+        if (!statSync(path).isSocket()) return "missing";
+        accessSync(path, fsConstants.W_OK);
+        return "ok";
+      } catch (e: any) { return e?.code === "EACCES" || e?.code === "EPERM" ? "denied" : "missing"; }
+    },
+    serviceStatus: async () => { const svc = await import("./service"); return svc.serviceStatus(svc.realServiceDeps(() => {})); },
+    // container and VM bridges (docker0, br-..., veth..., virbr0, podman, cni) are not reachable from a phone
+    addresses: () => Object.entries(networkInterfaces()).filter(([name]) => !/^(docker|br-|veth|virbr|podman|cni|lxc|lxd)/.test(name)).flatMap(([, list]) => list ?? []).filter((a) => a.family === "IPv4" && !a.internal).map((a) => a.address),
   };
 }
