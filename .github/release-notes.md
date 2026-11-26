@@ -1,3 +1,23 @@
+## Nookdeck 0.6.0: Linux, and updates in one click
+
+Upgrading: run the install command below again, or `nookdeck update`, or use **Check for updates** in the app. On a Mac, this is the last time you install the app by hand: from 0.6.0 on, the app updates itself.
+
+### New
+
+- **Linux (experimental).** Ubuntu 22.04 and 24.04, Debian 12 and 13, on x86_64 or ARM64:
+  - Install the `.deb` (`sudo apt install ./nookdeck_*_amd64.deb`) and open **Nookdeck** from the app menu. A tray app sets everything up and lets you pair a phone, open the manage page, restart and update.
+  - The install command works too, with no `sudo`. `.rpm` and a tarball are also there.
+  - Keys and typing use `xdotool` on X11, and `ydotool` or `wtype` on Wayland. `nookdeck doctor` tells you what is missing and how to fix it.
+  - Debian with GNOME needs the AppIndicator extension to show tray icons. Everything else also works from the manage page.
+- **The app tells you when an update is out**, and offers **Install and restart**, **Later** or **Skip this version**:
+  - **Mac:** the app downloads the new version, checks that it is the real one (same signature as the app you have), replaces itself and opens again. Your phones reconnect on their own, and the Accessibility permission stays.
+  - **Windows:** the same choice, then the installer runs quietly and the app starts again.
+  - **Linux:** the same choice for the `.deb` and `.rpm` installs.
+
+### Fixed
+
+- Windows: opening Nookdeck from the Start menu or the desktop shortcut while it already runs did nothing. It now opens the manage page.
+
 ## Nookdeck 0.5.3
 
 Upgrading: run the install command below again, or `nookdeck update`, or use **Check for updates** in the app.
