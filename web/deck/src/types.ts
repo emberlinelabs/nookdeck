@@ -1,4 +1,5 @@
 // Wire types shared with the agent (mirrors src/config.ts; kept local so web/deck builds on its own).
+import type { CameraAction, MicAction, OnAirAction } from '../../shared/onair'
 export type Action =
   | { type: 'open'; target: string }
   | { type: 'hotkey'; keys: string }
@@ -12,8 +13,11 @@ export type Action =
   | { type: 'macro'; steps: { kind: string; [k: string]: unknown }[] }
   | { type: 'plugin'; plugin: string; action: string; args?: { [k: string]: unknown } }
   | { type: 'hass'; service: string; entityId?: string; data?: { [k: string]: unknown } }
+  | OnAirAction
+  | MicAction
+  | CameraAction
 
-export type WidgetKind = 'clock' | 'cpu' | 'gpu' | 'memory' | 'uptime' | 'load' | 'network' | 'nowplaying' | 'quota' | 'sessions' | 'entity' | 'weather' | 'value' | 'notifications' | 'plugin'
+export type WidgetKind = 'clock' | 'cpu' | 'gpu' | 'memory' | 'uptime' | 'load' | 'network' | 'nowplaying' | 'quota' | 'sessions' | 'entity' | 'weather' | 'value' | 'notifications' | 'plugin' | 'onair'
 
 export type ClockStyle = 'digital' | 'flip' | 'analog' | 'minimal' | 'word' | 'world'
 export interface ClockOptions {

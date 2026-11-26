@@ -103,6 +103,10 @@ export interface ProcessOptions {
   onFailed?: (message: string) => void;
   /** The widget refresh intervals the plugin registered, in seconds (after every (re)start). */
   onRegistered?: (r: InitResult) => void;
+  /** The host process ended (stopped, crashed or killed): its WebSockets are already closed. */
+  onEnded?: () => void;
+  /** True while the plugin must stay up although nothing calls it (it reports to On Air); open WebSockets count too. */
+  keepAlive?: () => boolean;
 }
 
 export interface ProcessInfo { state: ProcState; pid?: number; restarts: number; lastError?: string; startedAt?: number }
@@ -152,6 +156,7 @@ export class PluginProcess {
       onGarbage: (line) => this.o.log.append(`[stdout] ${line}`),
     });
     this.peer = peer;
+    this.o.services.attach((method, params) => { if (this.peer === peer) peer.notify(method, params); });
     const pump = async (s: ReadableStream<Uint8Array>, on: (t: string) => void) => {
       const dec = new TextDecoder();
       try { for await (const c of s as any) on(dec.decode(c, { stream: true })); } catch { /* closed */ }
@@ -172,6 +177,8 @@ export class PluginProcess {
     }
     this.state = "running";
     this.startedAt = Date.now();
+    // so the log's last line says how the latest start went, not an old failure from another version or folder
+    this.o.log.append(`[agent] started ${this.o.version}`);
     this.pingTimer = setInterval(() => void this.heartbeat(child), this.o.pingIntervalMs ?? PING_INTERVAL_MS);
     (this.pingTimer as any).unref?.();
     this.touch();
@@ -199,6 +206,8 @@ export class PluginProcess {
     clearTimeout(this.idleTimer);
     this.peer?.close("the plugin process ended");
     this.child = null; this.peer = null; this.startedAt = undefined;
+    this.o.services.closeAllSockets();
+    try { this.o.onEnded?.(); } catch { /* a listener's bug */ }
     if (this.stopRequested) { this.state = "stopped"; return; }
     if (this.fatal) {
       this.fatal = false;
@@ -233,12 +242,13 @@ export class PluginProcess {
 
   private touch(): void {
     clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => void this.stop(), this.o.idleStopMs ?? IDLE_STOP_MS);
+    // a plugin with an open WebSocket (OBS) or that reports to On Air is not idle: it would miss what happens while no phone looks
+    this.idleTimer = setTimeout(() => (this.o.keepAlive?.() || this.o.services.openSockets() > 0 ? this.touch() : void this.stop()), this.o.idleStopMs ?? IDLE_STOP_MS);
     (this.idleTimer as any).unref?.();
   }
 
   /** One call into the plugin. Errors: RpcCallError (the plugin threw, timed out, ...) or Error (could not start). */
-  async call<T>(method: "widget.get" | "action.run", params: { id: string; settings: Settings; tile?: WidgetGetParams["tile"] }): Promise<T> {
+  async call<T>(method: "widget.get" | "action.run" | "settings.options", params: { id: string; settings: Settings; tile?: WidgetGetParams["tile"] }): Promise<T> {
     await this.ensureStarted();
     this.touch();
     try { return await this.peer!.call<T>(method, params, this.o.callTimeoutMs ?? CALL_TIMEOUT_MS); }

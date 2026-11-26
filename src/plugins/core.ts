@@ -222,7 +222,8 @@ export class CoreHost {
     const ctx: PluginContext = {
       id,
       log: (...a) => { try { svc.log?.(id, ...a); } catch { /* never throws */ } },
-      settings: { get: () => svc.settings?.(id) ?? {} },
+      // no core plugin has a select with optionsFrom, nor a WebSocket: these are for community plugins
+      settings: { get: () => svc.settings?.(id) ?? {}, options: () => {} },
       storage: {
         async get(key) { return store.has(key) ? JSON.parse(JSON.stringify(store.get(key))) : undefined; },
         async set(key, value) {
@@ -238,6 +239,7 @@ export class CoreHost {
           if (!/^https:\/\//i.test(url)) return Promise.reject(new PluginPermissionError("network", "only https"));
           return (svc.fetch ?? fetch)(url, init);
         },
+        websocket: () => Promise.reject(new PluginPermissionError("network", "core plugins do not open WebSockets")),
       },
       widgets: {
         provide: (wid, fn, o?: ProvideOptions) => {

@@ -51,6 +51,26 @@ namespace PD {
     public static void SetMute(bool m) { Guid g = Guid.Empty; Ep().SetMute(m, ref g); }
   }
 
+  // The default recording device (the Mic button and On Air). Apps record from the "console" default or the
+  // "communications" default (Teams, Zoom); both are muted so every app gets silence.
+  public static class Mic {
+    static IAudioEndpointVolume Of(int role) {
+      var e = (IMMDeviceEnumerator)(new MMDeviceEnumeratorCom());
+      IMMDevice d; if (e.GetDefaultAudioEndpoint(1, role, out d) != 0 || d == null) return null;
+      Guid g = typeof(IAudioEndpointVolume).GUID; object o;
+      if (d.Activate(ref g, 23, IntPtr.Zero, out o) != 0) return null;
+      return (IAudioEndpointVolume)o;
+    }
+    public static bool Available() { try { return Of(0) != null; } catch { return false; } }
+    public static bool GetMute() { bool m; Of(0).GetMute(out m); return m; }
+    public static float GetLevel() { float l; Of(0).GetMasterVolumeLevelScalar(out l); return l; }
+    public static void SetMute(bool m) {
+      Guid g = Guid.Empty;
+      Marshal.ThrowExceptionForHR(Of(0).SetMute(m, ref g));
+      try { var c = Of(2); if (c != null) c.SetMute(m, ref g); } catch { }
+    }
+  }
+
   [StructLayout(LayoutKind.Sequential)] struct SIZE { public int cx, cy; }
   [StructLayout(LayoutKind.Sequential)] struct BITMAP { public int bmType, bmWidth, bmHeight, bmWidthBytes; public short bmPlanes, bmBitsPixel; public IntPtr bmBits; }
   [StructLayout(LayoutKind.Sequential)] struct BITMAPINFOHEADER { public int biSize, biWidth, biHeight; public short biPlanes, biBitCount; public int biCompression, biSizeImage, biXPelsPerMeter, biYPelsPerMeter, biClrUsed, biClrImportant; }
@@ -94,6 +114,13 @@ namespace PD {
       return r.ToArray();
     }
     public static long Foreground() { return GetForegroundWindow().ToInt64(); }
+    // "pid|title" of the foreground window (the Camera button picks the meeting app from it)
+    public static string FrontInfo() {
+      IntPtr h = GetForegroundWindow(); if (h == IntPtr.Zero) return "";
+      uint pid; GetWindowThreadProcessId(h, out pid);
+      int n = GetWindowTextLength(h); StringBuilder sb = new StringBuilder(Math.Max(n, 0) + 1); if (n > 0) GetWindowText(h, sb, n + 1);
+      return pid + "|" + sb.ToString();
+    }
     public static bool Focus(long hwnd) {
       IntPtr h = new IntPtr(hwnd);
       if (IsIconic(h)) ShowWindow(h, 9);
@@ -222,6 +249,42 @@ function Cmd-VolumeSet($a) {
   if ($null -ne $a.level) { [PD.Audio]::SetLevel([float]([Math]::Max(0, [Math]::Min(100, [double]$a.level)) / 100.0)) }
   if ($null -ne $a.muted) { [PD.Audio]::SetMute([bool]$a.muted) }
   $true
+}
+
+# On Air (FR-6): an app with LastUsedTimeStop = 0 under the consent store uses the mic or camera now. Packaged apps are
+# keys named by package family; desktop apps are under NonPackaged with the exe path written with # for \.
+function Cmd-CapInUse($cap) {
+  $root = "HKCU:\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\$cap"
+  $apps = @()
+  if (-not (Test-Path $root)) { return , $apps }
+  $keys = @(Get-ChildItem $root -ErrorAction SilentlyContinue)
+  $np = Join-Path $root "NonPackaged"
+  if (Test-Path $np) { $keys += @(Get-ChildItem $np -ErrorAction SilentlyContinue) }
+  foreach ($k in $keys) {
+    if ($k.PSChildName -eq "NonPackaged") { continue }
+    $p = Get-ItemProperty $k.PSPath -ErrorAction SilentlyContinue
+    if ($null -eq $p -or $null -eq $p.LastUsedTimeStop -or $null -eq $p.LastUsedTimeStart) { continue }
+    if ([int64]$p.LastUsedTimeStop -eq 0 -and [int64]$p.LastUsedTimeStart -gt 0) { $apps += ([string]$k.PSChildName -replace "#", "\") }
+  }
+  , $apps
+}
+function Cmd-AvUsage { @{ mic = (Cmd-CapInUse "microphone"); camera = (Cmd-CapInUse "webcam") } }
+function Cmd-MicGet {
+  if (-not [PD.Mic]::Available()) { return $null }
+  try { @{ muted = [PD.Mic]::GetMute(); level = [double][PD.Mic]::GetLevel() } } catch { $null }
+}
+function Cmd-MicSet($a) {
+  if (-not [PD.Mic]::Available()) { throw "no recording device" }
+  [PD.Mic]::SetMute([bool]$a.muted)
+  $true
+}
+function Cmd-FrontApp {
+  $i = [PD.Win]::FrontInfo()
+  if (-not $i) { return $null }
+  $p = $i.Split("|", 2)
+  $name = ""
+  try { $name = (Get-Process -Id ([int]$p[0]) -ErrorAction Stop).ProcessName + ".exe" } catch { }
+  @{ id = $name; title = [string]$p[1] }
 }
 
 function Cmd-AppsList {
@@ -413,6 +476,10 @@ function Handle($req) {
     'window.focusnew' { return Cmd-WindowFocusNew $req }
     'window.foreground' { return [PD.Win]::Foreground() }
     'sound.duration' { return Cmd-SoundDuration $req }
+    'av.usage' { return Cmd-AvUsage }
+    'mic.get' { return Cmd-MicGet }
+    'mic.set' { return Cmd-MicSet $req }
+    'front.app' { return Cmd-FrontApp }
     default { throw ('unknown command ' + $req.cmd) }
   }
 }

@@ -64,6 +64,7 @@ export const ZH_PLUGINS: Record<string, string> = {
   "On": "开启",
   "Off": "关闭",
   "Open Screens": "打开屏幕",
+  "Every Weather tile without a city of its own uses this one. To give a tile its own city, open it in Screens.": "所有没有单独设置城市的天气图块都使用这个城市。要给某个图块单独设置城市，请在“屏幕”中打开它。",
   "The location is set on each Weather tile: pick the tile on the phone, then choose Automatic or search for a city.": "位置在每个天气磁贴上设置：在手机上选中磁贴，然后选择自动或搜索城市。",
   "Quota, sessions and permission prompts on the phone": "在手机上查看额度、会话和权限提示",
   "Sessions and usage on the phone": "在手机上查看会话和用量",
@@ -240,4 +241,11 @@ export const ZH_PLUGINS: Record<string, string> = {
   "Style": "样式",
   "How this tile looks on the phone.": "此磁贴在手机上的外观。",
   "Suggested": "推荐",
+  // plugin API: WebSocket hosts, On Air, choices from the plugin
+  "Turn On Air on": "开启 On Air",
+  "Can turn On Air on while it is live or recording.": "直播或录制时可以开启 On Air。",
+  "{value} (not found now)": "{value}（当前找不到）",
+  "Loading the choices…": "正在加载选项…",
+  "Could not get the choices ({error}). You can type the name.": "无法获取选项（{error}）。你可以直接输入名称。",
+  "No choices yet. You can type the name.": "还没有选项。你可以直接输入名称。",
 };

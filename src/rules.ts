@@ -23,6 +23,8 @@ export interface RuleActions {
   notify(text: string, level: "info" | "warn" | "alert", ruleId: string): void;
   themeMode(mode: "dark" | "light" | null, ruleId: string): void;
   runItem(pageId: string, itemId: string, ruleId: string): void | Promise<void>;
+  /** The On Air manual source (absent: the rule action does nothing). */
+  onair?(mode: "toggle" | "on" | "off", ruleId: string): void;
 }
 
 export interface RuleEngineOptions {
@@ -144,6 +146,7 @@ export class RuleEngine {
       case "goto-page": return a.gotoPage(th.pageId, { countdown: th.countdown ?? 0, reason: this.reason(r), ruleId: r.id, revert: !!r.revert });
       case "notify": return a.notify(th.text, th.level ?? "info", r.id);
       case "theme-mode": return a.themeMode(th.mode, r.id);
+      case "onair": return a.onair?.(th.mode, r.id);
       case "run-item": return void Promise.resolve(a.runItem(th.pageId, th.itemId, r.id)).catch((e) => console.error(`rule ${r.id} run-item:`, e));
     }
   }

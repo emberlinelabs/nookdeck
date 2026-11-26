@@ -26,7 +26,7 @@ const matches = (e: { name: string; id: string; author?: string; description?: s
 
 const fromEntry = (e: RegistryEntry): PluginDetails => ({ id: e.id, name: e.name, author: e.author, version: e.version, description: e.description, verified: e.verified, permissions: e.permissions, widgets: [], actions: [], source: e.repo, screenshot: e.screenshot, readme: true });
 const fromInstalled = (p: PluginInfo, reg?: RegistryEntry): PluginDetails => reg ? { ...fromEntry(reg), version: p.version, builtin: p.builtin } : { id: p.id, name: p.name, author: p.author, version: p.version, description: p.description, builtin: p.builtin, permissions: p.permissions, widgets: p.widgets, actions: p.actions, source: p.source, readme: false };
-const NO_PERMS: PluginPermissions = { network: [], shell: false, keyboard: false, storage: false };
+const NO_PERMS: PluginPermissions = { network: [], shell: false, keyboard: false, storage: false, onair: false };
 
 /** The Plugins page: find plugins in the Store, manage the installed ones, and see what is waiting for an update. */
 export function PluginsOverview({ deeplink, onDeeplinkDone, update, layout, onSaveLayout, onAddTile }: { deeplink?: PluginLink | null; onDeeplinkDone?: () => void; update: (fn: (l: Layout) => Layout) => void; layout: Layout; onSaveLayout: () => void; onAddTile: (p: PluginInfo, widgetId: string, pageIdx: number) => string | null }) {

@@ -54,16 +54,23 @@ export class PluginRuntime {
   constructor(private store: PluginStore, private deps: RuntimeDeps) {
     store.onChange(() => this.rebuild());
     deps.hosts?.onPush((plugin, widget, u, key) => this.pushCode(plugin, widget, u.render, u.data, key));
-    deps.hosts?.setTiles?.((plugin, widget) => this.tilesOf(plugin, widget).map(([key, t]) => ({ key, size: { ...t.size } })));
+    deps.hosts?.setTiles?.((plugin, widget) => this.tilesOf(plugin, widget).map(([key, t]) => ({ key, size: { ...t.size }, settings: this.tileSettings(t) })));
     // a code plugin's process (re)started: its tiles ask it again at once
     deps.hosts?.onRegistered((plugin) => { if (!this.active) return; for (const [id, t] of this.tiles) if (t.ref.id === plugin) { clearTimeout(t.timer); t.gen = ++this.gen; void this.refresh(id, t.gen); } });
     deps.core?.onPush((plugin, widget, u) => {
       if (typeof u !== "function") return this.pushCore(plugin, widget, u.data);
       for (const [id, t] of this.tilesOf(plugin, widget)) {
         const size = { ...t.size };
-        void (async () => u(size))().then((made) => this.pushCore(plugin, widget, made.data, id), (err) => this.deps.log?.(plugin, `[agent] widgets.push("${widget}") failed: ${String(err?.message ?? err).slice(0, 200)}`));
+        void (async () => u(size, this.tileSettings(t)))().then((made) => this.pushCore(plugin, widget, made.data, id), (err) => this.deps.log?.(plugin, `[agent] widgets.push("${widget}") failed: ${String(err?.message ?? err).slice(0, 200)}`));
       }
     });
+  }
+
+  /** What a provider of this tile gets as `settings`: plugin-wide overlaid with the tile's own (also given to a function push). */
+  private tileSettings(t: Tile): Record<string, string | number | boolean> {
+    const e = this.store.entry(t.ref.id);
+    const widget = e?.manifest.widgets.find((w) => w.id === t.ref.widget);
+    return e && widget ? resolveSettings([...e.manifest.settings, ...widget.settings], [e.state.settings, t.ref.settings]) : {};
   }
 
   private tilesOf(plugin: string, widget: string): Array<[string, Tile]> {

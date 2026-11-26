@@ -126,7 +126,8 @@ function normalizeFields(raw: unknown, saved: Record<string, unknown> = {}): Plu
       const value = str(ro.value);
       return value ? [{ value, label: str(ro.label) ?? value }] : [];
     });
-    return [{ key, type: type as PluginField["type"], label: str(r.label) ?? key, ...(typeof d === "string" || typeof d === "number" || typeof d === "boolean" ? { default: d } : {}), ...(options.length ? { options } : {}), ...(type === "secret" ? { isSet: r.isSet === true || (saved[key] !== undefined && saved[key] !== null && saved[key] !== "") } : {}) }];
+    const optionsFrom = type === "select" ? str(r.optionsFrom) : undefined;
+    return [{ key, type: type as PluginField["type"], label: str(r.label) ?? key, ...(typeof d === "string" || typeof d === "number" || typeof d === "boolean" ? { default: d } : {}), ...(options.length ? { options } : {}), ...(optionsFrom ? { optionsFrom } : {}), ...(type === "secret" ? { isSet: r.isSet === true || (saved[key] !== undefined && saved[key] !== null && saved[key] !== "") } : {}) }];
   });
 }
 
@@ -139,6 +140,7 @@ export function normalizePermissions(raw: unknown): PluginPermissions {
     shell: !!r.shell,
     keyboard: !!r.keyboard,
     storage: !!r.storage,
+    onair: !!r.onair,
   };
 }
 
@@ -454,6 +456,11 @@ export const api = {
   },
   grantPlugin: (id: string, permissions: PluginPermissions) => request<unknown>(`/api/plugins/${encodeURIComponent(id)}/grant`, json("POST", { permissions })),
   setPluginEnabled: (id: string, enabled: boolean) => request<unknown>(`/api/plugins/${encodeURIComponent(id)}/enabled`, json("POST", { enabled })),
+  /** The choices of a select with optionsFrom, from the plugin's code (it may need OBS running: it can fail). */
+  pluginOptions: async (id: string, provider: string, settings: Record<string, unknown>): Promise<string[]> => {
+    const r = rec(await request<unknown>(`/api/plugins/${encodeURIComponent(id)}/options`, json("POST", { provider, settings })));
+    return (Array.isArray(r.options) ? r.options : []).filter((x): x is string => typeof x === "string");
+  },
   putPluginSettings: (id: string, settings: Record<string, unknown>) => request<unknown>(`/api/plugins/${encodeURIComponent(id)}/settings`, json("PUT", settings)),
   /** The community registry. null when this agent has no registry endpoint (older agent); throws when the agent has nothing to show (502). */
   /** Installed theme packs plus the registry's; an agent without themes answers 404 and this returns null. */

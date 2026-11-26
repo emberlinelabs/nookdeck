@@ -11,13 +11,17 @@ export function permChips(p: PluginPermissions): PermChip[] {
   const out: PermChip[] = [];
   if (p.shell) out.push({ key: "shell", label: t("Runs commands"), risk: "high", plain: t("Can run any command on this computer, as you. Only allow it if you trust the author.") });
   if (p.keyboard) out.push({ key: "keyboard", label: t("Presses keys"), risk: "medium", plain: t("Can press keys and type text on this computer, as if you did.") });
-  for (const h of p.network) out.push({ key: `net-${h}`, label: h, risk: "low", plain: t("Can connect to {host} and nowhere else on the internet.", { host: h }) });
+  for (const h of p.network) { const host = networkLabel(h); out.push({ key: `net-${h}`, label: host, risk: "low", plain: t("Can connect to {host} and nowhere else on the internet.", { host }) }); }
   if (p.storage) out.push({ key: "storage", label: t("Saves data"), risk: "low", plain: t("Can keep its own small file of saved data on this computer.") });
+  if (p.onair) out.push({ key: "onair", label: t("On Air"), risk: "low", plain: t("Can turn On Air on while it is live or recording.") });
   return out;
 }
 
 export const riskTone = (r: Risk): "danger" | "warning" | "neutral" => (r === "high" ? "danger" : r === "medium" ? "warning" : "neutral");
-export const hasPerms = (p: PluginPermissions): boolean => p.network.length > 0 || p.shell || p.keyboard || p.storage;
+export const hasPerms = (p: PluginPermissions): boolean => p.network.length > 0 || p.shell || p.keyboard || p.storage || p.onair;
+
+/** `ws://127.0.0.1:4455` -> `127.0.0.1:4455`: a WebSocket origin is shown as its host and port; a host name as it is. */
+export const networkLabel = (entry: string): string => entry.replace(/^wss?:\/\//, "");
 
 /** What a tile renderer is called to people. A raw renderer id (stat, custom:quota) is never shown. */
 export function rendererLabel(r: string, short = false): string {

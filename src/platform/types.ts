@@ -57,7 +57,33 @@ export interface Platform {
   nowPlayingStatus(): Promise<{ ok: boolean; why?: string }>;
   /** Stops anything long-lived this platform started (the Windows helper). */
   dispose(): void;
+
+  /** Mic and camera in use right now (On Air, FR-6). `apps` stay on the agent (NFR-3). `ignorePid`: the agent's own use. */
+  avUsage(ignorePid?: number): Promise<AvUsage>;
+  /** The default input device's mute and volume; null when there is no input device. */
+  readMic(): Promise<MicState | null>;
+  /** Mutes the default input device for every app; only when readMic().canMute. */
+  setMicMuted(muted: boolean): Promise<void>;
+  /** Input volume 0-1 (macOS devices without a mute control); throws where the OS has no such control. */
+  setMicVolume(level: number): Promise<void>;
+  /**
+   * The frontmost app (macOS bundle id, Windows exe name, Linux WM class) and its front window title; null when unknown.
+   * macOS reads the title only with `withTitle` (System Events, an Apple Event): the Camera button asks for it when a browser is in front.
+   */
+  frontApp(withTitle?: boolean): Promise<{ id: string; title?: string } | null>;
+  /** Brings a running app forward (macOS bundle id); false when it does not run or the OS cannot. */
+  activateApp(id: string): Promise<boolean>;
+  /** Which of these apps run (macOS bundle ids); [] where the OS is not asked. */
+  runningApps(ids: string[]): Promise<string[]>;
 }
+
+export interface AvUsage {
+  mic: { inUse: boolean; apps: string[] };
+  camera: { inUse: boolean; apps: string[] };
+}
+
+/** muted null: the OS cannot tell. volume null: no software input volume. */
+export interface MicState { muted: boolean | null; canMute: boolean; volume: number | null }
 
 export interface SecretStore {
   get(service: string, account: string): Promise<string | undefined>;

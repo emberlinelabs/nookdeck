@@ -13,10 +13,13 @@ import { PROVIDER_COLOR } from './ai'
 import { PermissionSheet, ProcessSheet, QuestionSheet } from './sheets'
 import { ScreenLayer, ScreenSheet } from './screen'
 import { swapPreview } from './swap'
+import { LiveBadge, OnAirSign, OnAirTile } from './onair'
+import { liveView, signVisible, PEEK_MS, type LiveView } from './live-logic'
+import type { OnAirMsg } from '../../shared/onair'
 import { coreTileOf, previewSlot } from './plugin-logic'
 import { CameraView, setCameraBase } from './camera'
 import type { PluginSlot } from './plugin-logic'
-import { browserShiftHost, headerMode, keepAwakeOn, liteOn, onLocalScreen, runShift, shiftOn } from './screen-logic'
+import { browserShiftHost, headerMode, keepAwakeOn, liteOn, localScreen, onLocalScreen, runShift, shiftOn } from './screen-logic'
 import type { PermissionRequest, QuestionRequest, WeatherData, PushedValue, Notice, GotoReq, HassEntity, HassState, IconAssets, AiData, Item, Layout, Media, MediaCommand, Orientation, Page, Stats, Theme, TileStyle } from './types'
 
 export { Icon }
@@ -465,9 +468,10 @@ function SoundRing(props: { w: number; h: number; r: number; color: string; at: 
 }
 
 /** data-state of a tile: on / off (entities), playing (media, sound), ok / warn / error (status and load), or nothing. */
-function tileState(item: Item, props: { sound?: unknown; busy?: boolean; media: Media | null; hassEnt?: HassEntity; hassForceOn?: boolean; plug?: PluginSlot; stats?: Stats | null; ai?: AiData | null }): string | undefined {
-  if (item.kind !== 'widget') return props.sound || props.busy ? 'playing' : undefined
+function tileState(item: Item, props: { live?: LiveView | null; onair?: OnAirMsg | null; sound?: unknown; busy?: boolean; media: Media | null; hassEnt?: HassEntity; hassForceOn?: boolean; plug?: PluginSlot; stats?: Stats | null; ai?: AiData | null }): string | undefined {
+  if (item.kind !== 'widget') return props.sound || props.busy ? 'playing' : props.live ? props.live.state : undefined
   const w = item.widget || ''
+  if (w === 'onair') return props.onair && props.onair.on ? 'live' : 'off'
   if (w === 'nowplaying') return props.media && props.media.playing ? 'playing' : 'off'
   if (props.hassEnt || item.entity) {
     if (!props.hassEnt) return 'off'
@@ -519,6 +523,10 @@ export function Tile(props: {
   onMedia: (c: MediaCommand, app?: string) => Promise<unknown> | void
   onVolume: (v: { level: number } | { muted: boolean }) => Promise<unknown> | void
   sound?: { at: number; durMs?: number }
+  /** On Air / mic / camera state of a button with such an action */
+  live?: LiveView | null
+  /** for the On Air tile */
+  onair?: OnAirMsg | null
   hassEnt?: HassEntity
   hassForceOn?: boolean
   hassConnected?: boolean
@@ -637,11 +645,12 @@ export function Tile(props: {
     if (sheetTap && props.onEntity) props.onEntity(page, item, 'sheet')
     else props.onPress(page, item)
   }
+  const onAirTap = !props.preview && item.kind === 'widget' && item.widget === 'onair' && !!item.action
   const tappable = !props.preview && item.kind === 'widget' && (item.widget === 'cpu' || item.widget === 'memory')
   if (item.kind === 'widget') {
     return (
       <div
-        class={cls + ' pd-tile--widget' + (entTap || camTap ? ' pd-tile--tap' : '') + (sty === 'ios' ? ' pd-tile--iosw' : '') + (item.widget === 'nowplaying' ? ' pd-tile--np' : '') + (tappable ? ' pd-tile--tap' : '')}
+        class={cls + ' pd-tile--widget' + (entTap || camTap ? ' pd-tile--tap' : '') + (sty === 'ios' ? ' pd-tile--iosw' : '') + (item.widget === 'nowplaying' ? ' pd-tile--np' : '') + (tappable || onAirTap ? ' pd-tile--tap' : '') + (item.widget === 'onair' ? ' pd-tile--onair' : '')}
         style={style}
         data-id={item.id}
         data-part="tile"
@@ -649,7 +658,7 @@ export function Tile(props: {
         data-kind={tileKind(item)}
         data-size={item.pw + 'x' + item.ph}
         onPointerDown={down}
-        onClick={tappable ? () => props.onWidget(item.widget as string) : camTap ? () => (props.onEntity as NonNullable<typeof props.onEntity>)(page, item, 'sheet') : entTap ? () => entClick() : undefined}
+        onClick={onAirTap ? () => props.onPress(page, item) : tappable ? () => props.onWidget(item.widget as string) : camTap ? () => (props.onEntity as NonNullable<typeof props.onEntity>)(page, item, 'sheet') : entTap ? () => entClick() : undefined}
         onTouchStart={holdable ? () => entHoldStart() : undefined}
         onTouchEnd={holdable ? entHoldEnd : undefined}
         onTouchMove={holdable ? entHoldEnd : undefined}
@@ -659,6 +668,9 @@ export function Tile(props: {
         onMouseLeave={holdable ? entHoldEnd : undefined}
         onContextMenu={holdable ? (ev: Event) => ev.preventDefault() : undefined}
       >
+        {item.widget === 'onair' ? (
+          <OnAirTile onair={props.onair} cw={item.w || 1} ch={item.h || 1} tw={props.tw} th={props.th} scale={props.scale} showLabel={props.tt.showLabels && !item.hideLabel} label={item.label} />
+        ) : (
         <Widget
           kind={core ? core.kind : item.widget || 'clock'}
           stats={stats}
@@ -700,6 +712,7 @@ export function Tile(props: {
           onMedia={props.onMedia}
           onVolume={props.onVolume}
         />
+        )}
         {handle}
       </div>
     )
@@ -745,6 +758,7 @@ export function Tile(props: {
         <span class={'pd-ios__sq' + (asIs ? ' pd-ios__sq--asis' : '')} style={sqStyle}>
           {ic ? <TileIcon value={ic} size={lobe ? Math.round(sq * 0.6) : asIs ? sq : gsz} assets={props.assets} weight={props.sound ? 'Filled' : undefined} /> : null}
           {props.sound || props.busy ? <SoundRing w={sq} h={sq} r={Math.round(sq * 0.225)} color="#fff" at={props.sound ? props.sound.at : Date.now()} durMs={props.sound ? props.sound.durMs : undefined} /> : null}
+          {props.live && props.live.state !== 'off' ? <LiveBadge view={props.live} size={Math.max(9, Math.round(sq * 0.15))} pill /> : null}
         </span>
         {hasLabel ? (
           <span class="pd-ios__lb" data-part="tile-label" style={lst}>
@@ -786,6 +800,7 @@ export function Tile(props: {
           {item.label}
         </span>
       ) : null}
+      {props.live ? <LiveBadge view={props.live} size={Math.max(9, Math.round(lsz * 0.85))} /> : null}
       {handle}
     </button>
   )
@@ -990,6 +1005,21 @@ export function Deck(props: DeckProps) {
   }, [])
   useEffect(() => onLocalScreen(() => bumpLocal((x) => x + 1)), [])
   const [scrOpen, setScrOpen] = useState(false)
+  // full-screen ON AIR on this phone (local setting): tell the agent when it is switched, so it keeps checking mic and camera
+  const onAirFull = !!localScreen().onAirFull
+  const onAirFullSent = useRef(onAirFull)
+  useEffect(() => {
+    if (onAirFullSent.current === onAirFull) return
+    onAirFullSent.current = onAirFull
+    client.onAirWatch(onAirFull)
+  }, [onAirFull])
+  // a tap on the sign shows the deck for 30 s
+  const [peekUntil, setPeekUntil] = useState(0)
+  useEffect(() => {
+    if (!peekUntil) return
+    const id = window.setTimeout(() => setPeekUntil(0), Math.max(0, peekUntil - Date.now()) + 50)
+    return () => window.clearTimeout(id)
+  }, [peekUntil])
   const [pv, setPv] = useState<{ layout: Layout | null; selectedId: string | null; np: string; clean: boolean; pluginData?: unknown }>(() => {
     const q = new URLSearchParams(location.search)
     const n = splitNp(q.get('np') || '')
@@ -2078,6 +2108,8 @@ export function Deck(props: DeckProps) {
                             onLight={(pg, itm, op, v) => { ctl(pg, itm, op, v) }}
                             busy={!!run[p.id + '/' + it.id]}
                             sound={it.action && it.action.type === 'sound' && st.sounds ? st.sounds[soundKey(it.action.sound)] : undefined}
+                            live={it.kind === 'button' ? liveView(it.action, st.onair) : undefined}
+                            onair={it.widget === 'onair' ? st.onair : undefined}
                             onPress={press}
                             onDown={onDown}
                           />
@@ -2182,6 +2214,7 @@ export function Deck(props: DeckProps) {
         </div>
       </div>
       {st.status !== 'pair' ? <ScreenLayer settings={theme.screen} alarms={st.layout ? st.layout.alarms : undefined} preview={preview} pvFlags={preview ? pv.np.split(',') : undefined} /> : null}
+      {!preview && st.status !== 'pair' && st.onair && signVisible(onAirFull, st.onair, peekUntil, Date.now()) ? <OnAirSign onair={st.onair} onPeek={() => setPeekUntil(Date.now() + PEEK_MS)} /> : null}
     </div>
   )
 }

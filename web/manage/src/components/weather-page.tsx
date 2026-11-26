@@ -4,6 +4,9 @@ import { Field } from "@/components/ui/knowns/input";
 import { SegmentedControl } from "@/components/ui/knowns/segmented-control";
 import { Icon } from "@/components/icon";
 import { PluginsPanel } from "@/components/plugins-panel";
+import { CityField } from "@/components/item-form";
+import { api } from "@/api";
+import { useEffect, useState } from "react";
 import { t, useLanguage } from "@/lib/i18n";
 import type { Layout } from "@/types";
 
@@ -11,6 +14,20 @@ import type { Layout } from "@/types";
 export function WeatherPage({ layout, update, onGoScreens }: { layout: Layout; update: (fn: (l: Layout) => Layout) => void; onGoScreens: () => void }) {
   useLanguage();
   const unit = layout.theme?.temperatureUnit === "f" ? "f" : "c";
+  // the default city is a plugin-wide setting of core.weather: tiles without their own city use it
+  const [place, setPlace] = useState<{ name: string; lat: number; lon: number } | undefined>();
+  const [cityErr, setCityErr] = useState<string | null>(null);
+  useEffect(() => {
+    api.getPlugins().then((list) => {
+      const s = list.find((p) => p.id === "core.weather")?.settings ?? {};
+      if (typeof s.lat === "number" && typeof s.lon === "number") setPlace({ name: typeof s.locationName === "string" ? s.locationName : "", lat: s.lat, lon: s.lon });
+    }, () => undefined);
+  }, []);
+  const saveCity = (p: { name: string; lat: number; lon: number } | undefined) => {
+    setCityErr(null);
+    api.putPluginSettings("core.weather", p ? { locationName: p.name, lat: p.lat, lon: p.lon } : { locationName: null, lat: null, lon: null })
+      .then(() => setPlace(p), (e) => setCityErr(e instanceof Error ? e.message : String(e)));
+  };
   return (
     <div className="flex max-w-3xl flex-col gap-3">
       <Card>
@@ -26,8 +43,10 @@ export function WeatherPage({ layout, update, onGoScreens }: { layout: Layout; u
             <SegmentedControl size="sm" aria-label={t("Temperature unit")} value={unit} options={[{ value: "c", label: "°C" }, { value: "f", label: "°F" }]}
               onValueChange={(v) => update((l) => { const th = { ...(l.theme ?? {}) }; if (v === "f") th.temperatureUnit = "f"; else delete th.temperatureUnit; return { ...l, theme: th }; })} />
           </Field>
+          <CityField place={place} onChange={saveCity} />
+          {cityErr && <p className="text-xs text-destructive">{cityErr}</p>}
           <div className="flex flex-col gap-2 rounded-xl border p-3 text-[13px]">
-            <p className="text-muted-foreground">{t("The location is set on each Weather tile: pick the tile on the phone, then choose Automatic or search for a city.")}</p>
+            <p className="text-muted-foreground">{t("Every Weather tile without a city of its own uses this one. To give a tile its own city, open it in Screens.")}</p>
             <div><Button size="sm" variant="secondary" onClick={onGoScreens}>{t("Open Screens")}</Button></div>
           </div>
         </CardContent>

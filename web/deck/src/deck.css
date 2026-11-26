@@ -3849,3 +3849,37 @@
 .pd-root.pd-onetile { background: transparent !important; }
 .pd-onetile__back { position: absolute; top: 0; right: 0; bottom: 0; left: 0; border-radius: var(--pd-radius); background-color: var(--pd-bg); background-size: cover; }
 .pd-root .pd-onetile__back > .pd-tile { width: 100%; height: 100%; box-sizing: border-box; }
+
+/* ---------- On Air, mic and camera (onair.tsx). ON AIR red is fixed: it is a sign, not a theme colour. ---------- */
+.pd-root { --pd-onair: #e5322d; --pd-onair-deep: #a3120f; }
+.pd-tile--btn[data-state='on'] { box-shadow: inset 0 0 0 2px var(--pd-accent); }
+.pd-tile--btn[data-state='live'] { box-shadow: inset 0 0 0 2px var(--pd-onair), 0 0 14px rgba(229, 50, 45, 0.45); }
+.pd-tile--btn[data-state='muted'] { box-shadow: inset 0 0 0 2px var(--pd-onair); background-color: rgba(229, 50, 45, 0.16); }
+.pd-live { display: block; max-width: 100%; margin-top: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.2; color: var(--pd-muted); font-family: var(--pd-ff-num, inherit); }
+.pd-live--timer { font-variant-numeric: tabular-nums; font-weight: 600; }
+.pd-tile--btn[data-state='live'] .pd-live, .pd-tile--btn[data-state='muted'] .pd-live { color: var(--pd-onair); }
+.pd-live__dot, .pd-onair__dot { display: inline-block; width: 0.55em; height: 0.55em; margin-right: 0.35em; border-radius: 50%; background: currentColor; vertical-align: 0.08em; -webkit-animation: pd-onair-blink 1.6s ease-in-out infinite; animation: pd-onair-blink 1.6s ease-in-out infinite; }
+@-webkit-keyframes pd-onair-blink { 50% { opacity: 0.25; } }
+@keyframes pd-onair-blink { 50% { opacity: 0.25; } }
+.pd-tile--ios[data-state='on'], .pd-tile--ios[data-state='live'], .pd-tile--ios[data-state='muted'] { box-shadow: none; background-color: transparent; }
+.pd-tile--ios[data-state='on'] .pd-ios__sq { box-shadow: 0 0 0 2px var(--pd-accent), 0 1px 3px rgba(0, 0, 0, 0.35); }
+.pd-tile--ios[data-state='live'] .pd-ios__sq, .pd-tile--ios[data-state='muted'] .pd-ios__sq { box-shadow: 0 0 0 2px var(--pd-onair), 0 0 12px rgba(229, 50, 45, 0.5); }
+.pd-live--pill { position: absolute; left: 50%; bottom: 6%; max-width: 92%; margin: 0; padding: 1px 6px; box-sizing: border-box; border-radius: 99px; -webkit-transform: translateX(-50%); transform: translateX(-50%); background: rgba(0, 0, 0, 0.55); color: #fff; }
+.pd-tile--ios[data-state='live'] .pd-live--pill, .pd-tile--ios[data-state='muted'] .pd-live--pill { background: var(--pd-onair); color: #fff; }
+.pd-lite .pd-live__dot, .pd-lite .pd-onair__dot { -webkit-animation: none; animation: none; }
+
+.pd-onair { position: absolute; left: 0; top: 0; right: 0; bottom: 0; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; padding: 6px; box-sizing: border-box; text-align: center; color: var(--pd-muted); border-radius: inherit; }
+.pd-onair__title { font-weight: 700; letter-spacing: 0.04em; line-height: 1.05; white-space: nowrap; }
+.pd-onair__time { margin-top: 0.15em; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; font-family: var(--pd-ff-num, inherit); }
+.pd-onair__why { margin-top: 0.35em; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; opacity: 0.9; }
+.pd-onair--on { background: var(--pd-onair); color: #fff; }
+.pd-onair--on .pd-onair__title { letter-spacing: 0.08em; }
+.pd-onair--micoff { background: var(--pd-onair-deep); }
+.pd-tile--onair { overflow: hidden; }
+
+.pd-onair-sign { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 130; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; padding: 24px; box-sizing: border-box; background: var(--pd-onair); color: #fff; text-align: center; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; -webkit-animation: pd-fade-in 0.3s; animation: pd-fade-in 0.3s; }
+.pd-onair-sign--micoff { background: var(--pd-onair-deep); }
+.pd-onair-sign__title { font-size: 19vmin; font-weight: 800; letter-spacing: 0.06em; line-height: 1; white-space: nowrap; }
+.pd-onair-sign__time { margin-top: 3vmin; font-size: 11vmin; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; font-family: var(--pd-ff-num, inherit); }
+.pd-onair-sign__why { margin-top: 3vmin; font-size: 5.5vmin; font-weight: 600; opacity: 0.9; }
+.pd-onair-sign__hint { position: absolute; left: 0; right: 0; bottom: 16px; font-size: 13px; opacity: 0.6; }

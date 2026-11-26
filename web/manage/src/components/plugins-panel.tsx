@@ -18,16 +18,17 @@ import { Switch } from "@/components/ui/knowns/switch";
 import { api } from "@/api";
 import { t, useLanguage } from "@/lib/i18n";
 import { addLayoutPack, pluginUsage, removePluginItems } from "@/lib/plugins";
-import { osBadges, permChips, riskTone } from "@/lib/plugin-ui";
+import { networkLabel, osBadges, permChips, riskTone } from "@/lib/plugin-ui";
 import { Row, type PluginView, RowList } from "@/components/plugin-view";
 import type { Layout, PluginField, PluginInfo, PluginPermissions } from "@/types";
 
 /** What a plugin asks for, one line each (the install dialog and the card use the same wording). */
 export function permissionLines(p: PluginPermissions): string[] {
-  const out = p.network.map((h) => t("Connect to {host}", { host: h }));
+  const out = p.network.map((h) => t("Connect to {host}", { host: networkLabel(h) }));
   if (p.shell) out.push(t("Run shell commands on this computer"));
   if (p.keyboard) out.push(t("Press keys and type text"));
   if (p.storage) out.push(t("Store its own data"));
+  if (p.onair) out.push(t("Turn On Air on"));
   return out;
 }
 
@@ -295,7 +296,7 @@ export function PluginsPanel({ update, layout, onSaveLayout, only, quietIfMissin
       </Dialog>
 
       <PermissionDialog open={!!grant} name={grant?.name ?? ""} version={grant?.version ?? ""} author={grant?.author} unreviewed={!!grant?.unreviewed && !grant?.builtin}
-        permissions={grant?.permissions ?? { network: [], shell: false, keyboard: false, storage: false }} source={grant && !grant.builtin ? grant.source : undefined}
+        permissions={grant?.permissions ?? { network: [], shell: false, keyboard: false, storage: false, onair: false }} source={grant && !grant.builtin ? grant.source : undefined}
         onCancel={() => setGrant(null)} onConfirm={() => void confirmGrant()} />
 
       <Dialog
@@ -391,7 +392,7 @@ function PluginCard({ plugin: p, busy, onToggle, onRemove, onSaved, onError, onR
 
         <PluginProcessPanel plugin={p} onError={onError} />
 
-        {open && p.fields.length > 0 && <SettingsForm plugin={p} onSaved={() => { setOpen(false); onSaved(); }} onError={onError} />}
+        {open && p.fields.length > 0 && p.id !== "core.weather" && <SettingsForm plugin={p} onSaved={() => { setOpen(false); onSaved(); }} onError={onError} />}
 
         {p.enabled && (p.themes.length > 0 || p.layouts.length > 0) && (
           <div className="flex flex-col gap-1.5 rounded-xl border p-3">
@@ -414,7 +415,7 @@ function PluginCard({ plugin: p, busy, onToggle, onRemove, onSaved, onError, onR
 
         <div className="flex flex-wrap items-center gap-2">
           {onAddTile && <Button size="sm" icon={<Plus />} onClick={onAddTile}>{t("Add tile to a screen")}</Button>}
-          {p.fields.length > 0 && <Button size="sm" variant="secondary" aria-expanded={open} onClick={() => setOpen((o) => !o)}>{open ? t("Hide settings") : t("Settings")}</Button>}
+          {p.fields.length > 0 && p.id !== "core.weather" && <Button size="sm" variant="secondary" aria-expanded={open} onClick={() => setOpen((o) => !o)}>{open ? t("Hide settings") : t("Settings")}</Button>}
           {onDetails && <Button size="sm" variant="ghost" onClick={onDetails}>{t("Details")}</Button>}
           {!p.builtin && (
             <div className="ml-auto">
@@ -437,7 +438,7 @@ function PluginRow({ plugin: p, busy, onToggle, onRemove, onSaved, onError, onRe
   const status = p.error ? <Badge size="sm" tone="danger" dot>{t("Error")}</Badge> : pending ? <Badge size="sm" tone="warning" dot>{t("Needs approval")}</Badge> : <Badge size="sm" tone={p.enabled ? "success" : "neutral"} dot>{p.enabled ? t("On") : t("Off")}</Badge>;
   const items = [
     ...(onAddTile ? [{ id: "tile", label: t("Add tile to a screen"), icon: <Plus /> }] : []),
-    ...(p.fields.length > 0 ? [{ id: "settings", label: open ? t("Hide settings") : t("Settings") }] : []),
+    ...(p.fields.length > 0 && p.id !== "core.weather" ? [{ id: "settings", label: open ? t("Hide settings") : t("Settings") }] : []),
     { id: "details", label: t("Details") },
     ...(!p.builtin ? [{ id: "remove", label: t("Remove…"), danger: true, icon: <Trash /> }] : []),
   ];
@@ -467,7 +468,7 @@ function PluginRow({ plugin: p, busy, onToggle, onRemove, onSaved, onError, onRe
         </div>
       </Row>
       {p.error && <li className="list-none"><Alert tone="danger">{p.error}</Alert></li>}
-      {open && p.fields.length > 0 && <li className="list-none rounded-xl border bg-card p-3"><SettingsForm plugin={p} onSaved={() => { setOpen(false); onSaved(); }} onError={onError} /></li>}
+      {open && p.fields.length > 0 && p.id !== "core.weather" && <li className="list-none rounded-xl border bg-card p-3"><SettingsForm plugin={p} onSaved={() => { setOpen(false); onSaved(); }} onError={onError} /></li>}
     </>
   );
 }
@@ -497,14 +498,45 @@ function SettingsForm({ plugin: p, onSaved, onError }: { plugin: PluginInfo; onS
   return (
     <form className="flex flex-col gap-3 rounded-xl border p-3" onSubmit={(e) => { e.preventDefault(); void save(); }}>
       {p.fields.map((f) => (
-        <FieldInput key={f.key} id={`pl-${p.id}-${f.key}`} field={f} value={vals[f.key]} secret={secrets[f.key] ?? ""} onChange={(v) => setVals((s) => ({ ...s, [f.key]: v }))} onSecret={(v) => setSecrets((s) => ({ ...s, [f.key]: v }))} />
+        <FieldInput key={f.key} id={`pl-${p.id}-${f.key}`} field={f} value={vals[f.key]} secret={secrets[f.key] ?? ""} pluginId={p.id} settings={vals} onChange={(v) => setVals((s) => ({ ...s, [f.key]: v }))} onSecret={(v) => setSecrets((s) => ({ ...s, [f.key]: v }))} />
       ))}
       <div><Button type="submit" size="sm" loading={saving}>{t("Save settings")}</Button></div>
     </form>
   );
 }
 
-export function FieldInput({ id, field: f, value, secret, onChange, onSecret }: { id: string; field: PluginField; value: unknown; secret: string; onChange: (v: unknown) => void; onSecret: (v: string) => void }) {
+/**
+ * A select whose choices come from the plugin's code (optionsFrom): asked once when the form opens. While they load, and when the plugin
+ * cannot give them (OBS not running ...), the field is a text box with the saved value, so nothing is lost and a name can still be typed.
+ */
+function DynamicSelect({ id, pluginId, provider, settings, value, onChange }: { id: string; pluginId: string; provider: string; settings: Record<string, unknown>; value: string; onChange: (v: string) => void }) {
+  useLanguage();
+  const [state, setState] = useState<{ options: string[] } | { error: string } | null>(null);
+  // the settings at the moment the form opened: a provider is not asked again on every key press
+  const [asked] = useState(() => settings);
+  useEffect(() => {
+    let live = true;
+    api.pluginOptions(pluginId, provider, asked).then((options) => { if (live) setState({ options }); }, (e) => { if (live) setState({ error: e instanceof Error ? e.message : String(e) }); });
+    return () => { live = false; };
+  }, [pluginId, provider, asked]);
+  if (state && "options" in state && state.options.length) {
+    const opts = state.options.map((o) => ({ value: o, label: o }));
+    // a saved value the plugin no longer lists stays selectable, marked
+    if (value && !state.options.includes(value)) opts.unshift({ value, label: t("{value} (not found now)", { value }) });
+    if (!value) opts.unshift({ value: "", label: t("Choose…") });
+    return <Select id={id} value={value} options={opts} onChange={(e) => onChange(e.target.value)} />;
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <Input id={id} value={value} autoComplete="off" spellCheck={false} onChange={(e) => onChange(e.target.value)} />
+      <span className="text-xs text-muted-foreground">
+        {!state ? t("Loading the choices…") : "error" in state ? t("Could not get the choices ({error}). You can type the name.", { error: state.error }) : t("No choices yet. You can type the name.")}
+      </span>
+    </div>
+  );
+}
+
+export function FieldInput({ id, field: f, value, secret, pluginId, settings, onChange, onSecret }: { id: string; field: PluginField; value: unknown; secret: string; pluginId?: string; settings?: Record<string, unknown>; onChange: (v: unknown) => void; onSecret: (v: string) => void }) {
   if (f.type === "boolean") {
     return (
       <label className="flex items-center justify-between gap-2 text-[13px]">
@@ -515,7 +547,9 @@ export function FieldInput({ id, field: f, value, secret, onChange, onSecret }: 
   }
   return (
     <Field label={f.label} id={id} hint={f.type === "secret" ? t("Stored on this computer. It is never shown again.") : f.type === "entity" ? t("A Home Assistant entity id, for example light.desk") : undefined}>
-      {f.type === "select" ? (
+      {f.type === "select" && f.optionsFrom && pluginId ? (
+        <DynamicSelect id={id} pluginId={pluginId} provider={f.optionsFrom} settings={settings ?? {}} value={String(value ?? "")} onChange={onChange} />
+      ) : f.type === "select" ? (
         <Select id={id} value={String(value ?? "")} options={f.options ?? []} onChange={(e) => onChange(e.target.value)} />
       ) : f.type === "secret" ? (
         <Input id={id} type="password" value={secret} autoComplete="new-password" spellCheck={false} placeholder={f.isSet ? t("•••••••• (Saved)") : ""} onChange={(e) => onSecret(e.target.value)} />

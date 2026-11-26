@@ -6,9 +6,9 @@ import { userHome } from "../home";
 import { join } from "node:path";
 
 import { HOME } from "../config";
-import { EVERY_DEFAULT_S, type InitResult, type Settings, type WidgetUpdate } from "./api";
+import { EVERY_DEFAULT_S, type InitResult, type OnAirKind, type Settings, type WidgetUpdate } from "./api";
 import type { TileSize, WidgetTile } from "./api";
-import { PluginServices } from "./capabilities";
+import { PluginServices, type WebSocketLike } from "./capabilities";
 import { PluginLog, PluginProcess, hostArgv, realSpawn, type ProcessInfo, type SpawnFn } from "./process";
 import type { PluginStore } from "./store";
 import type { SourceDeps } from "./sources";
@@ -21,6 +21,10 @@ export interface HostsDeps extends SourceDeps {
   logDir?: string;
   dataDir?: string;
   timing?: Partial<Pick<ConstructorParameters<typeof PluginProcess>[0], "pingIntervalMs" | "pingTimeoutMs" | "callTimeoutMs" | "idleStopMs" | "backoffMs" | "restartResetMs" | "restartMax">>;
+  /** On Air, for plugins granted `onair` (ctx.onair.set). `clear` = this plugin reports nothing any more (stopped, disabled, revoked). */
+  onair?: { set(pluginId: string, kind: OnAirKind, on: boolean, since?: number): void; clear(pluginId: string): void };
+  /** Client WebSockets for ctx.net.websocket (tests); the runtime's WebSocket otherwise. */
+  websocket?: (url: string, protocols: string[]) => WebSocketLike;
 }
 
 interface Slot { proc: PluginProcess; version: string; sha: string; settingsJson: string; every: Record<string, number>; log: PluginLog }
@@ -38,6 +42,22 @@ export class PluginHosts {
     this.logDir = deps.logDir ?? join(HOME, "logs", "plugins");
     this.dataDir = deps.dataDir ?? join(HOME, "plugins-data");
     store.onChange(() => void this.reconcile());
+  }
+
+  /** Plugins granted `onair` report live state even with no phone open: start them now (the agent calls this once it is up). */
+  startEager(): void {
+    for (const id of this.store.ids()) {
+      if (!this.store.entry(id)?.state.granted?.onair) continue;
+      const s = this.slot(id);
+      s?.proc.ensureStarted().catch((e) => s.log.append(`[agent] start failed: ${e?.message ?? e}`));
+    }
+  }
+
+  /** The choices of a select with optionsFrom, from the plugin's code (ctx.settings.options). Throws a short message. */
+  async options(id: string, providerId: string, settings: Settings): Promise<string[]> {
+    const s = this.slot(id);
+    if (!s) throw new Error("plugin not running");
+    return s.proc.call<string[]>("settings.options", { id: providerId, settings });
   }
 
   onPush(fn: (pluginId: string, widgetId: string, update: WidgetUpdate, key?: string) => void): void { this.pushFns.add(fn); }
@@ -62,6 +82,8 @@ export class PluginHosts {
       granted: () => this.store.entry(id)?.state.granted ?? null,
       fetch: this.deps.fetch, shell: this.deps.shell, keys: this.deps.keys,
       dataFile: join(this.dataDir, `${id}.json`),
+      ...(this.deps.websocket ? { websocket: this.deps.websocket } : {}),
+      onair: (kind, on, since) => this.deps.onair?.set(id, kind, on, since),
     });
     const slot: Slot = {
       version: e.state.version, sha: e.state.sha256, settingsJson: JSON.stringify(e.state.settings), every: {}, log,
@@ -80,6 +102,8 @@ export class PluginHosts {
           for (const w of m?.widgets ?? []) if ("agent" in w.source && !r.widgets.includes(w.id)) log.append(`[agent] warning: widget "${w.id}" has no ctx.widgets.provide("${w.id}", ...)`);
           for (const a of m?.actions ?? []) if ("agent" in a.run && !r.actions.includes(a.id)) log.append(`[agent] warning: action "${a.id}" has no ctx.actions.handle("${a.id}", ...)`); for (const f of this.registeredFns) f(id); },
         onFailed: (m) => { for (const f of this.failedFns) f(id, m); },
+        onEnded: () => this.deps.onair?.clear(id),
+        keepAlive: () => !!this.store.entry(id)?.state.granted?.onair,
         ...this.deps.timing,
       }),
     };
@@ -143,9 +167,11 @@ export class PluginHosts {
         await s.proc.stop();
         continue;
       }
+      if (!e.state.granted?.onair) this.deps.onair?.clear(id);
       const json = JSON.stringify(e.state.settings);
       if (json !== s.settingsJson) { s.settingsJson = json; s.proc.notifySettings(e.state.settings); }
     }
+    this.startEager(); // a plugin just enabled or granted onair starts without waiting for a phone
   }
 
   /** Where plugin files live, for the CLI messages. */

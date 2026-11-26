@@ -1,4 +1,5 @@
 // Mirrors src/config.ts of the agent (that file imports node modules, so the types are duplicated here).
+import type { CameraAction, MicAction, OnAirAction } from "@shared/onair";
 export type Action =
   | { type: "open"; target: string }
   | { type: "hotkey"; keys: string }
@@ -11,7 +12,10 @@ export type Action =
   | { type: "sound-stop" }
   | { type: "hass"; service: string; entityId?: string; data?: Record<string, unknown> }
   | { type: "macro"; steps: MacroStep[] }
-  | { type: "plugin"; plugin: string; action: string; settings?: Record<string, unknown> };
+  | { type: "plugin"; plugin: string; action: string; settings?: Record<string, unknown> }
+  | OnAirAction
+  | MicAction
+  | CameraAction;
 
 export type SoundTarget = "mac" | "phone" | "both";
 export type SoundMode = "overlap" | "restart" | "toggle";
@@ -25,7 +29,7 @@ export interface Sound {
 }
 
 export type ActionType = Action["type"];
-export const ACTION_TYPES: ActionType[] = ["open", "hotkey", "type", "shell", "media", "volume", "page", "sound", "sound-stop", "hass", "macro"];
+export const ACTION_TYPES: ActionType[] = ["open", "hotkey", "type", "shell", "media", "volume", "page", "sound", "sound-stop", "hass", "onair", "mic", "camera", "macro"];
 
 export type AiProvider = "claude" | "codex" | "antigravity" | "opencode" | "grok";
 export const AI_PROVIDERS: AiProvider[] = ["claude", "codex", "antigravity", "opencode", "grok"];
@@ -100,8 +104,8 @@ export interface MetricOptions {
   showSub?: boolean;
 }
 
-export type WidgetKind = "clock" | "cpu" | "gpu" | "memory" | "uptime" | "load" | "network" | "nowplaying" | "quota" | "sessions" | "entity" | "weather" | "value" | "notifications" | "plugin";
-export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "gpu", "memory", "uptime", "load", "network", "nowplaying", "quota", "sessions", "entity", "weather", "value", "notifications"];
+export type WidgetKind = "clock" | "cpu" | "gpu" | "memory" | "uptime" | "load" | "network" | "nowplaying" | "quota" | "sessions" | "entity" | "weather" | "value" | "notifications" | "plugin" | "onair";
+export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "gpu", "memory", "uptime", "load", "network", "nowplaying", "quota", "sessions", "entity", "weather", "value", "notifications", "onair"];
 /** A plugin tile or button points at the plugin by id (see GET /api/plugins). */
 export interface PluginRef { id: string; widget: string; settings?: Record<string, unknown>; /** How the tile is drawn; omit for the manifest suggestion or the renderer default. */ view?: { style?: string } }
 
@@ -224,7 +228,7 @@ export interface ItemStyle {
 
 export type Item =
   | ({ id: string; kind: "button"; label: string; icon?: string; color?: string; action?: Action } & Size & ItemStyle)
-  | ({ id: string; kind: "widget"; widget: WidgetKind; color?: string; provider?: AiProvider; clock?: ClockOptions; metric?: MetricOptions; quota?: QuotaOptions; entity?: EntityOptions; weather?: WeatherOptions; push?: PushOptions; plugin?: PluginRef } & Size & ItemStyle);
+  | ({ id: string; kind: "widget"; widget: WidgetKind; color?: string; provider?: AiProvider; clock?: ClockOptions; metric?: MetricOptions; quota?: QuotaOptions; entity?: EntityOptions; weather?: WeatherOptions; push?: PushOptions; plugin?: PluginRef; action?: Action } & Size & ItemStyle);
 
 export type ThemeOrientation = "landscape" | "portrait" | "auto";
 
@@ -451,14 +455,19 @@ export interface PluginField {
   label: string;
   default?: string | number | boolean;
   options?: { value: string; label: string }[];
+  /** select: the choices come from the plugin's code (POST /api/plugins/:id/options) when the form opens. */
+  optionsFrom?: string;
   /** A secret that already has a value on the agent (the value itself is never sent back). */
   isSet?: boolean;
 }
 export interface PluginPermissions {
+  /** Host names (fetch) and WebSocket origins like ws://127.0.0.1:4455. */
   network: string[];
   shell: boolean;
   keyboard: boolean;
   storage: boolean;
+  /** May turn On Air on (the OBS plugin reports live / recording). */
+  onair: boolean;
 }
 /** One plugin of the community registry (GET /api/plugins/registry). Entries carry no tiles or buttons: see RegistryManifest. */
 export interface RegistryEntry {

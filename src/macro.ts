@@ -32,6 +32,8 @@ function toAction(st: MacroStep): Action | null {
     case "media": return { type: "media", command: st.command };
     case "volume": return { type: "volume", command: st.command };
     case "hass": return { type: "hass", service: st.service, ...(st.entityId ? { entityId: st.entityId } : {}), ...(st.data ? { data: st.data } : {}) };
+    case "onair": return { type: "onair", ...(st.mode ? { mode: st.mode } : {}) };
+    case "mic": return { type: "mic", ...(st.mode ? { mode: st.mode } : {}) };
     default: return null;
   }
 }

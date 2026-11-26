@@ -45,10 +45,11 @@ The user sees this list before the plugin turns on, and nothing runs until they 
 
 | Key | Meaning |
 |---|---|
-| `network` | A list of hosts the plugin may call. Calls to any other host fail. |
+| `network` | A list of hosts the plugin may call. Calls to any other host fail. A WebSocket address goes in the same list with its scheme and port, like `ws://127.0.0.1:4455` (see [WebSockets](#websockets)). |
 | `shell` | Run commands on the computer (needed by `command` sources). |
 | `keyboard` | Press keys and type text. |
 | `storage` | Keep the plugin's own data. |
+| `onair` | Turn On Air on while the plugin reports it is live or recording (see [On Air](#on-air)). |
 
 Ask for the least you need. Plugins from a link or a folder are shown as **Unreviewed**.
 
@@ -257,6 +258,8 @@ ctx.widgets.provide("timer", (settings, tile) => ({
 ctx.widgets.push("timer", (tile) => ({ render: "card", data: tile.w >= 4 ? wideCard() : smallCard() }));
 ```
 
+From Nookdeck 0.7 the function given to `push` also gets the tile's settings as its second argument, the same `settings` its provider gets, so tiles of one widget with different settings (one scene each, say) can each show their own state: `ctx.widgets.push("scene", (tile, settings) => sceneCard(settings.scene))`.
+
 `tile` is `{ w, h }` (type `TileSize`): the cells the tile takes in the layout, not pixels, and the same however the phone is turned. The function given to `push` may be `async`; if it throws for one tile, that tile keeps what it shows and the plugin log says why. Pushes of a widget arrive in the order you made them. While a function push is still under way, only the newest later push waits for it; the ones in between are dropped. The function has 20 seconds for each tile: after that the tile is skipped for this push, the plugin log says so, and a result that comes later is ignored. A plain update given to `push` goes to every tile, as before, and a provider that takes only `settings` works unchanged. `http` and `command` widgets are not told the size. Needs Nookdeck 0.5.1: before it, `tile` is `undefined` and `push` takes only an update, so set `"nookdeck": ">=0.5.1"`.
 
 ## Show a tile on a web page
@@ -295,7 +298,7 @@ Each widget and action can declare settings. The manage page shows them as a for
 | `string` | Text |
 | `number` | Number |
 | `boolean` | Switch |
-| `select` | Choice (add `options`) |
+| `select` | Choice (add `options`, or `optionsFrom` for a list from your code, see [Choices from your code](#choices-from-your-code)) |
 | `secret` | Password. Stored on the computer, never sent to phones, and never shown again after saving. |
 | `entity` | A Home Assistant entity id |
 
@@ -349,13 +352,16 @@ Each code plugin runs in its own process, started by the agent, so a crash or a 
 | `ctx.settings.get()` | | The plugin-wide settings the user saved. `ctx.settings.onChange(fn)` runs after they change |
 | `ctx.storage.get/set` | `storage` | The plugin's own saved data |
 | `ctx.net.fetch(url, init?)` | `network` hosts | `fetch`, limited to the hosts you list |
+| `ctx.net.websocket(url, { protocols? })` | `network` ws origins | A WebSocket to an origin you list. See [WebSockets](#websockets) |
+| `ctx.settings.options(id, fn)` | | Supplies the choices of a `select` with `optionsFrom: id` |
+| `ctx.onair?.set(kind, on, since?)` | `onair` | Tells On Air you are live (`"stream"`) or recording (`"record"`). Present only when granted |
 | `ctx.shell?.run(cmd)` | `shell` | Run a command, get `{ code, stdout }`. Present only when granted |
 | `ctx.keys?.hotkey / type` | `keyboard` | Press keys and type text. Present only when granted |
 | `ctx.widgets.provide(id, fn, { every })` | | Supply a widget's data now and every `every` seconds |
 | `ctx.widgets.push(id, update)` | | Push new data when something changes |
 | `ctx.actions.handle(id, fn)` | | Handle a button press |
 
-`ctx.shell` and `ctx.keys` exist only when the user granted that permission. A call that is not allowed (a host you did not list, storage without `storage`) rejects with a `PluginPermissionError`. A widget provider or an action handler receives the plugin-wide settings overlaid with the tile's own settings. The exact types are in `src/plugins/api.ts`, re-exported by `@nookdeck/plugin` (`PluginContext`, `PluginModule`, `WidgetUpdate`).
+`ctx.shell`, `ctx.keys` and `ctx.onair` exist only when the user granted that permission. A call that is not allowed (a host you did not list, storage without `storage`) rejects with a `PluginPermissionError`. A widget provider or an action handler receives the plugin-wide settings overlaid with the tile's own settings. The exact types are in `src/plugins/api.ts`, re-exported by `@nookdeck/plugin` (`PluginContext`, `PluginModule`, `WidgetUpdate`).
 
 ### No dependencies
 
@@ -372,11 +378,63 @@ An import of any other package stops the plugin with a message that says so. The
 | What | Limit |
 |---|---|
 | `net.fetch` | 5 MB response, 15 s, 5 redirects, only your listed hosts (checked on every redirect) |
+| `net.websocket` | 4 open sockets, 1 MB per message either way, text frames only, 10 s to connect, only your listed origins, no redirects |
+| Choices (`optionsFrom`) | 200 per list, 200 characters each |
 | `shell.run` | 30 s |
 | `storage` | 1 MB in total |
 | Widget refresh | `every` defaults to 60 s, minimum 5 s |
 | After a crash | restarts after 0.5, 2, 10, then 60 s; marked failed after 8 crashes in a row |
-| Idle | a plugin with no calls for 5 minutes is stopped and starts again on the next call |
+| Idle | a plugin with no calls for 5 minutes is stopped and starts again on the next call, unless it has a WebSocket open or the `onair` permission |
+
+### WebSockets
+
+For a program that speaks WebSocket (OBS Studio, a home server, a chat bridge), list its origin in `permissions.network` with the scheme, host and port, then open it from your code:
+
+```json
+"permissions": { "network": ["ws://127.0.0.1:4455", "ws://localhost:4455"] }
+```
+
+```ts
+const ws = await ctx.net.websocket("ws://127.0.0.1:4455", { protocols: ["obswebsocket.json"] });
+ws.onMessage((text) => { /* one text frame */ });
+ws.onClose((code, reason) => { /* reconnect later */ });
+ws.send(JSON.stringify({ op: 1, d: {} }));
+ws.close();
+```
+
+- Scheme, host and port must match an entry exactly. There are no wildcards, `127.0.0.1` and `localhost` are different entries, and a host name entry (for `net.fetch`) does not allow a WebSocket.
+- The connection runs in the agent, which checks the address. A redirect answer is not followed.
+- Frames the server sends before you call `onMessage` are kept for you.
+- A message over 1 MB or a binary frame closes the socket, and `onClose` gets 1009 or 1003.
+- When the plugin stops, is turned off or is removed, its sockets are closed. When it starts again, open them again in `activate`.
+- A plugin with an open socket is not stopped for being idle, so it can keep a connection and push tile updates with `ctx.widgets.push`.
+
+The install screen shows each origin as "Connect to 127.0.0.1:4455".
+
+### Choices from your code
+
+A `select` whose choices are only known at run time (OBS scenes, a list from an API) takes `optionsFrom` instead of `options`:
+
+```json
+{ "key": "scene", "type": "select", "label": "Scene", "optionsFrom": "scenes" }
+```
+
+```ts
+ctx.settings.options("scenes", async (settings) => (await listScenes()).map((s) => s.name));
+```
+
+The manage page calls the provider when the form opens, with the values the form has so far over the saved plugin settings. Secrets come from the saved settings only. The list may hold up to 200 strings: other values, empty strings and duplicates are dropped. If the provider throws (the program is not running, for example), the field becomes a text box with the saved value and your error message, so the owner can still type a name. A saved value that is not in the list stays selectable.
+
+### On Air
+
+A plugin with `"onair": true` in its permissions gets `ctx.onair`:
+
+```ts
+ctx.onair.set("stream", true, startedAtMs); // live
+ctx.onair.set("record", false);             // recording stopped
+```
+
+These feed On Air's OBS sources (live and recording). The owner can turn that source off in the On Air settings. When the plugin stops, is turned off or loses the permission, its On Air state is cleared. A plugin with `onair` starts when the agent starts, not only when a phone shows one of its tiles, so On Air works with no phone open. The install screen says "Turn On Air on".
 
 ### Permissions and trust
 

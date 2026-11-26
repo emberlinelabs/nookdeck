@@ -161,5 +161,22 @@
         "tempUnit": "c"
       }
     }
+  ],
+  "settings": [
+    {
+      "key": "locationName",
+      "type": "string",
+      "label": "Default city"
+    },
+    {
+      "key": "lat",
+      "type": "number",
+      "label": "Default latitude"
+    },
+    {
+      "key": "lon",
+      "type": "number",
+      "label": "Default longitude"
+    }
   ]
 }

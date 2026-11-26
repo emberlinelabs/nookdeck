@@ -350,6 +350,7 @@ console.log(`Phone:  http://${lanIp()}:${app.port}  or  http://${host}.local:${a
 console.log(`${t("Manage:")} http://localhost:${app.port}/manage/`);
 void printPairing(app.pin);
 
-const shutdown = () => { app.stop(); process.exit(0); };
+// the mic volume comes back first (NFR-6), with a short cap so a stuck helper never blocks exiting
+const shutdown = () => { void Promise.race([app.restoreMic(), new Promise((r) => setTimeout(r, 1500))]).finally(() => { app.stop(); process.exit(0); }); };
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);

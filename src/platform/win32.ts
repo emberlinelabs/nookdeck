@@ -275,6 +275,35 @@ export function createWin32(d: Win32Deps = {}): Platform {
     openExternal: async (url) => { await run(ps(`Start-Process -FilePath '${escapePowerShell(url)}'`)); },
     hookPath: (p) => p.replace(/\\/g, "/"),
     dispose: () => helper.dispose(),
+
+    async avUsage(ignorePid) {
+      const r = (await helper.call<{ mic: string[] | null; camera: string[] | null }>("av.usage", {}, 6000)) ?? { mic: [], camera: [] };
+      return winAvUsage(r, ignorePid === process.pid ? process.execPath : undefined);
+    },
+    async readMic() {
+      const m = await helper.call<{ muted: boolean; level: number } | null>("mic.get", {}, 5000);
+      return m ? { muted: m.muted, canMute: true, volume: m.level } : null;
+    },
+    setMicMuted: async (muted) => void (await helper.call("mic.set", { muted }, 5000)),
+    setMicVolume: async () => { throw new Error("not used on Windows: the recording device is muted instead"); },
+    async frontApp() {
+      try { const f = await helper.call<{ id: string; title: string } | null>("front.app", {}, 4000); return f && f.id ? { id: f.id.toLowerCase(), title: f.title } : null; } catch { return null; }
+    },
+    activateApp: async () => false,
+    runningApps: async () => [],
   };
   return self;
+}
+
+/**
+ * The consent store rows in use (packaged app family names, or desktop exe paths) as exe names / family names. A desktop
+ * app is "C:\\Program Files\\Zoom\\bin\\Zoom.exe" -> "zoom.exe". `selfExe` (the agent) is left out.
+ */
+export function winAvUsage(r: { mic: string[] | null; camera: string[] | null }, selfExe?: string): { mic: { inUse: boolean; apps: string[] }; camera: { inUse: boolean; apps: string[] } } {
+  const self = selfExe?.toLowerCase();
+  const names = (rows: string[] | null) => (rows ?? [])
+    .filter((p) => typeof p === "string" && p && p.toLowerCase() !== self)
+    .map((p) => (/[\\/]/.test(p) ? p.split(/[\\/]/).pop()! : p).toLowerCase());
+  const mic = names(r.mic), camera = names(r.camera);
+  return { mic: { inUse: mic.length > 0, apps: mic }, camera: { inUse: camera.length > 0, apps: camera } };
 }

@@ -58,6 +58,9 @@ async function macMemUsed(): Promise<number | undefined> {
 
 const mac = () => macNative();
 
+/** The title of the frontmost window (System Events; asks once for permission to control System Events). */
+export const FRONT_TITLE_SCRIPT = 'tell application "System Events" to tell (first application process whose frontmost is true) to if (count of windows) > 0 then return name of front window';
+
 // ---------- Now Playing from every app (mediaremote-adapter stream) ----------
 
 let adapterFiles: Promise<AdapterFiles | null> | undefined;
@@ -227,5 +230,30 @@ export function createDarwin(): Platform {
     openExternal: async (url) => void (await runCapture(["open", url], 5000)),
     hookPath: (p) => p,
     dispose: () => { remote.stop(); macNative().dispose(); },
+
+    async avUsage(ignorePid) {
+      const r = await mac().call<{ mic: { inUse: boolean; apps: string[] }; camera: boolean }>("avUsage", { ignorePid: ignorePid ?? 0 });
+      return { mic: { inUse: r.mic.inUse, apps: r.mic.apps }, camera: { inUse: r.camera, apps: [] } };
+    },
+    async readMic() {
+      const m = await mac().call<{ muted: boolean | null; canMute: boolean; volume: number | null } | null>("micRead");
+      return m ? { muted: m.muted, canMute: m.canMute, volume: m.volume } : null;
+    },
+    setMicMuted: async (muted) => void (await mac().call("micMute", { muted })),
+    setMicVolume: async (level) => void (await mac().call("micVolume", { level })),
+    async frontApp(withTitle) {
+      let id = "";
+      try { id = await mac().call<string>("frontApp"); } catch { return null; }
+      if (!id) return null;
+      if (!withTitle) return { id };
+      try {
+        const title = await mac().call<string>("script", { source: FRONT_TITLE_SCRIPT });
+        return { id, title: String(title ?? "") };
+      } catch { return { id }; }
+    },
+    activateApp: async (id) => { try { return !!(await mac().call<boolean>("activate", { bundle: id })); } catch { return false; } },
+    async runningApps(ids) {
+      try { const r = await mac().call<Record<string, boolean>>("running", { bundles: ids }); return ids.filter((b) => r[b]); } catch { return []; }
+    },
   };
 }

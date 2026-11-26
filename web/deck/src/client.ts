@@ -4,6 +4,8 @@ import { setPlatform } from './platform'
 import { mediaWithPreviousArtwork } from './media-merge'
 import { mergePlugins } from './plugin-logic'
 import type { PluginSlot } from './plugin-logic'
+import { parseOnAir, type OnAirMsg } from '../../shared/onair'
+import { localScreen } from './screen-logic'
 import type { QuestionRequest, GotoReq, Notice, PushedValue, WeatherData, HassState, AiData, Layout, Media, MediaCommand, PermissionRequest, ProcInfo, Stats } from './types'
 
 /** Connection to the Nookdeck agent: pairing (REST) + live deck (WebSocket). No UI code here. */
@@ -42,6 +44,8 @@ export interface ClientState {
   modeOverride?: 'dark' | 'light' | null
   /** sound id (without snd:) -> when it started and how long it is (ms, when known); phone and computer playback merged */
   sounds?: { [id: string]: { at: number; durMs?: number } }
+  /** On Air, mic and camera (contract message `onair`) */
+  onair?: OnAirMsg
 }
 
 export interface PressResult {
@@ -245,6 +249,8 @@ export class DeckClient {
       this.set({ status: 'online', closeCode: undefined })
       clearInterval(this.pingTimer)
       this.pingTimer = window.setInterval(() => this.send({ type: 'ping' }), 20000)
+      // this phone shows the full-screen ON AIR sign: the agent keeps checking mic and camera (onair-watch, web/shared/onair.ts)
+      if (localScreen().onAirFull) this.send({ type: 'onair-watch', on: true })
     }
     ws.onmessage = (ev) => {
       let msg: any
@@ -327,6 +333,11 @@ export class DeckClient {
           if (inc[id] === null) delete ents[id]
         })
         this.set({ hass: { entities: ents, connected: msg.connected !== false } })
+        break
+      }
+      case 'onair': {
+        const o = parseOnAir(msg)
+        if (o) this.set({ onair: o })
         break
       }
       case 'weather': {
@@ -498,6 +509,11 @@ export class DeckClient {
   }
 
   /** Send a request that gets a `result` reply (press, media, volume). Resolves with the agent's result. */
+  /** The full-screen ON AIR option was switched on this phone. */
+  onAirWatch(on: boolean) {
+    this.send({ type: 'onair-watch', on })
+  }
+
   request(body: { [k: string]: unknown }): Promise<PressResult> {
     return new Promise((resolve) => {
       const reqId = 'r' + this.nextReq++

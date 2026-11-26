@@ -137,6 +137,8 @@ function audio() {
     AudioObjectGetPropertyData: { args: [T.u32, T.ptr, T.u32, T.ptr, T.ptr, T.ptr], returns: T.i32 },
     AudioObjectSetPropertyData: { args: [T.u32, T.ptr, T.u32, T.ptr, T.u32, T.ptr], returns: T.i32 },
     AudioObjectHasProperty: { args: [T.u32, T.ptr], returns: T.bool },
+    AudioObjectGetPropertyDataSize: { args: [T.u32, T.ptr, T.u32, T.ptr, T.ptr], returns: T.i32 },
+    AudioObjectIsPropertySettable: { args: [T.u32, T.ptr, T.ptr], returns: T.i32 },
   }).symbols);
 }
 const fcc = (s: string) => ((s.charCodeAt(0) << 24) | (s.charCodeAt(1) << 16) | (s.charCodeAt(2) << 8) | s.charCodeAt(3)) >>> 0;
@@ -189,6 +191,184 @@ export function volumeStep(command: "up" | "down" | "mute"): void {
   if (!cur) throw new Error("the output device has no software volume");
   if (command === "mute") return setMuted(!cur.muted);
   setVolume(cur.level + (command === "up" ? 6 : -6));
+}
+
+// ---------- CoreAudio input: microphone in use and the default input's mute (On Air, the Mic button) ----------
+// Selectors: dev# devices, stm# streams, gone DeviceIsRunningSomewhere, dIn default input, mute, vmvc virtual main volume,
+// prs# process objects (macOS 14.2+), ppid pid, pbid bundle id, piri IsRunningInput.
+const SYSTEM = 1;
+
+/** An array of UInt32 object ids (devices, processes) of `obj`; empty when the property is missing. */
+function idList(obj: number, selector: string, scope = "glob"): number[] {
+  const a = audio();
+  const ad = addr(selector, scope);
+  const size = new Uint32Array(1);
+  if (a.AudioObjectGetPropertyDataSize(obj, ptr(ad), 0, null, ptr(size)) !== 0 || !size[0]) return [];
+  const ids = new Uint32Array(size[0] / 4);
+  if (a.AudioObjectGetPropertyData(obj, ptr(ad), 0, null, ptr(size), ptr(ids)) !== 0) return [];
+  return [...ids.subarray(0, size[0] / 4)];
+}
+
+function u32(obj: number, selector: string, scope = "glob", element = 0): number | null {
+  const a = audio();
+  const ad = new Uint32Array([fcc(selector), fcc(scope), element]);
+  if (!a.AudioObjectHasProperty(obj, ptr(ad))) return null;
+  const v = new Uint32Array(1), size = new Uint32Array([4]);
+  return a.AudioObjectGetPropertyData(obj, ptr(ad), 0, null, ptr(size), ptr(v)) === 0 ? v[0]! : null;
+}
+
+function cfStringProp(obj: number, selector: string): string {
+  const a = audio();
+  const ad = addr(selector, "glob");
+  if (!a.AudioObjectHasProperty(obj, ptr(ad))) return "";
+  const slot = new BigUint64Array(1), size = new Uint32Array([8]);
+  if (a.AudioObjectGetPropertyData(obj, ptr(ad), 0, null, ptr(size), ptr(slot)) !== 0 || !slot[0]) return "";
+  const s = jsString(slot[0]);
+  rt().p(slot[0], rt().sel("release")); // the HAL hands back a +1 CFString
+  return s;
+}
+
+/**
+ * macOS services that keep a microphone open for wake words and alerts ("Hey Siri", Sound Recognition, Voice Control). They are
+ * not someone talking into a call, so they never turn On Air on (seen live: com.apple.CoreSpeech after a `say`).
+ */
+export const SYSTEM_LISTENERS = /^com\.apple\.(CoreSpeech|corespeechd|siri|assistantd|SiriTTSService|accessibility\.heard|speech\.|SpeechRecognitionCore|VoiceTrigger)/i;
+
+const hasInputStreams = (dev: number) => idList(dev, "stm#", "inpt").length > 0;
+
+/**
+ * Which apps record from any input device right now. macOS 14.2+ names them (process objects with IsRunningInput); before
+ * that only "an input-only device is running" is known (a headset that also plays sound would read as in use, so duplex
+ * devices are skipped there). `ignorePid` (the agent itself) never counts. Apps are bundle ids, or "pid:<n>".
+ */
+export function micUsage(ignorePid = 0): { inUse: boolean; apps: string[]; exact: boolean } {
+  return pooled(() => {
+    const procs = idList(SYSTEM, "prs#");
+    if (procs.length) {
+      const apps: string[] = [];
+      for (const p of procs) {
+        if (u32(p, "piri") !== 1) continue;
+        const pid = u32(p, "ppid") ?? 0;
+        if (pid && pid === ignorePid) continue;
+        const id = cfStringProp(p, "pbid");
+        if (id && SYSTEM_LISTENERS.test(id)) continue;
+        apps.push(id || `pid:${pid}`);
+      }
+      return { inUse: apps.length > 0, apps, exact: true };
+    }
+    // older macOS: device level only
+    let inUse = false;
+    for (const d of idList(SYSTEM, "dev#")) {
+      if (!hasInputStreams(d) || idList(d, "stm#", "outp").length) continue;
+      if (u32(d, "gone") === 1) { inUse = true; break; }
+    }
+    return { inUse, apps: [], exact: false };
+  });
+}
+
+function inputDevice(): number | null {
+  const dev = u32(SYSTEM, "dIn ");
+  return dev && hasInputStreams(dev) ? dev : null;
+}
+
+/** The element that carries a control: the main element (0) when it has it, else channel 1. */
+function controlElement(dev: number, selector: string): number | null {
+  const a = audio();
+  for (const el of [0, 1]) if (a.AudioObjectHasProperty(dev, ptr(new Uint32Array([fcc(selector), fcc("inpt"), el])))) return el;
+  return null;
+}
+
+function settable(dev: number, selector: string, el: number): boolean {
+  const ok = new Uint32Array(1);
+  return audio().AudioObjectIsPropertySettable(dev, ptr(new Uint32Array([fcc(selector), fcc("inpt"), el])), ptr(ok)) === 0 && ok[0] !== 0;
+}
+
+/** The default input device: its mute when it has a settable one, and its volume 0-1 (null when it has no software volume). */
+export function readMic(): { device: number; muted: boolean | null; canMute: boolean; volume: number | null } | null {
+  const dev = inputDevice();
+  if (!dev) return null;
+  const a = audio();
+  const muteEl = controlElement(dev, "mute");
+  const canMute = muteEl !== null && settable(dev, "mute", muteEl);
+  const muted = muteEl === null ? null : (u32(dev, "mute", "inpt", muteEl) ?? 0) !== 0;
+  let volume: number | null = null;
+  const vol = addr("vmvc", "inpt");
+  if (a.AudioObjectHasProperty(dev, ptr(vol))) {
+    const f = new Float32Array(1), size = new Uint32Array([4]);
+    if (a.AudioObjectGetPropertyData(dev, ptr(vol), 0, null, ptr(size), ptr(f)) === 0) volume = Math.max(0, Math.min(1, f[0]!));
+  }
+  return { device: dev, muted: canMute ? muted : volume === null ? null : volume === 0, canMute, volume };
+}
+
+export function setMicMuted(muted: boolean): void {
+  const dev = inputDevice();
+  if (!dev) throw new Error("no input device");
+  const el = controlElement(dev, "mute");
+  if (el === null || !settable(dev, "mute", el)) throw new Error("the input device has no mute control");
+  // set every channel element that has a mute, so a device with per-channel mutes is fully silenced
+  for (const e of [0, 1, 2]) {
+    const ad = new Uint32Array([fcc("mute"), fcc("inpt"), e]);
+    if (!audio().AudioObjectHasProperty(dev, ptr(ad))) continue;
+    if (audio().AudioObjectSetPropertyData(dev, ptr(ad), 0, null, 4, ptr(new Uint32Array([muted ? 1 : 0]))) !== 0 && e === el) throw new Error("could not change the input mute");
+  }
+}
+
+export function setMicVolume(level: number): void {
+  const dev = inputDevice();
+  if (!dev) throw new Error("no input device");
+  const vol = addr("vmvc", "inpt");
+  if (!audio().AudioObjectHasProperty(dev, ptr(vol))) throw new Error("the input device has no software volume");
+  const f = new Float32Array([Math.max(0, Math.min(1, level))]);
+  if (audio().AudioObjectSetPropertyData(dev, ptr(vol), 0, null, 4, ptr(f)) !== 0) throw new Error("could not set the input volume");
+}
+
+// ---------- CoreMediaIO: is any camera in use (On Air) ----------
+let cmio: any;
+function mediaIO() {
+  return (cmio ??= dlopen(FW("CoreMediaIO"), {
+    CMIOObjectGetPropertyDataSize: { args: [T.u32, T.ptr, T.u32, T.ptr, T.ptr], returns: T.i32 },
+    CMIOObjectGetPropertyData: { args: [T.u32, T.ptr, T.u32, T.ptr, T.u32, T.ptr, T.ptr], returns: T.i32 },
+    CMIOObjectHasProperty: { args: [T.u32, T.ptr], returns: T.bool },
+  }).symbols);
+}
+
+/** True while any camera (built-in, USB, Continuity) is streaming to some app. macOS does not say which app. */
+export function cameraInUse(): boolean {
+  const m = mediaIO();
+  const devs = addr("dev#", "glob");
+  const size = new Uint32Array(1), used = new Uint32Array(1);
+  if (m.CMIOObjectGetPropertyDataSize(SYSTEM, ptr(devs), 0, null, ptr(size)) !== 0 || !size[0]) return false;
+  const ids = new Uint32Array(size[0] / 4);
+  if (m.CMIOObjectGetPropertyData(SYSTEM, ptr(devs), 0, null, size[0], ptr(used), ptr(ids)) !== 0) return false;
+  const gone = addr("gone", "glob");
+  for (const d of ids.subarray(0, used[0]! / 4)) {
+    if (!m.CMIOObjectHasProperty(d, ptr(gone))) continue;
+    const v = new Uint32Array(1);
+    if (m.CMIOObjectGetPropertyData(d, ptr(gone), 0, null, 4, ptr(used), ptr(v)) === 0 && v[0] !== 0) return true;
+  }
+  return false;
+}
+
+/** The frontmost app's bundle id (for the Camera button), or "". */
+export function frontApp(): string {
+  const o = rt();
+  return pooled(() => {
+    const ws = o.p(o.cls("NSWorkspace"), o.sel("sharedWorkspace"));
+    const app = o.p(ws, o.sel("frontmostApplication"));
+    return app === 0n ? "" : jsString(o.p(app, o.sel("bundleIdentifier")));
+  });
+}
+
+/** Brings a running app forward (its first instance); false when it does not run. */
+export function activateApp(bundleId: string): boolean {
+  const o = rt();
+  return pooled(() => {
+    const arr = o.pp(o.cls("NSRunningApplication"), o.sel("runningApplicationsWithBundleIdentifier:"), nsString(bundleId));
+    if (arr === 0n || Number(o.u(arr, o.sel("count"))) === 0) return false;
+    const app = o.pp(arr, o.sel("objectAtIndex:"), 0n);
+    // NSApplicationActivateIgnoringOtherApps = 2
+    return !!dlopen(OBJC, { objc_msgSend: { args: [T.u64, T.u64, T.u64], returns: T.bool } }).symbols.objc_msgSend(app, o.sel("activateWithOptions:"), 2n);
+  });
 }
 
 // ---------- NSWorkspace: which apps run ----------

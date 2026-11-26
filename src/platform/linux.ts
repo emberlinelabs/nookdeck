@@ -14,6 +14,7 @@ import type { LinuxInputTool } from "./linux-keys";
 import { createLinuxApps } from "./linux-apps";
 import { NVIDIA_SMI_ARGS, fileUrlPath, imageMime, parseMeminfo, parseNvidiaSmi, parseXprintidle } from "./linux-sys";
 import { shrinkPng } from "./png";
+import { PACTL_GET_SOURCE_MUTE, PACTL_GET_SOURCE_VOLUME, PACTL_SHORT_SOURCES, PACTL_SOURCE_OUTPUTS, cameraApps, micApps, pactlSourceMuteCommand, parseShortSources, parseSourceMute, parseSourceOutputs, type ProcFs } from "./linux-av";
 
 const LINUX_FORMAT = ["{{playerName}}", "{{status}}", "{{title}}", "{{artist}}", "{{album}}", "{{position}}", "{{mpris:length}}", "{{mpris:artUrl}}"].join(US);
 const ART_MAX_BYTES = 1024 * 1024;
@@ -88,6 +89,8 @@ export interface LinuxDeps {
   readText?: (path: string) => Promise<string>;
   home?: string;
   host?: () => string;
+  /** /proc access for the camera check (tests). */
+  procFs?: ProcFs;
 }
 
 /** Linux (experimental): X11 and Wayland input, PulseAudio/PipeWire, MPRIS, and the readings in L5 of specs/linux-support. */
@@ -179,5 +182,40 @@ export function createLinux(
     openExternal: async (url) => void (await runCapture(["xdg-open", url], 5000)),
     hookPath: (p) => p,
     dispose: () => {},
+
+    async avUsage(ignorePid) {
+      let mic: string[] = [];
+      if (which("pactl")) {
+        try {
+          const [outs, srcs] = await Promise.all([run(PACTL_SOURCE_OUTPUTS, 3000), run(PACTL_SHORT_SOURCES, 3000)]);
+          mic = micApps(parseSourceOutputs(outs), parseShortSources(srcs), ignorePid);
+        } catch { /* no sound server: not in use */ }
+      }
+      const camera = await cameraApps(deps.procFs, ignorePid);
+      return { mic: { inUse: mic.length > 0, apps: mic }, camera: { inUse: camera.length > 0, apps: camera } };
+    },
+    async readMic() {
+      if (!which("pactl")) return null;
+      try {
+        const muted = parseSourceMute(await run(PACTL_GET_SOURCE_MUTE, 3000));
+        const pct = /(\d+)%/.exec(await run(PACTL_GET_SOURCE_VOLUME, 3000).catch(() => ""))?.[1];
+        return { muted, canMute: muted !== null, volume: pct === undefined ? null : Math.min(1, Number(pct) / 100) };
+      } catch { return null; }
+    },
+    async setMicMuted(muted) {
+      if (!which("pactl")) throw new Error(t("pactl is not installed"));
+      await run(pactlSourceMuteCommand(muted), 3000);
+    },
+    setMicVolume: async () => { throw new Error("not used on Linux: the source is muted instead"); },
+    async frontApp() {
+      // X11 with xdotool only; Wayland has no common way to ask
+      if (linuxSession(env) !== "x11" || !which("xdotool")) return null;
+      try {
+        const [cls, title] = await Promise.all([run(["xdotool", "getactivewindow", "getwindowclassname"], 2000), run(["xdotool", "getactivewindow", "getwindowname"], 2000)]);
+        return cls.trim() ? { id: cls.trim().toLowerCase(), title: title.trim() } : null;
+      } catch { return null; }
+    },
+    activateApp: async () => false,
+    runningApps: async () => [],
   };
 }

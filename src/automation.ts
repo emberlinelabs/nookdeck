@@ -4,6 +4,8 @@
  * Pure: no I/O. src/config.ts calls these from validateLayout.
  */
 
+import { validOnairAction } from "../web/shared/onair"; // onair / mic macro steps (On Air)
+
 const fail = (msg: string): never => { throw new Error(msg); };
 const isObj = (v: unknown): v is Record<string, any> => !!v && typeof v === "object" && !Array.isArray(v);
 const s = (v: unknown, where: string, max = 200): string => (typeof v === "string" ? v.slice(0, max) : fail(`${where} must be a string`));
@@ -75,6 +77,9 @@ export type MacroStep =
   | { kind: "media"; command: "playpause" | "next" | "previous" }
   | { kind: "volume"; command: "up" | "down" | "mute" }
   | { kind: "hass"; service: string; entityId?: string; data?: Record<string, unknown> }
+  /** On Air manual source, and the computer's mic mute (On Air spec FR-10, FR-12). */
+  | { kind: "onair"; mode?: "toggle" | "on" | "off" }
+  | { kind: "mic"; mode?: "toggle" | "mute" | "unmute" }
   | { kind: "item"; pageId: string; itemId: string } // run another button's action (no nested macros beyond depth 2)
   | { kind: "notify"; text: string };
 
@@ -102,6 +107,11 @@ export function macroSteps(v: any, where: string): MacroStep[] {
         if (st.entityId) { const e = s(st.entityId, `${w}.entityId`, 100); if (!ENTITY_RE.test(e)) fail(`${w}.entityId must look like "domain.object_id"`); out.entityId = e; }
         if (st.data !== undefined) { if (!isObj(st.data) || JSON.stringify(st.data).length > 2048) fail(`${w}.data must be a small object`); out.data = st.data; }
         return out;
+      }
+      case "onair": case "mic": {
+        const why = validOnairAction({ kind: st.kind, ...(st.mode !== undefined ? { mode: st.mode } : {}) });
+        if (why) fail(`${w}: ${why}`);
+        return { kind: st.kind, ...(st.mode !== undefined ? { mode: st.mode } : {}) } as MacroStep;
       }
       case "item": return { kind: "item", pageId: s(st.pageId, `${w}.pageId`, 80), itemId: s(st.itemId, `${w}.itemId`, 80) };
       case "notify": return { kind: "notify", text: s(st.text, `${w}.text`, 200) };
@@ -131,6 +141,7 @@ export type RuleThen =
   | { kind: "goto-page"; pageId: string; countdown?: number }       // seconds of visible countdown, 0 = immediately
   | { kind: "notify"; text: string; level?: "info" | "warn" | "alert" }
   | { kind: "theme-mode"; mode: "dark" | "light" }
+  | { kind: "onair"; mode: "toggle" | "on" | "off" }                // the On Air manual source
   | { kind: "run-item"; pageId: string; itemId: string };
 
 export interface Rule {
@@ -189,6 +200,7 @@ function ruleThen(v: any, where: string): RuleThen {
     case "goto-page": return { kind: "goto-page", pageId: s(v.pageId, `${where}.pageId`, 80), ...(v.countdown !== undefined ? { countdown: n(v.countdown, `${where}.countdown`, 0, 60) } : {}) };
     case "notify": return { kind: "notify", text: s(v.text, `${where}.text`, 200), ...(v.level !== undefined ? { level: oneOf(v.level, `${where}.level`, ["info", "warn", "alert"] as const) } : {}) };
     case "theme-mode": return { kind: "theme-mode", mode: oneOf(v.mode, `${where}.mode`, ["dark", "light"] as const) };
+    case "onair": return { kind: "onair", mode: v.mode === undefined ? "on" : oneOf(v.mode, `${where}.mode`, ["toggle", "on", "off"] as const) };
     case "run-item": return { kind: "run-item", pageId: s(v.pageId, `${where}.pageId`, 80), itemId: s(v.itemId, `${where}.itemId`, 80) };
     default: return fail(`${where}.kind "${v.kind}" is not supported`);
   }

@@ -17,6 +17,7 @@ import { MetricOptionsForm } from "@/components/metric-options";
 import { PluginStylePicker } from "@/components/plugin-style";
 import { HotkeyField } from "@/components/hotkey-field";
 import { MacroEditor } from "@/components/macro-editor";
+import { LiveFields } from "@/components/live-fields";
 import { IconPicker } from "@/components/icon-picker";
 import {
   ACTION_ICON, ACTION_SHORT, MEDIA_LABEL, PROVIDER_LABEL, VOLUME_LABEL, WIDGET_LABEL, defaultAction, tileName,
@@ -78,7 +79,7 @@ export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onD
 
   const plugins = useEnabledPlugins();
   // A plugin tile only comes in the sizes its manifest lists.
-  const allowedSizes = item.kind === "widget" && item.widget === "plugin" ? pluginSizes(findPluginWidget(plugins, item.plugin)?.widget.sizes ?? []) : [];
+  const allowedSizes: [number, number][] = item.kind === "widget" && item.widget === "plugin" ? pluginSizes(findPluginWidget(plugins, item.plugin)?.widget.sizes ?? []) : item.kind === "widget" && item.widget === "onair" ? [[1, 1], [2, 1], [2, 2]] : [];
   const w = item.w ?? 1;
   const h = item.h ?? 1;
   const resize = (nw: number, nh: number) => setSizeError(onResize(nw, nh));
@@ -114,6 +115,12 @@ export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onD
             )}
             {item.widget === "weather" && <WeatherForm value={item.weather} onChange={(weather) => set({ weather })} />}
             {item.widget === "value" && <ValueForm value={item.push} onChange={(push) => set({ push })} />}
+            {item.widget === "onair" && (
+              <div className="flex items-center justify-between gap-3">
+                <label htmlFor="f-onair-tap" className="text-[13px] font-medium">{t("Tap turns On Air on or off")} <span className="block font-normal text-xs text-muted-foreground">{t("Off: the tile only shows the state. Its sources are set in Plugins > On Air.")}</span></label>
+                <Switch id="f-onair-tap" checked={item.action?.type === "onair"} onCheckedChange={(v) => set({ action: v ? { type: "onair", mode: "toggle" } : undefined })} aria-label={t("Tap turns On Air on or off")} />
+              </div>
+            )}
             {item.widget === "entity" && <EntityForm value={item.entity} onChange={(entity) => set({ entity })} />}
             {item.widget === "quota" && <QuotaOptionsForm provider={item.provider ?? "claude"} value={item.quota} onChange={(quota) => set({ quota })} />}
             {item.widget === "quota" && (
@@ -137,7 +144,7 @@ export function ItemForm({ item, page, pages, accent, onChange, onDuplicate, onD
           <ColorField value={item.color} onChange={(v) => set({ color: v })} />
         </Field>
         {allowedSizes.length > 0 ? (
-          <Field label={t("Size")} id="f-size" hint={t("The sizes this plugin tile supports.")}>
+          <Field label={t("Size")} id="f-size" hint={item.kind === "widget" && item.widget === "onair" ? t("The sizes the On Air tile supports.") : t("The sizes this plugin tile supports.")}>
             <Select id="f-size" value={`${w}x${h}`} onChange={(e) => { const [nw, nh] = e.target.value.split("x").map(Number); resize(nw!, nh!); }}
               options={[...(allowedSizes.some(([sw, sh]) => sw === w && sh === h) ? [] : [{ value: `${w}x${h}`, label: `${w}×${h} (${t("not supported")})` }]), ...allowedSizes.map(([sw, sh]) => ({ value: `${sw}x${sh}`, label: `${sw}×${sh}` }))]} />
           </Field>
@@ -271,6 +278,7 @@ function ActionFields({ action, pages, onChange, onPickApp }: { action: Action |
       {a?.type === "sound-stop" && <p className="text-xs text-muted-foreground">{t("Press this button to stop all playing sounds (on the computer and the phone).")}</p>}
       {a?.type === "macro" && <MacroEditor steps={a.steps} pages={pages} onChange={(steps) => onChange({ type: "macro", steps })} />}
       {a?.type === "hass" && <HassFields action={a} onChange={(next) => onChange(next)} />}
+      {(a?.type === "onair" || a?.type === "mic" || a?.type === "camera") && <LiveFields action={a} onChange={(next) => onChange(next)} />}
       {a?.type === "page" && (
         <Field label={t("Go to screen")} id="f-page" error={pages.some((p) => p.id === a.page) ? undefined : t("This screen no longer exists")}>
           <Select id="f-page" value={a.page} onChange={(e) => patch({ page: e.target.value })}
@@ -481,7 +489,7 @@ function WeatherForm({ value, onChange }: { value: WeatherOptions | undefined; o
   );
 }
 
-function CityField({ place, onChange }: { place: WeatherOptions["location"]; onChange: (p: { name: string; lat: number; lon: number } | undefined) => void }) {
+export function CityField({ place, onChange }: { place: WeatherOptions["location"]; onChange: (p: { name: string; lat: number; lon: number } | undefined) => void }) {
   useLanguage();
   const [q, setQ] = useState("");
   const [found, setFound] = useState<GeoPlace[] | null>(null);
@@ -590,13 +598,13 @@ const findPluginWidget = (plugins: PluginInfo[], ref: { id: string; widget: stri
 };
 
 /** Per-tile settings of a plugin. Secrets are not shown here: they are set once in the Plugins tab and stay on the computer. */
-function PluginSettings({ idBase, fields, value, onChange }: { idBase: string; fields: PluginField[]; value: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void }) {
+function PluginSettings({ idBase, pluginId, fields, value, onChange }: { idBase: string; pluginId: string; fields: PluginField[]; value: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void }) {
   const shown = fields.filter((f) => f.type !== "secret");
   if (!shown.length) return null;
   return (
     <>
       {shown.map((f) => (
-        <FieldInput key={f.key} id={`${idBase}-${f.key}`} field={f} value={value[f.key] ?? f.default ?? (f.type === "boolean" ? false : "")} secret="" onSecret={() => undefined} onChange={(v) => onChange({ ...value, [f.key]: v })} />
+        <FieldInput key={f.key} id={`${idBase}-${f.key}`} field={f} value={value[f.key] ?? f.default ?? (f.type === "boolean" ? false : "")} secret="" pluginId={pluginId} settings={value} onSecret={() => undefined} onChange={(v) => onChange({ ...value, [f.key]: v })} />
       ))}
     </>
   );
@@ -665,7 +673,7 @@ function PluginWidgetForm({ item, plugins, onChange }: { item: Extract<Item, { k
       <p className="text-xs text-muted-foreground">{found.plugin.name} · {found.widget.name}</p>
       <PluginStylePicker render={found.widget.render} value={ref.view?.style} suggested={found.widget.style}
         onChange={(style) => { const { view: _v, ...rest } = ref; onChange(style ? { ...rest, view: { style } } : rest); }} />
-      <PluginSettings idBase="f-pl" fields={found.widget.settings} value={ref.settings ?? {}} onChange={(settings) => onChange({ ...ref, settings })} />
+      <PluginSettings idBase="f-pl" pluginId={found.plugin.id} fields={found.widget.settings} value={ref.settings ?? {}} onChange={(settings) => onChange({ ...ref, settings })} />
     </>
   );
 }
@@ -678,7 +686,7 @@ function PluginActionForm({ action: a, onChange }: { action: Extract<Action, { t
   return (
     <>
       <p className="text-xs text-muted-foreground">{plugin!.name} · {def.name}</p>
-      <PluginSettings idBase="f-pla" fields={def.settings} value={a.settings ?? {}} onChange={(settings) => onChange({ ...a, settings })} />
+      <PluginSettings idBase="f-pla" pluginId={a.plugin} fields={def.settings} value={a.settings ?? {}} onChange={(settings) => onChange({ ...a, settings })} />
     </>
   );
 }

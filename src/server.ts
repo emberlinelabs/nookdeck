@@ -11,6 +11,8 @@ import { SOUND_MAX, SOUND_TYPES, SoundLibrary, SoundPlayer, bareId, SOUND_ID_HEX
 import type { HassLike } from "./automation-types";
 import { HassClient } from "./hass/client";
 import { HassConfigStore } from "./hass/config";
+import { OnAir } from "./onair";
+import { MicControl, avProbe, cameraToggle, type AvPlatform } from "./mic-camera";
 import { HassOAuth } from "./hass/oauth";
 import { cameraTiles, wantedEntities } from "./hass/entities";
 import { entityPress } from "./hass/press";
@@ -115,6 +117,13 @@ export interface StartOptions {
   hassFetch?: typeof fetch;
   /** Webhook key file (tests). */
   webhookKeyFile?: string;
+  /** Mic / camera / front app access for On Air and the Mic and Camera buttons (tests: a fake). */
+  av?: AvPlatform;
+  /** On Air settings file, and the file that keeps a mic volume to restore (tests: temp paths). */
+  onairFile?: string;
+  micSavedFile?: string;
+  /** On Air mic / camera poll interval (tests). */
+  onairPollMs?: number;
   /** fetch for Open-Meteo (tests). */
   weatherFetch?: (url: string, init?: RequestInit) => Promise<Response>;
   /** Weather refresh while phones are connected, default 15 min. */
@@ -175,6 +184,8 @@ export interface StartOptions {
 
 interface WsData {
   deviceId: string | null;
+  /** this phone keeps the full-screen ON AIR sign on (onair-watch), so mic / camera are checked */
+  onairWatch?: boolean;
 }
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
@@ -255,7 +266,7 @@ export async function startServer(opts: StartOptions = {}) {
   let layoutAssets: Record<string, any> = await icons.layoutAssets(layout).catch(() => ({}));
   /** The layout and its icons as WebSocket messages (big icon maps go in parts first: see ws-frames.ts). */
   const sendLayout = (ws: ServerWebSocket<WsData>) => { try { for (const f of layoutFrames(layout, layoutAssets)) ws.send(f); } catch {} };
-  const broadcastLayout = () => { const frames = layoutFrames(layout, layoutAssets); for (const ws of sockets) { try { for (const f of frames) ws.send(f); } catch {} } };
+  const broadcastLayout = () => { const frames = layoutFrames(layout, layoutAssets); for (const ws of sockets) { try { for (const f of frames) ws.send(f); } catch {} } syncOnAirNeed(); };
   let catalogGz: Uint8Array | undefined;
   const sounds = opts.sounds ?? new SoundLibrary();
   const player = new SoundPlayer({ spawn: opts.soundSpawn, which: opts.soundWhich, onChange: (ids) => broadcast({ type: "sounds-playing", ids }) });
@@ -290,6 +301,27 @@ export async function startServer(opts: StartOptions = {}) {
   });
   if (hassClient) void hassClient.start().catch((e) => console.error("hass", e));
   const webhookKey = new WebhookKey(opts.webhookKeyFile);
+  // On Air (spec obs-integration-and-on-air FR-5..12): OBS live, mic / camera in use, the manual button and the API. Mic and
+  // camera are read only while a phone shows something that uses them (NFR-4); the apps using them stay here (NFR-3).
+  const av: AvPlatform = opts.av ?? {
+    id: platform.id,
+    avUsage: (p) => platform.avUsage(p), readMic: () => platform.readMic(), setMicMuted: (m) => platform.setMicMuted(m),
+    setMicVolume: (l) => platform.setMicVolume(l), frontApp: (w) => platform.frontApp(w), activateApp: (id) => platform.activateApp(id),
+    runningApps: (ids) => platform.runningApps(ids), runAction: (a) => deps.runAction(a),
+  };
+  const onair = new OnAir({ probe: avProbe(av), settingsFile: opts.onairFile ?? join(HOME, "onair.json"), onChange: (m) => broadcast(m), pollMs: opts.onairPollMs });
+  await onair.load();
+  const micControl = new MicControl(av, opts.micSavedFile ?? join(HOME, "mic-restore.json"));
+  void micControl.restore().catch(() => {}); // a volume left at 0 by a crash comes back (NFR-6)
+  const AV_ACTIONS = ["onair", "mic", "camera"];
+  function syncOnAirNeed(): void {
+    let need = false;
+    if (sockets.size) {
+      for (const ws of sockets) if (ws.data.onairWatch) need = true;
+      if (!need) need = layout.pages.some((p) => p.items.some((it) => (it.kind === "widget" && it.widget === "onair") || (it.kind === "button" && !!it.action && AV_ACTIONS.includes(it.action.type))));
+    }
+    onair.setNeeded(need);
+  }
   const notes = new NotificationStore();
   let themeOverride: "dark" | "light" | null = null;
   const stopCtl = new AbortController();
@@ -320,8 +352,11 @@ export async function startServer(opts: StartOptions = {}) {
     fetch: opts.pluginDeps?.fetch ?? fetch,
     shell: opts.pluginDeps?.shell ?? realShell,
     keys: { hotkey: (keys) => platform.runAction({ type: "hotkey", keys }), type: (text) => platform.runAction({ type: "type", text }) },
+    // ctx.onair.set of a plugin granted "onair" (the OBS plugin): its own On Air source, cleared when it stops
+    onair: { set: (pid, kind, on, since) => onair.setPluginSource(pid, kind, on, since), clear: (pid) => onair.clearPlugin(pid) },
     ...opts.pluginHostDeps,
   });
+  pluginHosts.startEager();
   // a plugin that keeps crashing is switched off (the owner can turn it on again on the Plugins tab)
   pluginHosts.onFailed((id) => { void pluginStore.setEnabled(id, false).catch(() => {}); });
   const registry = opts.registry ?? new Registry();
@@ -377,6 +412,9 @@ export async function startServer(opts: StartOptions = {}) {
       }
       case "plugin":
         return pluginRuntime.runAction(action, (steps) => execute({ type: "macro", steps }, depth, ws));
+      case "onair": { onair.setManual(action.mode ?? "toggle"); return; }
+      case "mic": { await micControl.set(action.mode ?? "toggle"); void onair.refresh(); return; }
+      case "camera": { await cameraToggle(av); return; }
       case "hass":
         if (!hass.connected()) throw new Error(t("Home Assistant is not connected"));
         return hass.callService(action.service, action.entityId, action.data);
@@ -390,6 +428,7 @@ export async function startServer(opts: StartOptions = {}) {
       gotoRevert: (ruleId) => broadcast({ type: "goto-revert", ruleId }),
       notify: (text, level, ruleId) => void addNote({ title: text, level, source: `rule:${ruleId}` }),
       themeMode: (mode) => { themeOverride = mode; broadcast({ type: "theme-override", mode }); },
+      onair: (mode) => void onair.setManual(mode),
       runItem: async (pageId, itemId) => {
         const a = findAction(pageId, itemId);
         if (!a) throw new Error(t("button {id} not found", { id: `${pageId}/${itemId}` }));
@@ -1134,7 +1173,7 @@ export async function startServer(opts: StartOptions = {}) {
       }
 
       // ----- plugins -----
-      const pluginRoute = /^\/api\/plugins(?:\/([^/]+)(?:\/(grant|enabled|settings|process|logs|restart|stop|reload|update))?)?$/.exec(path);
+      const pluginRoute = /^\/api\/plugins(?:\/([^/]+)(?:\/(grant|enabled|settings|options|process|logs|restart|stop|reload|update))?)?$/.exec(path);
       if (pluginRoute) {
         const denied = guardLocal(server, req);
         if (denied) return denied;
@@ -1157,6 +1196,24 @@ export async function startServer(opts: StartOptions = {}) {
           if (sub === "grant" && req.method === "POST") return json(await pluginStore.grant(pid, (await readBody(req))?.permissions));
           if (sub === "enabled" && req.method === "POST") return json(await pluginStore.setEnabled(pid, (await readBody(req))?.enabled));
           if (sub === "settings" && req.method === "PUT") return json(await pluginStore.setSettings(pid, await readBody(req)));
+          // the choices of a select with optionsFrom, asked by the manage form when it opens: { provider, settings? } -> { options }
+          if (sub === "options" && req.method === "POST") {
+            const b = await readBody(req);
+            const e = pluginStore.entry(pid)!;
+            const m = e.manifest;
+            const fields = [...m.settings, ...m.widgets.flatMap((w) => w.settings), ...m.actions.flatMap((a) => a.settings)];
+            if (typeof b?.provider !== "string" || !fields.some((f) => f.optionsFrom === b.provider)) return json({ error: "no setting of this plugin takes its options from that provider" }, 400);
+            if (pluginStore.runnable(pid) !== "ok") return json({ error: "the plugin is not enabled" }, 409);
+            // what the form has so far over the saved values; secrets come from the saved settings only (the form never has them)
+            const secret = new Set(fields.filter((f) => f.type === "secret").map((f) => f.key));
+            const settings: Record<string, string | number | boolean> = { ...e.state.settings };
+            if (b.settings && typeof b.settings === "object") for (const [k, v] of Object.entries(b.settings)) {
+              if (secret.has(k) || !/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(k)) continue;
+              if (typeof v === "boolean" || (typeof v === "number" && Number.isFinite(v)) || (typeof v === "string" && v.length <= 2000)) settings[k] = v;
+            }
+            try { return json({ options: await pluginHosts.options(pid, b.provider, settings) }); }
+            catch (err: any) { return json({ error: String(err?.message ?? err).slice(0, 200) }, 502); }
+          }
           if (!sub && req.method === "GET") return json(pluginStore.summary(pid));
           if (sub === "process" && req.method === "GET") return json(pluginHosts.info(pid));
           if (sub === "logs" && req.method === "GET") return json({ lines: pluginHosts.logs(pid, Math.max(1, Math.min(1000, Number(url.searchParams.get("lines")) || 50))) });
@@ -1391,6 +1448,22 @@ export async function startServer(opts: StartOptions = {}) {
         broadcast({ type: "goto", pageId, countdown: Math.round(c), reason, revert: false });
         return json({ ok: true });
       }
+      // On Air: GET the state and settings, PUT the settings (manage page); POST from anything with the webhook key (FR-12)
+      if (path === "/api/onair" && req.method === "POST") {
+        const denied = await hookAuth();
+        if (denied) return denied;
+        try { onair.setApi(await readBody(req)); } catch (err: any) { return json({ error: err?.message ?? String(err) }, 400); }
+        return json({ ok: true, ...onair.snapshot() });
+      }
+      if ((path === "/api/onair" && req.method === "GET") || path === "/api/onair/settings") {
+        const denied = guardLocal(server, req);
+        if (denied) return denied;
+        if (path === "/api/onair/settings" && req.method !== "PUT") return json({ error: "method not allowed" }, 405);
+        if (req.method === "PUT") {
+          try { await onair.setSettings(await readBody(req)); } catch (err: any) { return json({ error: err?.message ?? String(err) }, 400); }
+        } else if (!onair.isNeeded()) await onair.refresh(); // nobody polls: read once so the answer is current
+        return json({ ...onair.snapshot(), settings: onair.settings() });
+      }
       if (path === "/api/webhooks" && req.method === "GET") {
         const denied = guardLocal(server, req);
         if (denied) return denied;
@@ -1556,6 +1629,8 @@ export async function startServer(opts: StartOptions = {}) {
         if (Object.keys(pv).length) send(ws, { type: "pushed", values: Object.fromEntries(Object.entries(pv).map(([k, v]) => [k, { value: v.value, ...(v.sub ? { sub: v.sub } : {}), at: v.at }])) });
         send(ws, { type: "notifications", items: notes.list() });
         if (hassClient) send(ws, { type: "hass", entities: hassClient.snapshot(), connected: hassClient.connected() });
+        send(ws, onair.snapshot());
+        syncOnAirNeed();
         if (themeOverride) send(ws, { type: "theme-override", mode: themeOverride });
         { const pi = pluginRuntime.snapshot(); if (Object.keys(pi).length) send(ws, { type: "plugin", items: pi }); }
         pluginRuntime.setActive(true);
@@ -1570,6 +1645,7 @@ export async function startServer(opts: StartOptions = {}) {
         let msg: any;
         try { msg = JSON.parse(String(raw)); } catch { return; }
         if (msg?.type === "ping") return send(ws, { type: "pong" });
+        if (msg?.type === "onair-watch") { ws.data.onairWatch = msg.on === true; return syncOnAirNeed(); }
         const reqId = msg?.reqId;
         if (msg?.type === "media" || msg?.type === "volume") {
           const c = parseControl(msg);
@@ -1666,6 +1742,7 @@ export async function startServer(opts: StartOptions = {}) {
       },
       close(ws, code, reason) {
         sockets.delete(ws);
+        syncOnAirNeed();
         if (unusualClose(code)) {
           console.error(`websocket closed by device ${ws.data.deviceId ?? "?"}: ${code}${reason ? " " + reason : ""}`);
           drops.add({ at: Date.now(), code, reason: String(reason ?? "").slice(0, 120), device: ws.data.deviceId ?? "?" });
@@ -1685,6 +1762,9 @@ export async function startServer(opts: StartOptions = {}) {
     port: server.port as number,
     get pin() { return pairing.pin; },
     pairing,
+    /** Puts back a mic volume the Mic button set to 0 (NFR-6); the agent awaits it before exiting. */
+    restoreMic: () => micControl.restore().then(() => {}, () => {}),
+    onair,
     stop() {
       stopped = true;
       void lastMedia.persist(true);
@@ -1699,6 +1779,7 @@ export async function startServer(opts: StartOptions = {}) {
       pushes.close();
       unsubHass?.();
       hassClient?.stop();
+      onair.dispose();
       if (aiSessionsTimer) clearInterval(aiSessionsTimer);
       if (aiQuotaTimer) clearInterval(aiQuotaTimer);
       broker.clear();

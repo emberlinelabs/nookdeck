@@ -13,7 +13,7 @@ import { useEnabledPlugins } from "@/lib/plugins";
 import { MAC_ONLY_ENTRIES, usePlatform } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 
-const ORDER: PaletteGroup[] = ["widget", "home", "app", "keys", "media", "sound", "system", "plugin"];
+const ORDER: PaletteGroup[] = ["widget", "home", "live", "app", "keys", "media", "sound", "system", "plugin"];
 const DRAG_THRESHOLD = 5;
 const OPEN_KEY = "pd.palette.open";
 

@@ -19,7 +19,7 @@ export type { Permissions, Renderer, SettingValue, Settings };
 // ------------------------------------------------------------------------------------------------ permissions
 
 /** Permission names as they appear in the manifest `permissions` object and in error messages. */
-export const PERMISSION_NAMES = ["network", "shell", "keyboard", "storage"] as const;
+export const PERMISSION_NAMES = ["network", "shell", "keyboard", "storage", "onair"] as const;
 export type PermissionName = (typeof PERMISSION_NAMES)[number];
 
 /** Thrown (and sent over RPC as `error.data.permission`) when a plugin uses something it was not granted. */
@@ -68,8 +68,11 @@ export interface WidgetUpdate {
 /** A tile's size in grid cells, as the layout has it (not pixels, and the same however the phone is turned). */
 export interface TileSize { w: number; h: number }
 
-/** What `ctx.widgets.push` takes: one update for every tile of the widget, or a function that makes one for each tile from its size. */
-export type PushUpdate = WidgetUpdate | ((tile: TileSize) => WidgetUpdate | Promise<WidgetUpdate>);
+/**
+ * What `ctx.widgets.push` takes: one update for every tile of the widget, or a function that makes one for each tile from its size
+ * and its settings (the same `settings` a provider gets: plugin-wide overlaid with the tile's own; Nookdeck 0.7).
+ */
+export type PushUpdate = WidgetUpdate | ((tile: TileSize, settings: Settings) => WidgetUpdate | Promise<WidgetUpdate>);
 
 /**
  * Provides the data of a widget. Called by the agent when a phone is connected, every `every` seconds (and once at start).
@@ -93,6 +96,32 @@ export interface PluginFetchInit {
   body?: string;
 }
 
+/** `ctx.net.websocket` options. */
+export interface PluginWebSocketOptions {
+  /** Sec-WebSocket-Protocol values to offer (for example "obswebsocket.json"). */
+  protocols?: string[];
+}
+
+/**
+ * An open WebSocket of a plugin (`ctx.net.websocket`). The connection itself lives in the agent, which checked its origin. Text frames
+ * only; a message over WS_MAX_MESSAGE_BYTES (either way) closes it. Closed by the agent when the plugin stops or is disabled.
+ */
+export interface PluginWebSocket {
+  /** Sends one text frame. Throws when the socket is closed or the text is too long. */
+  send(text: string): void;
+  /** Each text frame from the server, in order. */
+  onMessage(fn: (text: string) => void): void;
+  /** Once, when the connection ends for any reason (by either side, or the agent). 1006 = it dropped without a close frame. */
+  onClose(fn: (code: number, reason: string) => void): void;
+  close(): void;
+}
+
+/** `ctx.onair`: what a plugin reports to On Air (permission: onair). */
+export type OnAirKind = "stream" | "record";
+
+/** What `ctx.settings.options` providers return: the choices of a select with `optionsFrom`. */
+export type OptionsProvider = (settings: Settings) => Promise<string[]> | string[];
+
 /**
  * The object `activate(ctx)` receives. Same type for community plugins (out of process) and core plugins (in the agent).
  * Optional members (`shell`, `keys`) are present ONLY when the user granted that permission; the others exist always, and calls
@@ -108,6 +137,11 @@ export interface PluginContext {
     get(): Settings;
     /** Called after the user changes the plugin's settings. */
     onChange?(fn: (settings: Settings) => void): void;
+    /**
+     * Provides the choices of every select setting with `"optionsFrom": id` (up to OPTIONS_MAX). Called when the owner opens a form
+     * that has such a field, with the settings the form has so far. A thrown error shows the field as a plain text box with the saved value.
+     */
+    options(id: string, fn: OptionsProvider): void;
   };
   /** JSON values kept in ~/.nookdeck/plugins-data/<id>.json (permission: storage). Total size is capped (STORAGE_MAX_BYTES). */
   storage: {
@@ -117,10 +151,19 @@ export interface PluginContext {
   /** HTTP(S) only to the hosts of `permissions.network`, checked on every redirect hop. Response bodies are capped (FETCH_MAX_BYTES). */
   net: {
     fetch(url: string, init?: PluginFetchInit): Promise<Response>;
+    /**
+     * Opens a WebSocket to a ws:// or wss:// origin listed in `permissions.network` (scheme, host and port exactly). Resolves once it is
+     * open; rejects when the origin is not allowed, the server cannot be reached, or the plugin already has WS_MAX_SOCKETS open.
+     */
+    websocket(url: string, o?: PluginWebSocketOptions): Promise<PluginWebSocket>;
   };
   /** Runs a command line with the OS shell (permission: shell). */
   shell?: {
     run(cmd: string): Promise<{ code: number; stdout: string }>;
+  };
+  /** Reports to On Air that this plugin is live or recording (permission: onair). `since` = when it started, ms since 1970. */
+  onair?: {
+    set(kind: OnAirKind, on: boolean, since?: number): void;
   };
   /** Presses keys on this computer (permission: keyboard). */
   keys?: {
@@ -160,6 +203,14 @@ export const STORAGE_MAX_BYTES = 1_000_000;
 export const FETCH_MAX_BYTES = 5_000_000;
 export const FETCH_TIMEOUT_MS = 15_000;
 export const FETCH_MAX_REDIRECTS = 5;
+/** `ctx.net.websocket`: open sockets per plugin, and the largest text frame either way (bytes). */
+export const WS_MAX_SOCKETS = 4;
+export const WS_MAX_MESSAGE_BYTES = 1_000_000;
+/** How long opening a WebSocket may take. */
+export const WS_OPEN_TIMEOUT_MS = 10_000;
+/** `ctx.settings.options`: the most choices a provider may return (longer lists are cut), and the longest choice. */
+export const OPTIONS_MAX = 200;
+export const OPTION_MAX_CHARS = 200;
 /** `shell.run` timeout, ms. */
 export const SHELL_TIMEOUT_MS = 30_000;
 /** The agent pings an idle host every PING_INTERVAL_MS; no answer within PING_TIMEOUT_MS = hung, killed and restarted. */
@@ -228,16 +279,20 @@ export interface InitResult {
   actions: string[];
   /** Refresh interval in seconds per widget id, from `provide(id, fn, {every})` (already clamped to EVERY_MIN_S..). */
   every?: Record<string, number>;
+  /** Ids of the ctx.settings.options providers it registered. */
+  options?: string[];
 }
 export interface WidgetGetParams { id: string; settings: Settings; tile: TileSize }
 /** One tile of a widget on the layout: `key` only names it in a push for that tile; the plugin never sees it. */
-export interface WidgetTile { key: string; size: TileSize }
+export interface WidgetTile { key: string; size: TileSize; settings?: Settings }
 export interface ActionRunParams { id: string; settings: Settings }
 
 export interface AgentToHost {
   init: { params: InitParams; result: InitResult };
   "widget.get": { params: WidgetGetParams; result: WidgetUpdate };
   "action.run": { params: ActionRunParams; result: null };
+  /** The choices of a select with `optionsFrom` (ctx.settings.options). */
+  "settings.options": { params: { id: string; settings: Settings }; result: string[] };
   /** Answer "pong": the heartbeat. */
   ping: { params?: undefined; result: "pong" };
 }
@@ -245,6 +300,10 @@ export interface AgentToHost {
 export interface AgentNotifications {
   "settings.changed": { settings: Settings };
   shutdown: undefined;
+  /** A text frame on one of the plugin's WebSockets. */
+  "net.ws.message": { sid: number; text: string };
+  /** That socket ended (any reason); no more messages for this sid. */
+  "net.ws.closed": { sid: number; code: number; reason: string };
 }
 
 // -- host -> agent (requests; the agent enforces permissions, then answers) -----------------------
@@ -268,6 +327,12 @@ export interface HostToAgent {
   "keys.type": { params: { t: string }; result: null };
   /** The tiles of one of the plugin's own widgets, for `ctx.widgets.push(id, fn)`. */
   "widget.tiles": { params: { id: string }; result: WidgetTile[] };
+  /** ctx.net.websocket: open (resolves when the connection is up), send one text frame, close. */
+  "net.ws.open": { params: { url: string; protocols?: string[] }; result: { sid: number } };
+  "net.ws.send": { params: { sid: number; text: string }; result: null };
+  "net.ws.close": { params: { sid: number }; result: null };
+  /** ctx.onair.set (permission: onair). */
+  "onair.set": { params: { kind: OnAirKind; on: boolean; since?: number }; result: null };
 }
 /** host -> agent, no answer. */
 export interface HostNotifications {
@@ -282,7 +347,7 @@ export type ParamsOf<T extends { params?: unknown }, K extends keyof T> = T[K] e
 export type ResultOf<T extends { result: unknown }, K extends keyof T> = T[K] extends { result: infer R } ? R : never;
 
 /** Method names the host accepts / the agent accepts, for validating incoming messages. */
-export const AGENT_METHODS = ["init", "widget.get", "action.run", "ping"] as const;
-export const AGENT_NOTIFICATIONS = ["settings.changed", "shutdown"] as const;
-export const HOST_METHODS = ["storage.get", "storage.set", "net.fetch", "shell.run", "keys.hotkey", "keys.type", "widget.tiles"] as const;
+export const AGENT_METHODS = ["init", "widget.get", "action.run", "settings.options", "ping"] as const;
+export const AGENT_NOTIFICATIONS = ["settings.changed", "shutdown", "net.ws.message", "net.ws.closed"] as const;
+export const HOST_METHODS = ["storage.get", "storage.set", "net.fetch", "shell.run", "keys.hotkey", "keys.type", "widget.tiles", "net.ws.open", "net.ws.send", "net.ws.close", "onair.set"] as const;
 export const HOST_NOTIFICATIONS = ["log", "widget.push"] as const;

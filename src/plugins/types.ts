@@ -17,11 +17,16 @@ export type CustomRenderer = `custom:${string}`;
 
 /** What a plugin may do. The manifest declares it, the user grants it, the agent enforces it on every call. */
 export interface Permissions {
-  /** Host names the plugin may call (exact, or `*.example.com` for subdomains). Always present, [] when none. */
+  /**
+   * Host names the plugin may call with ctx.net.fetch (exact, or `*.example.com` for subdomains), and WebSocket origins it may open with
+   * ctx.net.websocket (`ws://127.0.0.1:4455`, `wss://host:443`: scheme, host and port must match exactly). Always present, [] when none.
+   */
   network: string[];
   shell?: boolean;
   keyboard?: boolean;
   storage?: boolean;
+  /** May report to On Air that it is live / recording (ctx.onair.set): the On Air sources obs-stream / obs-record. */
+  onair?: boolean;
 }
 
 export const SETTING_TYPES = ["string", "number", "boolean", "select", "secret", "entity"] as const;
@@ -32,6 +37,8 @@ export interface SettingField {
   label: string;
   default?: string | number | boolean;
   options?: string[]; // select
+  /** select: the options come from the plugin's code at run time (ctx.settings.options(<this id>, fn)) instead of `options`. */
+  optionsFrom?: string;
 }
 export type SettingValue = string | number | boolean;
 export type Settings = Record<string, SettingValue>;

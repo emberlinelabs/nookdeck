@@ -2,7 +2,7 @@
 // placeholders of its English key, and no em dash.
 import { describe, expect, test } from "bun:test";
 
-const MANAGE_FILES = ["app", "editor", "palette", "screens", "automation", "plugins", "themes"] as const;
+const MANAGE_FILES = ["app", "editor", "palette", "screens", "automation", "plugins", "themes", "live"] as const;
 const LANGS = ["vi", "zh", "fr", "pt"] as const;
 const UPPER = { vi: "VI", zh: "ZH", fr: "FR", pt: "PT" } as const;
 const cap = (s: string) => s.toUpperCase();

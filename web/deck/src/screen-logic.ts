@@ -10,6 +10,8 @@ export interface LocalScreen {
   shift?: boolean
   /** false = no night dim on this phone (the dim behind the standby clock stays) */
   nightDim?: boolean
+  /** full-screen ON AIR sign on this phone while On Air is on (off unless switched on here) */
+  onAirFull?: boolean
 }
 
 const K_LOCAL = 'pd.screen.local'

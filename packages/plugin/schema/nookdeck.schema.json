@@ -153,9 +153,9 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$"
+            "pattern": "^((\\*\\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*|wss?://([a-z0-9.-]+|\\[[0-9a-f:.]+\\]):[0-9]{1,5})$"
           },
-          "description": "Host names the plugin may call: api.example.com or *.example.com."
+          "description": "Host names the plugin may call with ctx.net.fetch (api.example.com or *.example.com), and WebSocket origins it may open with ctx.net.websocket (ws://127.0.0.1:4455: scheme, host and port must match exactly)."
         },
         "shell": {
           "type": "boolean",
@@ -168,6 +168,10 @@
         "storage": {
           "type": "boolean",
           "description": "Keep its own saved data."
+        },
+        "onair": {
+          "type": "boolean",
+          "description": "Report to On Air that it is live or recording (ctx.onair.set)."
         }
       }
     },
@@ -213,7 +217,12 @@
           },
           "minItems": 1,
           "maxItems": 50,
-          "description": "Required for select."
+          "description": "Required for select, unless optionsFrom is set."
+        },
+        "optionsFrom": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,47}$",
+          "description": "select only, code plugins only: the choices come from ctx.settings.options(<this id>, fn) when the form opens. Use it instead of options."
         }
       }
     },

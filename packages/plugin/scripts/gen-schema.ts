@@ -13,7 +13,8 @@ const settingField = {
     type: { enum: [...SETTING_TYPES], description: "secret is write-only: phones never see it. entity picks a Home Assistant entity." },
     label: { type: "string", maxLength: 80 },
     default: { type: ["string", "number", "boolean"], description: "Must match the type. A secret has no default." },
-    options: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 50, description: "Required for select." },
+    options: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 50, description: "Required for select, unless optionsFrom is set." },
+    optionsFrom: { type: "string", pattern: idPart, description: "select only, code plugins only: the choices come from ctx.settings.options(<this id>, fn) when the form opens. Use it instead of options." },
   },
 };
 const settings = { type: "array", items: { $ref: "#/$defs/settingField" }, maxItems: 20 };
@@ -49,10 +50,11 @@ const schema = {
       type: "object",
       additionalProperties: false,
       properties: {
-        network: { type: "array", maxItems: 20, uniqueItems: true, items: { type: "string", pattern: "^(\\*\\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$" }, description: "Host names the plugin may call: api.example.com or *.example.com." },
+        network: { type: "array", maxItems: 20, uniqueItems: true, items: { type: "string", pattern: "^((\\*\\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*|wss?://([a-z0-9.-]+|\\[[0-9a-f:.]+\\]):[0-9]{1,5})$" }, description: "Host names the plugin may call with ctx.net.fetch (api.example.com or *.example.com), and WebSocket origins it may open with ctx.net.websocket (ws://127.0.0.1:4455: scheme, host and port must match exactly)." },
         shell: { type: "boolean", description: "Run commands on this computer." },
         keyboard: { type: "boolean", description: "Press keys and type text on this computer." },
         storage: { type: "boolean", description: "Keep its own saved data." },
+        onair: { type: "boolean", description: "Report to On Air that it is live or recording (ctx.onair.set)." },
       },
     },
     settingField: settingField,

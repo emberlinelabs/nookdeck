@@ -4,13 +4,14 @@ import { pluginSizes } from "@/lib/plugins";
 import { findFree, randomId, takenIds, uniquePageId } from "@/lib/layout";
 import type { Layout, Action, AiProvider, HassEntity, Item, MacApp, PluginInfo, Sound, WidgetKind } from "@/types";
 
-export type PaletteGroup = "widget" | "media" | "sound" | "home" | "app" | "keys" | "system" | "plugin";
+export type PaletteGroup = "widget" | "media" | "sound" | "home" | "live" | "app" | "keys" | "system" | "plugin";
 
 export const GROUP_LABEL: Record<PaletteGroup, string> = {
   widget: "Widget",
   media: "Media / Volume",
   sound: "Sounds",
   home: "Home",
+  live: "On Air",
   app: "Apps",
   keys: "Shortcuts / Typing",
   system: "System / Shell",
@@ -75,6 +76,11 @@ export const STATIC_ENTRIES: PaletteEntry[] = [
   { key: "v-mute", group: "media", label: "Mute", icon: "volume-x", size: [1, 1], make: () => button(t("Mute"), "volume-x", { type: "volume", command: "mute" }) },
   { key: "v-up", group: "media", label: "Volume up", icon: "volume-high", size: [1, 1], make: () => button(t("Volume up"), "volume-high", { type: "volume", command: "up" }) },
   { key: "v-down", group: "media", label: "Volume down", icon: "volume-low", size: [1, 1], make: () => button(t("Volume down"), "volume-low", { type: "volume", command: "down" }) },
+
+  { key: "onair-tile", group: "live", label: "On Air light", hint: "Red while you are live, recording or in a call", icon: "radio", size: [2, 1], tags: "on air live recording call meeting sign", make: () => widget("onair") },
+  { key: "onair-btn", group: "live", label: "On Air button", hint: "Turns On Air on or off by hand", icon: "radio", size: [1, 1], tags: "on air manual", make: () => button(t("On Air"), "radio", { type: "onair", mode: "toggle" }) },
+  { key: "mic-btn", group: "live", label: "Mute microphone", hint: "The computer's mic, for every app", icon: "mic", size: [1, 1], tags: "mic microphone mute call meeting", make: () => button(t("Mic"), "mic", { type: "mic", mode: "toggle" }) },
+  { key: "camera-btn", group: "live", label: "Meeting camera", hint: "Zoom, Google Meet, Microsoft Teams", icon: "video", size: [1, 1], tags: "camera video zoom meet teams", make: () => button(t("Camera"), "video", { type: "camera" }) },
 
   { key: "sound-stop", group: "sound", label: "Stop all sounds", icon: "player-stop", size: [1, 1], tags: "stop sound", make: () => button(t("Stop sound"), "player-stop", { type: "sound-stop" }) },
 

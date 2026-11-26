@@ -62,6 +62,7 @@ export const VI_PLUGINS: Record<string, string> = {
   "Connecting": "Đang kết nối",
   "Saved": "Đã lưu",
   "Open Screens": "Mở Màn hình",
+  "Every Weather tile without a city of its own uses this one. To give a tile its own city, open it in Screens.": "Mọi ô Thời tiết chưa có thành phố riêng sẽ dùng thành phố này. Muốn ô nào có thành phố riêng, mở ô đó trong Screens.",
   "The location is set on each Weather tile: pick the tile on the phone, then choose Automatic or search for a city.": "Vị trí được đặt trên từng ô Thời tiết: chọn ô trên điện thoại, rồi chọn Tự động hoặc tìm một thành phố.",
   "Quota, sessions and permission prompts on the phone": "Hạn mức, phiên và yêu cầu cấp quyền trên điện thoại",
   "Sessions and usage on the phone": "Phiên và mức dùng trên điện thoại",
@@ -237,4 +238,11 @@ export const VI_PLUGINS: Record<string, string> = {
   "Style": "Kiểu hiển thị",
   "How this tile looks on the phone.": "Cách ô này hiển thị trên điện thoại.",
   "Suggested": "Gợi ý",
+  // plugin API: WebSocket hosts, On Air, choices from the plugin
+  "Turn On Air on": "Bật On Air",
+  "Can turn On Air on while it is live or recording.": "Có thể bật On Air khi đang phát trực tiếp hoặc đang ghi hình.",
+  "{value} (not found now)": "{value} (hiện không tìm thấy)",
+  "Loading the choices…": "Đang tải danh sách…",
+  "Could not get the choices ({error}). You can type the name.": "Không lấy được danh sách ({error}). Bạn có thể gõ tên.",
+  "No choices yet. You can type the name.": "Chưa có lựa chọn nào. Bạn có thể gõ tên.",
 };

@@ -42,21 +42,50 @@ export const hostMatches = (host: string, allowed: string): boolean => {
   return a.startsWith("*.") ? h.endsWith(a.slice(1)) && h.length > a.length - 1 : h === a;
 };
 
+const WS_ENTRY_RE = /^(wss?):\/\/([a-z0-9.-]+|\[[0-9a-f:.]+\]):(\d{1,5})$/;
+
+/** A `permissions.network` WebSocket entry, normalized (`ws://127.0.0.1:4455`), or null when the text is not one. Throws when it looks like one but is not valid. */
+export function parseWsEntry(s: string, where: string): string | null {
+  if (!/^wss?:/i.test(s)) return null;
+  const m = WS_ENTRY_RE.exec(s.toLowerCase());
+  const host = m?.[2] ?? "";
+  const port = Number(m?.[3]);
+  if (!m || (!host.startsWith("[") && (!HOST_RE.test(host) || host.startsWith("*"))) || !(port >= 1 && port <= 65535)) {
+    return fail(`${where} "${s}" must be a WebSocket origin with its port, like ws://127.0.0.1:4455 or wss://example.com:443 (no path, no wildcard)`);
+  }
+  return `${m[1]}://${host}:${port}`;
+}
+
+/** The origin of a ws:// or wss:// URL in the form `permissions.network` lists it (the default port filled in), or null. */
+export function wsOrigin(url: string): string | null {
+  let u: URL;
+  try { u = new URL(url); } catch { return null; }
+  if (u.protocol !== "ws:" && u.protocol !== "wss:") return null;
+  if (u.username || u.password || !u.hostname) return null;
+  const port = u.port || (u.protocol === "wss:" ? "443" : "80");
+  return `${u.protocol}//${u.hostname.toLowerCase()}:${port}`;
+}
+
+/** `ws://127.0.0.1:4455` -> `127.0.0.1:4455` (how the install screen shows it); a host name stays as it is. */
+export const networkLabel = (entry: string): string => entry.replace(/^wss?:\/\//, "");
+
 export function parsePermissions(v: unknown, where = "permissions"): Permissions {
   if (v === undefined || v === null) return { network: [] };
   if (!isObj(v)) return fail(`${where} must be an object`);
   const out: Permissions = { network: [] };
-  for (const k of Object.keys(v)) if (!["network", "shell", "keyboard", "storage"].includes(k)) fail(`${where}.${k} is not a known permission (network, shell, keyboard, storage)`);
+  for (const k of Object.keys(v)) if (!["network", "shell", "keyboard", "storage", "onair"].includes(k)) fail(`${where}.${k} is not a known permission (network, shell, keyboard, storage, onair)`);
   if (v.network !== undefined) {
-    if (!Array.isArray(v.network) || v.network.length > 20) fail(`${where}.network must be a list of up to 20 host names`);
+    if (!Array.isArray(v.network) || v.network.length > 20) fail(`${where}.network must be a list of up to 20 host names or WebSocket origins`);
     const hosts = (v.network as unknown[]).map((h, i) => {
       const s = text(h, `${where}.network[${i}]`, 253).toLowerCase();
-      if (!HOST_RE.test(s)) fail(`${where}.network[${i}] "${s}" must be a host name like api.example.com or *.example.com`);
+      const ws = parseWsEntry(s, `${where}.network[${i}]`);
+      if (ws) return ws;
+      if (!HOST_RE.test(s)) fail(`${where}.network[${i}] "${s}" must be a host name like api.example.com or *.example.com, or a WebSocket origin like ws://127.0.0.1:4455`);
       return s;
     });
     out.network = [...new Set(hosts)];
   }
-  for (const k of ["shell", "keyboard", "storage"] as const) {
+  for (const k of ["shell", "keyboard", "storage", "onair"] as const) {
     if (v[k] === undefined) continue;
     if (typeof v[k] !== "boolean") fail(`${where}.${k} must be true or false`);
     if (v[k]) out[k] = true;
@@ -70,7 +99,7 @@ const patternCovers = (pattern: string, host: string): boolean =>
 /** Is everything in `asked` also in `have`? (a network host needs an equal or wider pattern) */
 export function covers(have: Permissions | null | undefined, asked: Permissions): boolean {
   const h = have ?? { network: [] };
-  for (const k of ["shell", "keyboard", "storage"] as const) if (asked[k] && !h[k]) return false;
+  for (const k of ["shell", "keyboard", "storage", "onair"] as const) if (asked[k] && !h[k]) return false;
   for (const host of asked.network) if (!h.network.some((p) => patternCovers(p, host))) return false;
   return true;
 }
@@ -78,10 +107,11 @@ export function covers(have: Permissions | null | undefined, asked: Permissions)
 /** Human lines for the install dialog, one per permission. */
 export function describePermissions(p: Permissions): string[] {
   const out: string[] = [];
-  for (const h of p.network) out.push(`Connect to ${h}`);
+  for (const h of p.network) out.push(`Connect to ${networkLabel(h)}`);
   if (p.shell) out.push("Run commands on this computer");
   if (p.keyboard) out.push("Press keys and type text on this computer");
   if (p.storage) out.push("Keep its own saved data");
+  if (p.onair) out.push("Turn On Air on");
   return out;
 }
 
@@ -98,7 +128,12 @@ export function settingFields(v: unknown, where: string): SettingField[] {
     seen.add(key);
     if (!(SETTING_TYPES as readonly string[]).includes(f.type)) fail(`${w}.type must be one of ${SETTING_TYPES.join(", ")}`);
     const out: SettingField = { key, type: f.type, label: text(f.label ?? key, `${w}.label`, 80) };
-    if (f.type === "select") {
+    if (f.optionsFrom !== undefined && f.type !== "select") fail(`${w}.optionsFrom is only for a select`);
+    if (f.type === "select" && f.optionsFrom !== undefined) {
+      if (f.options !== undefined) fail(`${w}: use either options (a fixed list) or optionsFrom (a list from the plugin's code), not both`);
+      if (typeof f.optionsFrom !== "string" || !ID_PART_RE.test(f.optionsFrom)) fail(`${w}.optionsFrom must be a provider id: lowercase letters, digits, - and _`);
+      out.optionsFrom = f.optionsFrom;
+    } else if (f.type === "select") {
       if (!Array.isArray(f.options) || !f.options.length || f.options.length > 50 || f.options.some((o: unknown) => typeof o !== "string")) fail(`${w}.options must be a list of strings`);
       out.options = f.options;
     }
@@ -107,7 +142,7 @@ export function settingFields(v: unknown, where: string): SettingField[] {
       const ok = f.type === "number" ? typeof d === "number" && Number.isFinite(d) : f.type === "boolean" ? typeof d === "boolean" : typeof d === "string" && d.length <= 500;
       if (!ok) fail(`${w}.default does not match type ${f.type}`);
       if (f.type === "secret") fail(`${w}: a secret has no default`);
-      if (f.type === "select" && !out.options!.includes(d as string)) fail(`${w}.default must be one of the options`);
+      if (f.type === "select" && out.options && !out.options.includes(d as string)) fail(`${w}.default must be one of the options`);
       out.default = d;
     }
     return out;
@@ -292,6 +327,10 @@ export function parseManifest(raw: unknown, opts: { agentVersion?: string; allow
   const settings = settingFields(raw.settings, "settings");
   const widgets = (raw.widgets === undefined ? [] : Array.isArray(raw.widgets) && raw.widgets.length <= 20 ? raw.widgets : fail("widgets must be a list of up to 20 widgets")).map((w: unknown, i: number) => parseWidget(w, permissions, settings, i, main !== null));
   const actions = (raw.actions === undefined ? [] : Array.isArray(raw.actions) && raw.actions.length <= 20 ? raw.actions : fail("actions must be a list of up to 20 actions")).map((a: unknown, i: number) => parseAction(a, permissions, settings, i, main !== null));
+  if (!main) {
+    const dyn = [...settings, ...widgets.flatMap((w) => w.settings), ...actions.flatMap((a) => a.settings)].find((f) => f.optionsFrom);
+    if (dyn) fail(`setting "${dyn.key}" uses optionsFrom, which needs a code plugin: set "main" to the entry file`);
+  }
   for (const [name, list] of [["widgets", widgets], ["actions", actions]] as const) {
     const seen = new Set<string>();
     for (const x of list) { if (seen.has(x.id)) fail(`${name}: id "${x.id}" is used twice`); seen.add(x.id); }

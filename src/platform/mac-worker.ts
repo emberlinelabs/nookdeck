@@ -21,6 +21,12 @@ const handlers: Record<string, (a: any) => any> = {
   jpeg: (a) => N.toJpegBase64(String(a.b64), Number(a.max) || 300),
   mute: (a) => N.setMuted(!!a.muted),
   volumeStep: (a) => N.volumeStep(a.command),
+  avUsage: (a) => ({ mic: N.micUsage(Number(a.ignorePid) || 0), camera: N.cameraInUse() }),
+  micRead: () => N.readMic(),
+  micMute: (a) => N.setMicMuted(!!a.muted),
+  micVolume: (a) => N.setMicVolume(Number(a.level)),
+  frontApp: () => N.frontApp(),
+  activate: (a) => N.activateApp(String(a.bundle)),
   running: (a) => Object.fromEntries((a.bundles as string[]).map((b) => [b, N.isRunning(b)])),
   /** Runs one script; `requires` (a bundle id) makes it a no-op unless that app is already running, so polling never launches anything. */
   script: (a) => (a.requires && !N.isRunning(a.requires) ? "" : N.runScript(String(a.source))),

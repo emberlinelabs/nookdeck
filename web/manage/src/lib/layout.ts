@@ -43,6 +43,9 @@ export function defaultAction(type: ActionType, firstPage = ""): Action {
     case "hass": return { type, service: "" };
     case "macro": return { type, steps: [{ kind: "hotkey", keys: "" }] };
     case "plugin": return { type, plugin: "", action: "" };
+    case "onair": return { type, mode: "toggle" };
+    case "mic": return { type, mode: "toggle" };
+    case "camera": return { type };
   }
 }
 
@@ -84,7 +87,7 @@ export function findFree(page: Page, w = 1, h = 1): { x: number; y: number } | u
 
 /** Preferred size of a widget: big for clock and now-playing, 2x1 for the metrics. */
 export const WIDGET_SIZE: Record<WidgetKind, [number, number]> = {
-  clock: [4, 2], nowplaying: [4, 2], cpu: [2, 1], gpu: [2, 1], memory: [2, 1], uptime: [2, 1], load: [2, 1], network: [2, 1], quota: [2, 2], sessions: [2, 3], entity: [1, 1], weather: [2, 2], value: [2, 1], notifications: [2, 2], plugin: [2, 1],
+  clock: [4, 2], nowplaying: [4, 2], cpu: [2, 1], gpu: [2, 1], memory: [2, 1], uptime: [2, 1], load: [2, 1], network: [2, 1], quota: [2, 2], sessions: [2, 3], entity: [1, 1], weather: [2, 2], value: [2, 1], notifications: [2, 2], plugin: [2, 1], onair: [2, 1],
 };
 
 /** Candidate sizes, largest first, ending with 1x1. */
@@ -349,11 +352,11 @@ export const PROVIDER_LABEL: Record<string, string> = { claude: "Claude", codex:
 
 export const WIDGET_HINT: Record<WidgetKind, string> = {
   clock: "Time and date", nowplaying: "Current track", cpu: "CPU usage (click to see processes)", gpu: "Graphics card load and memory (no data on Linux)", memory: "Memory in use",
-  uptime: "How long this computer has been running", load: "System load", network: "Network speed", quota: "Claude / Codex / Antigravity quota", sessions: "Running AI sessions", entity: "Home Assistant device", weather: "Weather", value: "Value pushed from outside (webhook)", notifications: "Recent notifications", plugin: "Tile from a plugin",
+  uptime: "How long this computer has been running", load: "System load", network: "Network speed", quota: "Claude / Codex / Antigravity quota", sessions: "Running AI sessions", entity: "Home Assistant device", weather: "Weather", value: "Value pushed from outside (webhook)", notifications: "Recent notifications", plugin: "Tile from a plugin", onair: "Red while you are live, recording or in a call",
 };
 
 export const WIDGET_LABEL: Record<string, string> = {
-  clock: "Clock", cpu: "CPU", gpu: "GPU", memory: "Memory", uptime: "Uptime", load: "System load", network: "Network", nowplaying: "Now playing", quota: "AI quota", sessions: "AI sessions", entity: "Home (Home Assistant)", weather: "Weather", value: "Pushed value", notifications: "Notifications", plugin: "Plugin tile",
+  clock: "Clock", cpu: "CPU", gpu: "GPU", memory: "Memory", uptime: "Uptime", load: "System load", network: "Network", nowplaying: "Now playing", quota: "AI quota", sessions: "AI sessions", entity: "Home (Home Assistant)", weather: "Weather", value: "Pushed value", notifications: "Notifications", plugin: "Plugin tile", onair: "On Air",
 };
 
 export const ACTION_LABEL: Record<ActionType, string> = {
@@ -369,6 +372,9 @@ export const ACTION_LABEL: Record<ActionType, string> = {
   macro: "Multi-step macro",
   plugin: "Plugin action",
   "sound-stop": "Stop all sounds",
+  onair: "On Air light",
+  mic: "Computer microphone",
+  camera: "Meeting camera",
 };
 
 export const MEDIA_LABEL: Record<string, string> = { playpause: "Play / Pause", next: "Next track", previous: "Previous track" };
@@ -376,13 +382,17 @@ export const VOLUME_LABEL: Record<string, string> = { up: "Increase", down: "Dec
 
 export const ACTION_ICON: Record<ActionType, string> = {
   open: "external-link", hotkey: "keyboard", type: "type", shell: "square-terminal",
-  media: "play", volume: "volume-2", page: "layout-grid", sound: "music", "sound-stop": "player-stop", hass: "home", macro: "bolt", plugin: "sparkles",
+  media: "play", volume: "volume-2", page: "layout-grid", sound: "music", "sound-stop": "player-stop", hass: "home", macro: "bolt", plugin: "sparkles", onair: "radio", mic: "mic", camera: "video",
 };
 
 export const ACTION_SHORT: Record<ActionType, string> = {
-  open: "Open", hotkey: "Hotkey", type: "Type", shell: "Command", media: "Music", volume: "Volume", page: "Screen", sound: "Sound", "sound-stop": "Stop sound", hass: "Home", macro: "Macro", plugin: "Plugin",
+  open: "Open", hotkey: "Hotkey", type: "Type", shell: "Command", media: "Music", volume: "Volume", page: "Screen", sound: "Sound", "sound-stop": "Stop sound", hass: "Home", macro: "Macro", plugin: "Plugin", onair: "On Air", mic: "Mic", camera: "Camera",
 };
 
+/** Mode words of the On Air and mic actions (English keys). */
+export const MODE_LABEL: Record<string, string> = {
+  toggle: "Toggle", mute: "Mute", unmute: "Unmute", on: "On", off: "Off",
+};
 /** One-line summary of what a button does, for the item list. */
 export function actionSummary(a: Action | undefined): string {
   if (!a) return t("No action");
@@ -398,6 +408,9 @@ export function actionSummary(a: Action | undefined): string {
     case "sound-stop": return t("Stop all sounds");
     case "macro": return t("Macro steps: {n}", { n: a.steps.length });
     case "plugin": return t("Plugin: {name}", { name: a.action || "…" });
+    case "onair": return t("On Air: {mode}", { mode: t(MODE_LABEL[a.mode ?? "toggle"] ?? "toggle") });
+    case "mic": return t("Computer mic: {mode}", { mode: t(MODE_LABEL[a.mode ?? "toggle"] ?? "toggle") });
+    case "camera": return t("Camera of the meeting app");
     case "hass": return a.service ? t("Home Assistant: {service}", { service: `${a.service}${a.entityId ? ` → ${a.entityId}` : ""}` }) : t("Home Assistant (no service selected)");
   }
 }

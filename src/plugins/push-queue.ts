@@ -31,7 +31,7 @@ export function createPushQueue(deps: PushQueueDeps): (id: string, u: PushUpdate
   async function deliver(id: string, u: PushUpdate): Promise<void> {
     if (typeof u !== "function") return deps.send(id, u);
     for (const t of await deps.tiles(id)) {
-      try { deps.send(id, await within(ms, () => u({ w: t.size.w, h: t.size.h })), t.key); }
+      try { deps.send(id, await within(ms, () => u({ w: t.size.w, h: t.size.h }, t.settings ?? {})), t.key); }
       catch (e) { deps.log(`widgets.push("${id}") failed for a ${t.size.w}x${t.size.h} tile: ${why(e)}`); }
     }
   }

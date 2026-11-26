@@ -420,6 +420,13 @@ export function ScreenSheet(props: { settings?: ScreenSettings; alarms?: Alarm[]
           </div>
           <div class="pd-scr__row">
             <div class="pd-scr__t">
+              {t('Full-screen ON AIR')}
+              <small>{t('While On Air is on, this phone shows a large ON AIR sign')}</small>
+            </div>
+            {sw(!!loc.onAirFull, () => saveLocalScreen({ onAirFull: !loc.onAirFull }), t('Full-screen ON AIR'))}
+          </div>
+          <div class="pd-scr__row">
+            <div class="pd-scr__t">
               {t('Alarms on this phone')}
               <small>{mine.length ? t('{0} armed', mine.length) : t('None for this phone')}</small>
             </div>

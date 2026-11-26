@@ -100,7 +100,8 @@ export function coerce(f: SettingField, raw: unknown): SettingValue | undefined 
   switch (f.type) {
     case "number": { const n = typeof raw === "number" ? raw : raw === "" ? NaN : Number(raw); return Number.isFinite(n) ? n : undefined; }
     case "boolean": return typeof raw === "boolean" ? raw : raw === "true" ? true : raw === "false" ? false : undefined;
-    case "select": return typeof raw === "string" && f.options?.includes(raw) ? raw : undefined;
+    // a list from the plugin's code (optionsFrom) is only known while the program runs: any name is kept, the plugin checks it
+    case "select": return typeof raw === "string" && (f.optionsFrom ? raw.length > 0 && raw.length <= 200 : f.options?.includes(raw)) ? raw : undefined;
     default: return typeof raw === "string" ? raw.slice(0, 2000) : typeof raw === "number" || typeof raw === "boolean" ? String(raw) : undefined;
   }
 }

@@ -98,6 +98,7 @@ export function buildCommand(a: Action, platform: NodeJS.Platform, input: LinuxI
   if (a.type === "hass") throw new Error("Home Assistant actions are handled by the HA client");
   if (a.type === "macro") throw new Error("macros are run step by step by the macro runner");
   if (a.type === "plugin") throw new Error("plugin actions are run by the plugin host");
+  if (a.type === "onair" || a.type === "mic" || a.type === "camera") throw new Error("On Air, mic and camera actions are handled by the agent (src/onair.ts, src/mic-camera.ts)");
 
   const isWin = platform === "win32";
   const isMac = platform === "darwin";

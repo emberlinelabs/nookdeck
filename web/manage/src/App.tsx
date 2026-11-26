@@ -33,6 +33,7 @@ import { SegmentedControl } from "@/components/ui/knowns/segmented-control";
 import { ThemesStore } from "@/components/themes-store";
 import { WeatherPage } from "@/components/weather-page";
 import { HassCard } from "@/components/hass-card";
+import { OnAirCard } from "@/components/onair-card";
 import { WebhookCard } from "@/components/webhook-card";
 import { BUILTIN_PLUGINS, AI_TOOL_IDS } from "@/lib/builtin-plugins";
 import { AppSidebar, pageFromHash, pageTitle, type Tab } from "@/components/app-sidebar";
@@ -410,6 +411,7 @@ export default function App() {
             onAddTile={(p, widgetId, pi) => { const r = placePluginTile(layout, pi, p, widgetId); if ("error" in r) return r.error; update(() => r.layout); setPageIdx(pi); setItemId(r.itemId); setTab("screens"); return null; }} />}
           {(AI_TOOL_IDS as readonly string[]).includes(tab.replace("plugin/", "")) && tab.startsWith("plugin/") && <IntegrationsPanel key={tab} tool={tab.slice(7) as AiProvider} />}
           {tab === "plugin/hass" && <div className="max-w-3xl"><HassCard /></div>}
+          {tab === "plugin/onair" && <div className="max-w-3xl"><OnAirCard /></div>}
           {tab === "plugin/quota" && <div className="max-w-3xl"><PluginsPanel key={tab} update={update} layout={layout} only="core.quota" /></div>}
           {tab === "plugin/weather" && <WeatherPage layout={layout} update={update} onGoScreens={() => setTab("screens")} />}
           {tab.startsWith("plugin/") && !BUILTIN_PLUGINS.some((p) => `plugin/${p.id}` === tab) && <div className="max-w-3xl"><PluginsPanel key={tab} update={update} only={tab.slice(7)} /></div>}

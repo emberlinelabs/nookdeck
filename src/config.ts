@@ -1,4 +1,5 @@
 import { PLUGIN_STYLES } from "../web/shared/plugin-styles";
+import { validOnairAction, type CameraAction, type MicAction, type OnAirAction } from "../web/shared/onair";
 import { userHome } from "./home";
 import "./compat";
 
@@ -24,6 +25,8 @@ export type Action =
   | { type: "hass"; service: string; entityId?: string; data?: Record<string, unknown> }
   /** Several steps in order (keys, text, waits, other buttons, HA calls…), see src/automation.ts. */
   | { type: "macro"; steps: MacroStep[] }
+  /** On Air (manual source), the computer's mic mute, and the meeting app's camera (src/onair.ts, src/mic-camera.ts). */
+  | OnAirAction | MicAction | CameraAction
   /** A no-code action of an installed plugin (src/plugins). `settings` override the plugin's own for this button. */
   | { type: "plugin"; plugin: string; action: string; settings?: Record<string, string | number | boolean> };
 
@@ -59,7 +62,7 @@ export type SoundMode = "overlap" | "restart" | "toggle";
 export const SOUND_ID_RE = /^snd:[a-f0-9]{16}$/;
 
 /** nowplaying = current track + transport + volume (agent sends {type:"media"}); network = rx/tx rates. */
-export type WidgetKind = "clock" | "cpu" | "gpu" | "memory" | "uptime" | "load" | "network" | "nowplaying" | "quota" | "sessions" | "entity" | "weather" | "value" | "notifications" | "plugin";
+export type WidgetKind = "clock" | "cpu" | "gpu" | "memory" | "uptime" | "load" | "network" | "nowplaying" | "quota" | "sessions" | "entity" | "weather" | "value" | "notifications" | "plugin" | "onair";
 
 /** AI coding tools Nookdeck reads quotas/sessions from. A "quota" widget shows one provider (item.provider). */
 export type AiProvider = "claude" | "codex" | "antigravity" | "opencode" | "grok";
@@ -326,8 +329,10 @@ export const HOME = process.env.NOOKDECK_HOME ?? join(userHome(), ".nookdeck");
 const LAYOUT_FILE = join(HOME, "layout.json");
 const DEVICES_FILE = join(HOME, "devices.json");
 
-export const ACTION_TYPES = ["open", "hotkey", "type", "shell", "media", "volume", "page", "sound", "sound-stop", "hass", "macro", "plugin"] as const;
-export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "gpu", "memory", "uptime", "load", "network", "nowplaying", "quota", "sessions", "entity", "weather", "value", "notifications", "plugin"];
+export const ACTION_TYPES = ["open", "hotkey", "type", "shell", "media", "volume", "page", "sound", "sound-stop", "hass", "macro", "plugin", "onair", "mic", "camera"] as const;
+/** The On Air tile's sizes (w x h). */
+export const ONAIR_SIZES = ["1x1", "2x1", "2x2"];
+export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "gpu", "memory", "uptime", "load", "network", "nowplaying", "quota", "sessions", "entity", "weather", "value", "notifications", "plugin", "onair"];
 
 export function defaultLayout(): Layout {
   return {
@@ -891,6 +896,14 @@ function pluginSettings(v: unknown, where: string): Record<string, string | numb
   return Object.keys(out).length ? out : undefined;
 }
 
+/** An onair / mic / camera action (On Air spec FR-10..12); only known fields are kept. */
+export function liveAction(a: any, where: string): OnAirAction | MicAction | CameraAction {
+  const why = validOnairAction({ type: a.type, ...(a.mode !== undefined ? { mode: a.mode } : {}) });
+  if (why) throw new Error(`${where}: ${why}`);
+  if (a.type === "camera") return { type: "camera" };
+  return { type: a.type, ...(a.mode !== undefined ? { mode: a.mode } : {}) } as OnAirAction | MicAction;
+}
+
 function validateAction(a: any, where: string): Action {
   if (!a || typeof a !== "object") throw new Error(`${where}.action must be an object`);
   switch (a.type) {
@@ -909,6 +922,7 @@ function validateAction(a: any, where: string): Action {
       return out;
     }
     case "sound-stop": return { type: "sound-stop" };
+    case "onair": case "mic": case "camera": return liveAction(a, `${where}.action`);
     case "macro": return { type: "macro", steps: macroSteps(a.steps, `${where}.action.steps`) };
     case "plugin": {
       const plugin = str(a.plugin, `${where}.action.plugin`);
@@ -974,6 +988,7 @@ export function validateLayout(raw: any): Layout {
       if (hasX) { size.x = num(it.x, `${w}.x`, 0, columns - 1); size.y = num(it.y, `${w}.y`, 0, MAX_ROWS - 1); }
       if (it.kind === "widget") {
         if (!WIDGET_KINDS.includes(it.widget)) throw new Error(`${w}.widget "${it.widget}" is not supported`);
+        if (it.widget === "onair" && !ONAIR_SIZES.includes(`${size.w ?? 1}x${size.h ?? 1}`)) throw new Error(`${w}: an On Air tile is 1x1, 2x1 or 2x2`);
         let provider: AiProvider | undefined;
         if (it.provider !== undefined && it.provider !== null && it.provider !== "") {
           if (!AI_PROVIDERS.includes(it.provider)) throw new Error(`${w}.provider must be one of ${AI_PROVIDERS.join(", ")}`);

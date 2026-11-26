@@ -80,6 +80,10 @@ const vi: Record<string, string> = {
   // server
   "the sound is no longer in the library": "âm thanh không còn trong thư viện",
   "Home Assistant is not connected": "Home Assistant chưa kết nối",
+  "No microphone found": "Không tìm thấy micro",
+  "This microphone cannot be muted": "Micro này không tắt tiếng được",
+  "No Zoom, Google Meet or Teams call found for the camera": "Không thấy cuộc gọi Zoom, Google Meet hay Teams nào để bật tắt camera",
+  "pactl is not installed": "Chưa cài pactl",
   "this tile is not linked to a Home Assistant device": "ô này không gắn với thiết bị Home Assistant",
   "this tile only shows status": "ô này chỉ hiển thị trạng thái",
   // ai
@@ -392,6 +396,10 @@ const zh: Record<string, string> = {
   // server
   "the sound is no longer in the library": "该声音已不在库中",
   "Home Assistant is not connected": "Home Assistant 未连接",
+  "No microphone found": "未找到麦克风",
+  "This microphone cannot be muted": "无法将此麦克风静音",
+  "No Zoom, Google Meet or Teams call found for the camera": "没有找到可切换摄像头的 Zoom、Google Meet 或 Teams 通话",
+  "pactl is not installed": "未安装 pactl",
   "this tile is not linked to a Home Assistant device": "此磁贴未关联 Home Assistant 设备",
   "this tile only shows status": "此磁贴仅显示状态",
   // ai
@@ -705,6 +713,10 @@ const fr: Record<string, string> = {
   // server
   "the sound is no longer in the library": "le son n'est plus dans la bibliothèque",
   "Home Assistant is not connected": "Home Assistant n'est pas connecté",
+  "No microphone found": "Aucun micro trouvé",
+  "This microphone cannot be muted": "Ce micro ne peut pas être coupé",
+  "No Zoom, Google Meet or Teams call found for the camera": "Aucun appel Zoom, Google Meet ou Teams trouvé pour la caméra",
+  "pactl is not installed": "pactl n'est pas installé",
   "this tile is not linked to a Home Assistant device": "cette tuile n'est liée à aucun appareil Home Assistant",
   "this tile only shows status": "cette tuile affiche seulement l'état",
   // ai
@@ -1017,6 +1029,10 @@ const pt: Record<string, string> = {
   // server
   "the sound is no longer in the library": "o som não está mais na biblioteca",
   "Home Assistant is not connected": "o Home Assistant não está conectado",
+  "No microphone found": "Nenhum microfone encontrado",
+  "This microphone cannot be muted": "Este microfone não pode ser silenciado",
+  "No Zoom, Google Meet or Teams call found for the camera": "Nenhuma chamada do Zoom, Google Meet ou Teams encontrada para a câmera",
+  "pactl is not installed": "o pactl não está instalado",
   "this tile is not linked to a Home Assistant device": "este bloco não está ligado a um dispositivo do Home Assistant",
   "this tile only shows status": "este bloco só mostra o estado",
   // ai

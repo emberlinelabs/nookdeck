@@ -62,6 +62,7 @@ export const FR_PLUGINS: Record<string, string> = {
   "Connecting": "Connexion",
   "Saved": "Enregistré",
   "Open Screens": "Ouvrir Écrans",
+  "Every Weather tile without a city of its own uses this one. To give a tile its own city, open it in Screens.": "Toutes les tuiles Météo sans ville à elles utilisent celle-ci. Pour donner une ville à une tuile, ouvrez-la dans Écrans.",
   "The location is set on each Weather tile: pick the tile on the phone, then choose Automatic or search for a city.": "La position se règle sur chaque tuile Météo : sélectionnez la tuile sur le téléphone, puis choisissez Automatique ou recherchez une ville.",
   "Quota, sessions and permission prompts on the phone": "Quota, sessions et demandes d'autorisation sur le téléphone",
   "Sessions and usage on the phone": "Sessions et utilisation sur le téléphone",
@@ -240,4 +241,11 @@ export const FR_PLUGINS: Record<string, string> = {
   "On": "Activé",
   "Off": "Désactivé",
   "{n} min": "{n} min",
+  // plugin API: WebSocket hosts, On Air, choices from the plugin
+  "Turn On Air on": "Activer On Air",
+  "Can turn On Air on while it is live or recording.": "Peut activer On Air pendant un direct ou un enregistrement.",
+  "{value} (not found now)": "{value} (introuvable pour le moment)",
+  "Loading the choices…": "Chargement des choix…",
+  "Could not get the choices ({error}). You can type the name.": "Impossible d'obtenir les choix ({error}). Vous pouvez saisir le nom.",
+  "No choices yet. You can type the name.": "Pas encore de choix. Vous pouvez saisir le nom.",
 };
