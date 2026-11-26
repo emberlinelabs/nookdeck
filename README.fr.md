@@ -40,15 +40,16 @@ de compte, pas de cloud.
 
 | Pour | Sur le téléphone |
 |---|---|
-| **Raccourcis** | Ouvrir des apps (avec leurs vraies icônes) et des URL, combinaisons de touches, saisie de texte, commandes shell, macros, touches multimédia et volume |
+| **Raccourcis** | Ouvrir des apps (avec leurs vraies icônes) et des URL, combinaisons de touches, saisie de texte, commandes shell, macros, touches multimédia et volume, captures d'écran (l'outil du système, ou Snapzy, CleanShot X et Shottr sur Mac, ShareX et Greenshot sur Windows) |
 | **Surveillance** | CPU, mémoire, réseau, charge et temps de fonctionnement, avec plusieurs styles de graphique ; touchez le CPU pour voir la liste des processus |
-| **Code avec l'IA** | Quotas Claude, Codex et Antigravity avec leur heure de réinitialisation ; choisissez les fenêtres à afficher (5 heures, 7 jours, par modèle) ; sessions Claude Code / Codex locales |
+| **Code avec l'IA** | Quotas Claude, Codex et Antigravity avec leur heure de réinitialisation, pour plusieurs comptes Claude et profils Codex ; choisissez les fenêtres à afficher (5 heures, 7 jours, par modèle) ; sessions Claude Code / Codex locales |
 | **Claude Code depuis le canapé** | Répondez aux demandes d'autorisation **Autoriser / Refuser** et aux questions à choix multiples de Claude depuis le téléphone (hooks à activer) |
+| **On Air** | Une tuile ON AIR et un panneau plein écran qui s'allument quand le micro ou la caméra sert, depuis un bouton, via `POST /api/onair` ou pendant qu'OBS diffuse ou enregistre ; les boutons **Micro** et **Caméra** coupent le micro et allument ou éteignent la caméra dans Zoom, Teams ou Google Meet |
 | **Au quotidien** | En cours de lecture avec pochette et reprise, 6 styles d'horloge et horloges mondiales, météo (par heure et par jour, °C ou °F), table de sons, notifications |
 | **Home Assistant** | Lumières avec couleur, température de couleur, scènes et effets ; climatisation (mode, ventilation, oscillation), ventilateurs, volets, aspirateurs, serrures, capteurs et images des caméras (facultatif) |
 | **Automatisation** | Webhooks qui envoient des valeurs et des notifications, règles qui réagissent à l'activité de l'ordinateur |
 | **À votre goût** | Grille en glisser-déposer (8×4, 8×3, 5×3…) avec un aperçu pour chaque taille d'écran, 4 styles de tuile (Soft, Solid, Outline, iOS), une couleur au choix par tuile, plus de 5 000 icônes, en anglais, vietnamien, chinois simplifié, français ou portugais du Brésil |
-| **Plugins** | Ajoutez des tuiles et des boutons depuis la [boutique de plugins](https://nookdeck.app/fr/plugins) ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)), ou créez les vôtres en TypeScript : voir le [guide des plugins](docs/plugins.md) |
+| **Plugins** | Ajoutez des tuiles et des boutons (OBS, Water reminder, Stocks, Pomodoro et d'autres) depuis la [boutique de plugins](https://nookdeck.app/fr/plugins) ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)), ou créez les vôtres en TypeScript : voir le [guide des plugins](docs/plugins.md) |
 | **Thèmes** | 15 packs de thèmes (Catppuccin, Tokyo Night, Cyberpunk, Sketchbook, Pixel…) en clair et en sombre, un mode Auto qui suit le téléphone, polices et arrière-plans ; [aperçu en direct](https://nookdeck.app/fr/themes) ou créez le vôtre |
 
 La disposition est une grille fixe de tuiles carrées, que vous composez par glisser-déposer dans la page de gestion, à l'adresse `http://localhost:7420/manage/`.
@@ -193,7 +194,7 @@ Confidentialité et sécurité → Accessibilité). Windows demande une fois d'a
 
 Vous veniez de PhoneDesk ? Nookdeck est son nouveau nom : une mise à jour reprend automatiquement votre disposition, vos téléphones et vos réglages.
 
-- **Mettre à jour :** relancez la même ligne d'installation. Votre disposition et vos téléphones associés sont conservés.
+- **Mettre à jour :** l'app vous prévient quand une nouvelle version sort, montre ce qui change et l'installe. Vous pouvez aussi relancer la même ligne d'installation. Votre disposition et vos téléphones associés sont conservés.
 - **Désinstaller (Mac) :** `curl -fsSL https://nookdeck.app/scripts/uninstall | bash`. Vos données sont conservées ; ajoutez `-s -- --purge` après `bash` pour les supprimer aussi.
 - **Désinstaller (Windows) :** `irm https://nookdeck.app/scripts/uninstall.ps1 | iex`.
 - **Désinstaller (Linux) :** la même ligne que sur Mac. Si vous avez installé le `.deb`, lancez aussi `sudo apt remove nookdeck`.

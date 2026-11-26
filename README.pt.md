@@ -40,15 +40,16 @@ conta, nada de nuvem.
 
 | Para | No celular |
 |---|---|
-| **Atalhos** | Abrir apps (com os ícones de verdade) e URLs, combinações de teclas, digitar texto, comandos de shell, macros, teclas de mídia e de volume |
+| **Atalhos** | Abrir apps (com os ícones de verdade) e URLs, combinações de teclas, digitar texto, comandos de shell, macros, teclas de mídia e de volume, capturas de tela (a ferramenta do sistema, ou Snapzy, CleanShot X e Shottr no Mac, ShareX e Greenshot no Windows) |
 | **Monitoramento** | CPU, memória, rede, carga e tempo ligado, com estilos de gráfico à escolha; toque na CPU para ver a lista de processos |
-| **Programação com IA** | Cotas do Claude, Codex e Antigravity com o horário em que zeram; escolha quais janelas mostrar (5 horas, 7 dias, por modelo); sessões locais do Claude Code / Codex |
+| **Programação com IA** | Cotas do Claude, Codex e Antigravity com o horário em que zeram, para várias contas do Claude e perfis do Codex; escolha quais janelas mostrar (5 horas, 7 dias, por modelo); sessões locais do Claude Code / Codex |
 | **Claude Code do sofá** | Responda aos pedidos de permissão **Permitir / Negar** e às perguntas de múltipla escolha do Claude pelo celular (hooks opcionais) |
+| **On Air** | Um bloco ON AIR e um aviso em tela cheia que acendem quando o microfone ou a câmera está em uso, por um botão, por `POST /api/onair` ou enquanto o OBS transmite ou grava; os botões **Mic** e **Câmera** silenciam o microfone e ligam ou desligam a câmera no Zoom, Teams ou Google Meet |
 | **Dia a dia** | Tocando agora com capa e retomar, 6 estilos de relógio e relógios mundiais, clima (por hora e por dia, °C ou °F), mesa de sons, notificações |
 | **Home Assistant** | Luzes com cor, temperatura de cor, cenas e efeitos; ar-condicionado (modo, ventilação, oscilação), ventiladores, persianas, robôs aspiradores, fechaduras, sensores e imagens das câmeras (opcional) |
 | **Automação** | Webhooks que enviam valores e notificações, regras que reagem à atividade no computador |
 | **Do seu jeito** | Grade de arrastar e soltar (8×4, 8×3, 5×3…) com prévia para cada tamanho de tela, 4 estilos de bloco (Soft, Solid, Outline, iOS), qualquer cor em cada bloco, mais de 5.000 ícones, em inglês, vietnamita, chinês simplificado, francês ou português do Brasil |
-| **Plugins** | Adicione blocos e botões pela [loja de plugins](https://nookdeck.app/pt/plugins) ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)) ou crie os seus em TypeScript: veja o [guia de plugins](docs/plugins.md) |
+| **Plugins** | Adicione blocos e botões (OBS, Water reminder, Stocks, Pomodoro e outros) pela [loja de plugins](https://nookdeck.app/pt/plugins) ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)) ou crie os seus em TypeScript: veja o [guia de plugins](docs/plugins.md) |
 | **Temas** | 15 pacotes de temas (Catppuccin, Tokyo Night, Cyberpunk, Sketchbook, Pixel…) com versões clara e escura, um modo Auto que segue o celular, fontes e fundos; [veja a prévia ao vivo](https://nookdeck.app/pt/themes) ou crie o seu |
 
 O layout é uma grade fixa de blocos quadrados, montada arrastando e soltando na página de gerenciamento, em `http://localhost:7420/manage/`.
@@ -193,7 +194,7 @@ Privacidade e Segurança → Acessibilidade). O Windows pergunta uma vez se o No
 
 Vem do PhoneDesk? Nookdeck é o novo nome dele: uma atualização leva seu layout, seus celulares e suas configurações automaticamente.
 
-- **Atualizar:** rode a mesma linha de instalação de novo. Seu layout e seus celulares pareados continuam.
+- **Atualizar:** o app avisa quando sai uma versão nova, mostra o que mudou e instala. Você também pode rodar a mesma linha de instalação de novo. Seu layout e seus celulares pareados continuam.
 - **Remover (Mac):** `curl -fsSL https://nookdeck.app/scripts/uninstall | bash`. Seus dados ficam; acrescente `-s -- --purge` depois de `bash` para apagá-los também.
 - **Remover (Windows):** `irm https://nookdeck.app/scripts/uninstall.ps1 | iex`.
 - **Remover (Linux):** a mesma linha do Mac. Se você instalou o `.deb`, rode também `sudo apt remove nookdeck`.

@@ -40,15 +40,16 @@ tài khoản, không dùng đám mây.
 
 | Dùng cho | Trên điện thoại |
 |---|---|
-| **Phím tắt** | Mở app (kèm icon thật) và URL, tổ hợp phím, gõ chữ, lệnh shell, macro, phím media và âm lượng |
+| **Phím tắt** | Mở app (kèm icon thật) và URL, tổ hợp phím, gõ chữ, lệnh shell, macro, phím media và âm lượng, chụp màn hình (công cụ của hệ thống, hoặc Snapzy, CleanShot X, Shottr trên Mac, ShareX, Greenshot trên Windows) |
 | **Theo dõi máy** | CPU, RAM, mạng, tải và thời gian chạy, chọn được kiểu biểu đồ; chạm CPU để xem danh sách tiến trình |
-| **Lập trình với AI** | Quota và thời điểm reset của Claude, Codex, Antigravity; chọn được mốc muốn xem (5 giờ, 7 ngày, theo model); các phiên Claude Code / Codex trên máy |
+| **Lập trình với AI** | Quota và thời điểm reset của Claude, Codex, Antigravity, cho nhiều tài khoản Claude và nhiều profile Codex; chọn được mốc muốn xem (5 giờ, 7 ngày, theo model); các phiên Claude Code / Codex trên máy |
 | **Điều khiển Claude Code từ xa** | Trả lời **Cho phép / Từ chối** và các câu hỏi nhiều lựa chọn của Claude ngay trên điện thoại (bật khi cần) |
+| **On Air** | Ô ON AIR và biển báo toàn màn hình sáng lên khi mic hoặc camera đang được dùng, khi bấm nút, khi gọi `POST /api/onair` hoặc khi OBS đang phát hay ghi hình; nút **Mic** và **Camera** tắt tiếng micro và bật tắt camera trong Zoom, Teams hoặc Google Meet |
 | **Hằng ngày** | Đang phát kèm ảnh bìa và nút phát tiếp, 6 kiểu đồng hồ và giờ thế giới, thời tiết (theo giờ, theo ngày, °C hoặc °F), soundboard, thông báo |
 | **Home Assistant** | Đèn có màu, nhiệt độ màu, cảnh và hiệu ứng; điều hòa (chế độ, quạt, đảo gió), quạt, rèm, robot hút bụi, khóa, cảm biến và ảnh từ camera (tùy chọn) |
 | **Tự động hóa** | Webhook đẩy giá trị và thông báo, rule phản ứng theo hoạt động trên máy |
 | **Tùy biến** | Lưới kéo thả (8×4, 8×3, 5×3…) có xem trước theo từng cỡ màn hình, 4 kiểu ô (Soft, Solid, Outline, iOS), màu riêng cho từng ô, hơn 5.000 icon, tiếng Anh, tiếng Việt, tiếng Trung giản thể, tiếng Pháp và tiếng Bồ Đào Nha (Brazil) |
-| **Plugin** | Thêm ô và nút từ [Cửa hàng plugin](https://nookdeck.app/plugins) ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)), hoặc tự viết bằng TypeScript: xem [hướng dẫn plugin](docs/plugins.md) |
+| **Plugin** | Thêm ô và nút (OBS, Water reminder, Stocks, Pomodoro và nhiều plugin khác) từ [Cửa hàng plugin](https://nookdeck.app/plugins) ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)), hoặc tự viết bằng TypeScript: xem [hướng dẫn plugin](docs/plugins.md) |
 | **Giao diện** | 15 bộ giao diện (Catppuccin, Tokyo Night, Cyberpunk, Sketchbook, Pixel…) có bản sáng và tối, chế độ Tự động theo điện thoại, font và hình nền; [xem trước trực tiếp](https://nookdeck.app/vi/themes) hoặc tự làm |
 
 Layout là lưới ô vuông cố định, sắp xếp bằng kéo thả ở trang quản lý `http://localhost:7420/manage/`. Có MCP server để
@@ -193,7 +194,7 @@ tư & Bảo mật → Trợ năng). Windows hỏi một lần cho Nookdeck dùng
 
 Đang dùng PhoneDesk? Nookdeck là tên mới của nó: khi cập nhật, bố cục, điện thoại đã ghép và cài đặt được chuyển sang tự động.
 
-- **Cập nhật:** chạy lại đúng dòng lệnh cài. Layout và điện thoại đã ghép đôi vẫn giữ nguyên.
+- **Cập nhật:** ứng dụng tự báo khi có bản mới, cho xem có gì mới rồi cài giúp bạn. Bạn cũng có thể chạy lại đúng dòng lệnh cài. Layout và điện thoại đã ghép đôi vẫn giữ nguyên.
 - **Gỡ (Mac):** `curl -fsSL https://nookdeck.app/scripts/uninstall | bash`. Dữ liệu được giữ lại; thêm `-s -- --purge` sau `bash` để xóa luôn.
 - **Gỡ (Windows):** `irm https://nookdeck.app/scripts/uninstall.ps1 | iex`.
 - **Gỡ (Linux):** dùng đúng dòng lệnh như trên Mac. Nếu đã cài gói `.deb` thì chạy thêm `sudo apt remove nookdeck`.

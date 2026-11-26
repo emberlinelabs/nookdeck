@@ -39,15 +39,16 @@ Nookdeck 是电脑上的一个小型 agent，通过 Wi-Fi 提供触控面板：�
 
 | 用途 | 在手机上 |
 |---|---|
-| **快捷操作** | 打开 app（显示真实图标）和 URL、组合键、输入文字、shell 命令、宏、媒体键和音量键 |
+| **快捷操作** | 打开 app（显示真实图标）和 URL、组合键、输入文字、shell 命令、宏、媒体键和音量键、截图（系统自带工具，或 Mac 上的 Snapzy、CleanShot X、Shottr，Windows 上的 ShareX、Greenshot） |
 | **监控** | CPU、内存、网络、负载和运行时间，可选择图表样式；点击 CPU 查看进程列表 |
-| **AI 编程** | Claude、Codex 和 Antigravity 的额度与重置时间；可选择要显示的时间窗口（5 小时、7 天、按模型）；本机的 Claude Code / Codex 会话 |
+| **AI 编程** | Claude、Codex 和 Antigravity 的额度与重置时间，支持多个 Claude 账号和 Codex 配置；可选择要显示的时间窗口（5 小时、7 天、按模型）；本机的 Claude Code / Codex 会话 |
 | **在沙发上用 Claude Code** | 在手机上回答**允许 / 拒绝**权限请求和 Claude 的选择题（需手动开启 hook） |
+| **On Air** | ON AIR 磁贴和全屏提示牌，在麦克风或摄像头使用时、按下按钮时、调用 `POST /api/onair` 时或 OBS 正在直播、录制时亮起；**麦克风**和**摄像头**按钮可以静音麦克风，并在 Zoom、Teams 或 Google Meet 中开关摄像头 |
 | **日常** | 带封面和继续播放的正在播放、6 种时钟样式和世界时钟、天气（逐小时和逐日，°C 或 °F）、音效板、通知 |
 | **Home Assistant** | 支持颜色、色温、场景和效果的灯；空调（模式、风速、摆风）、风扇、窗帘、扫地机器人、门锁、传感器和摄像头静态画面（可选） |
 | **自动化** | 推送数值和通知的 Webhook，以及根据电脑上的活动触发的规则 |
 | **个性化** | 可拖放的网格（8×4、8×3、5×3…），可按每种屏幕尺寸预览，4 种磁贴样式（Soft、Solid、Outline、iOS），每个磁贴可设任意颜色，5,000+ 图标，界面语言有英语、越南语、简体中文、法语和巴西葡萄牙语 |
-| **插件** | 从[插件商店](https://nookdeck.app/plugins)（[nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)）添加磁贴和按钮，或用 TypeScript 自己开发：参阅[插件指南](docs/plugins.md) |
+| **插件** | 从[插件商店](https://nookdeck.app/plugins)（[nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)）添加磁贴和按钮，例如 OBS、Water reminder、Stocks、Pomodoro，或用 TypeScript 自己开发：参阅[插件指南](docs/plugins.md) |
 | **主题** | 15 套主题（Catppuccin、Tokyo Night、Cyberpunk、Sketchbook、Pixel…），有浅色和深色版本、跟随手机的自动模式、字体和背景；可[在线预览](https://nookdeck.app/zh/themes)，也可以自己制作 |
 
 布局是由方形磁贴组成的固定网格，在 `http://localhost:7420/manage/` 的拖放式管理页面中编排。MCP 服务器可以让 AI 助手帮你排布局。
@@ -188,7 +189,7 @@ Linux 上需要注意：
 
 以前用过 PhoneDesk？Nookdeck 是它的新名字：更新时会自动迁移你的布局、已配对的手机和设置。
 
-- **更新：** 再运行一遍同样的安装命令。你的布局和已配对的手机会保留。
+- **更新：** 有新版本时应用会提醒你，显示更新内容并帮你安装。也可以再运行一遍同样的安装命令。你的布局和已配对的手机会保留。
 - **卸载（Mac）：** `curl -fsSL https://nookdeck.app/scripts/uninstall | bash`。数据会保留；在 `bash` 后加上 `-s -- --purge` 可一并删除。
 - **卸载（Windows）：** `irm https://nookdeck.app/scripts/uninstall.ps1 | iex`。
 - **卸载（Linux）：** 使用和 Mac 相同的命令。如果安装过 `.deb` 包，再运行 `sudo apt remove nookdeck`。

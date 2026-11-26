@@ -40,15 +40,16 @@ account, no cloud.
 
 | Use it for | On the phone |
 |---|---|
-| **Shortcuts** | Open apps (with their real icons) and URLs, key combinations, type text, shell commands, macros, media and volume keys |
+| **Shortcuts** | Open apps (with their real icons) and URLs, key combinations, type text, shell commands, macros, media and volume keys, screenshots (the system tool, or Snapzy, CleanShot X and Shottr on a Mac, ShareX and Greenshot on Windows) |
 | **Monitoring** | CPU, memory, network, load and uptime with selectable chart styles; tap CPU for the process list |
-| **AI coding** | Claude, Codex and Antigravity quotas with reset times; pick which windows to show (5 hours, 7 days, per model); local Claude Code / Codex sessions |
+| **AI coding** | Claude, Codex and Antigravity quotas with reset times, for several Claude accounts and Codex profiles; pick which windows to show (5 hours, 7 days, per model); local Claude Code / Codex sessions |
 | **Claude Code from the couch** | Answer **Allow / Deny** permission prompts and Claude's multiple-choice questions on the phone (opt-in hooks) |
+| **On Air** | An ON AIR tile and a full-screen sign that light up while the mic or camera is in use, from a button, from `POST /api/onair` or while OBS streams or records; **Mic** and **Camera** buttons mute the microphone and turn the camera on or off in Zoom, Teams or Google Meet |
 | **Everyday** | Now Playing with artwork and Resume, 6 clock styles and world clocks, weather (hourly and daily, °C or °F), a soundboard, notifications |
 | **Home Assistant** | Lights with colour, colour temperature, scenes and effects; climate (mode, fan, swing), fans, covers, vacuums, locks, sensors and camera stills (optional) |
 | **Automation** | Webhooks that push values and notifications, rules that react to activity on the computer |
 | **Make it yours** | Drag-and-drop grid (8×4, 8×3, 5×3…) with a preview for every screen size, 4 tile styles (Soft, Solid, Outline, iOS), any colour per tile, 5,000+ icons, English, Vietnamese, Simplified Chinese, French or Brazilian Portuguese |
-| **Plugins** | Add tiles and buttons from the [plugin Store](https://nookdeck.app/plugins) ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)), or build your own in TypeScript: see the [plugin guide](docs/plugins.md) |
+| **Plugins** | Add tiles and buttons (OBS, Water reminder, Stocks, Pomodoro and more) from the [plugin Store](https://nookdeck.app/plugins) ([nookdeck-plugins](https://github.com/howznguyen/nookdeck-plugins)), or build your own in TypeScript: see the [plugin guide](docs/plugins.md) |
 | **Themes** | 15 theme packs (Catppuccin, Tokyo Night, Cyberpunk, Sketchbook, Pixel…) with light and dark variants, an Auto mode that follows the phone, fonts and backgrounds; [preview them live](https://nookdeck.app/themes) or make your own |
 
 The layout is a fixed grid of square tiles built in a drag-and-drop management page at `http://localhost:7420/manage/`.
@@ -193,7 +194,7 @@ Privacy & Security → Accessibility). Windows asks once to allow Nookdeck on th
 
 Coming from PhoneDesk? Nookdeck is its new name: an update moves your layout, phones and settings over automatically.
 
-- **Update:** run the same install line again. Your layout and paired phones are kept.
+- **Update:** the app tells you when a new version is out, shows what's new and installs it. You can also run the same install line again. Your layout and paired phones are kept.
 - **Remove (Mac):** `curl -fsSL https://nookdeck.app/scripts/uninstall | bash`. Your data is kept; add `-s -- --purge` after `bash` to delete it too.
 - **Remove (Windows):** `irm https://nookdeck.app/scripts/uninstall.ps1 | iex`.
 - **Remove (Linux):** the same line as on a Mac. If you installed the `.deb`, also run `sudo apt remove nookdeck`.
