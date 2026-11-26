@@ -211,7 +211,17 @@ func setBusy(key string) {
 	render()
 }
 
-// poll asks the agent (cheap: the device list) and the Task Scheduler only when the agent does not answer.
+// The permission checks start several OS probes on the agent (four PowerShell processes on Windows), so they are asked for at most
+// once a minute and the last answer is kept in between; the status dot only uses them for "needs attention" (issue #15).
+const doctorEvery = time.Minute
+
+var (
+	doctorMu     sync.Mutex // poll runs from the ticker and after an action
+	lastDoctor   *core.Doctor
+	lastDoctorAt time.Time
+)
+
+// poll asks the agent (cheap: the device list), the permission checks once a minute, and the Task Scheduler only when the agent does not answer.
 func poll() {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
@@ -220,9 +230,17 @@ func poll() {
 	reachable := err == nil
 	var doc *core.Doctor
 	if reachable {
-		if d, err := c.Doctor(ctx); err == nil {
-			doc = &d
+		doctorMu.Lock()
+		if time.Since(lastDoctorAt) >= doctorEvery {
+			lastDoctorAt = time.Now()
+			dctx, dcancel := context.WithTimeout(context.Background(), 20*time.Second)
+			if d, err := c.Doctor(dctx); err == nil {
+				lastDoctor = &d
+			}
+			dcancel()
 		}
+		doc = lastDoctor
+		doctorMu.Unlock()
 	}
 	running := false
 	if !reachable {

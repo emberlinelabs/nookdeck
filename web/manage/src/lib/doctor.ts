@@ -9,9 +9,10 @@ export function useDoctor(): { items: DoctorItem[] | null; missing: boolean; err
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loaded = useRef(false);
-  const reload = useCallback(async () => {
+  // an explicit reload (and the first load) runs the checks now; the 30 s timer takes the agent's recent answer
+  const reload = useCallback(async (fresh = true) => {
     try {
-      setItems(await api.getDoctor());
+      setItems(await api.getDoctor(fresh));
       loaded.current = true;
       setMissing(false);
       setError(null);
@@ -26,7 +27,7 @@ export function useDoctor(): { items: DoctorItem[] | null; missing: boolean; err
   }, []);
   useEffect(() => {
     void reload();
-    const timer = setInterval(() => void reload(), 30000);
+    const timer = setInterval(() => void reload(false), 30000);
     return () => clearInterval(timer);
   }, [reload]);
   return { items, missing, error, reload };

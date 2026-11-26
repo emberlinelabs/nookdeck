@@ -414,8 +414,9 @@ export const api = {
     const o = rec(await request<unknown>("/api/update"));
     return { current: str(o.current) ?? "", latest: str(o.latest) ?? null, available: o.available === true, checkedAt: typeof o.checkedAt === "number" ? o.checkedAt : null, enabled: o.enabled !== false, error: str(o.error) };
   },
-  getDoctor: async (): Promise<DoctorItem[]> => {
-    const raw = rec(await request<unknown>("/api/doctor"));
+  /** `fresh`: run the checks now instead of the agent's answer from the last 30 s (opening the page, "check again"). */
+  getDoctor: async (fresh = false): Promise<DoctorItem[]> => {
+    const raw = rec(await request<unknown>(fresh ? "/api/doctor?fresh=1" : "/api/doctor"));
     const list = Array.isArray(raw.items) ? raw.items : [];
     return list.flatMap((x: unknown) => {
       const r = rec(x);

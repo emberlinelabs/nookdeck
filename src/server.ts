@@ -152,6 +152,8 @@ export interface StartOptions {
   askSettingsFile?: string;
   /** Probes for GET /api/doctor (fakes in tests: the real ones ask macOS). */
   doctorProbes?: Probes;
+  /** How long a doctor report is reused (default 30 s; 0 with fake probes so tests see every change). */
+  doctorCacheMs?: number;
   /** How long GET /api/doctor waits for the first Claude quota read (default 5000). */
   doctorWaitMs?: number;
   idleSeconds?: () => Promise<number | null>;
@@ -521,7 +523,18 @@ export async function startServer(opts: StartOptions = {}) {
   );
   const askSettings = new AskSettingsStore(opts.askSettingsFile);
   const doctorProbes = () => opts.doctorProbes ?? realProbes(pkg.version);
-  async function doctorReport(): Promise<DoctorReport> {
+  // One doctor run at a time, and its answer reused for a while: each run starts several OS probes (four PowerShell processes on
+  // Windows), and callers that give up (the tray waits 4 s) do not cancel it, so polling every few seconds piled them up (issue #15).
+  const DOCTOR_CACHE_MS = opts.doctorCacheMs ?? (opts.doctorProbes ? 0 : 30_000);
+  let doctorCached: { at: number; report: DoctorReport } | null = null;
+  let doctorRunning: Promise<DoctorReport> | null = null;
+  function doctorReport(fresh = false): Promise<DoctorReport> {
+    if (!fresh && doctorCached && Date.now() - doctorCached.at < DOCTOR_CACHE_MS) return Promise.resolve(doctorCached.report);
+    if (doctorRunning) return doctorRunning;
+    doctorRunning = doctorReportNow().then((report) => { doctorCached = { at: Date.now(), report }; return report; }).finally(() => { doctorRunning = null; });
+    return doctorRunning;
+  }
+  async function doctorReportNow(): Promise<DoctorReport> {
     // the first quota read can still be in flight right after start: wait for it a little before judging
     const read = () => hub.snapshot().providers.find((x) => x.id === "claude");
     // quotas are only polled while a phone shows them; without one the read never starts, so start it here
@@ -1213,7 +1226,7 @@ export async function startServer(opts: StartOptions = {}) {
       if (path === "/api/doctor" && req.method === "GET") {
         const denied = guardLocal(server, req);
         if (denied) return denied;
-        return json(await doctorReport());
+        return json(await doctorReport(new URL(req.url).searchParams.get("fresh") === "1"));
       }
       if (path === "/api/doctor/open" && req.method === "POST") {
         // opens the System Settings pane of one check (the "Open Settings" button); only panes the report itself names
@@ -1247,7 +1260,7 @@ export async function startServer(opts: StartOptions = {}) {
           if (!opts.doctorProbes) await touchLocalNetwork().catch(() => {});
           await hassClient?.test().catch(() => null);
         } else await probes.requestAutomation(what.bundle!);
-        const item = (await doctorReport()).items.find((i) => i.id === what.id);
+        const item = (await doctorReport(true)).items.find((i) => i.id === what.id);
         return json({ ok: true, item });
       }
 

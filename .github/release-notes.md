@@ -1,3 +1,15 @@
+## Nookdeck 0.6.1
+
+Upgrading: run the install command below again, or `nookdeck update`, or use **Install and restart** in the app.
+
+### Fixed
+
+- **Windows: high CPU from PowerShell** ([#15](https://github.com/howznguyen/nookdeck/issues/15)). The tray app asked for the permission checks every 5 seconds, each check started four PowerShell processes, and the ones it gave up on kept running, so they piled up. Now the agent runs one check at a time and reuses its answer for 30 seconds, and the tray app asks once a minute. On a test PC this went from about 42 PowerShell processes a minute to 7.
+
+### New
+
+- **Theme previews before you install.** Opening a theme in the store draws your own screen in that theme, and switching variants updates it live. The theme is downloaded to a cache and checked like an install; Install then reuses it.
+
 ## Nookdeck 0.6.0: Linux, and updates in one click
 
 Upgrading: run the install command below again, or `nookdeck update`, or use **Check for updates** in the app. On a Mac, this is the last time you install the app by hand: from 0.6.0 on, the app updates itself.
