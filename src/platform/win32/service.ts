@@ -29,10 +29,13 @@ const q = (s: string) => `"${s.replace(/"/g, '""')}"`; // a VBScript string lite
 const cmdArg = (s: string) => (/[\s&|<>^()%!"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
 
 /**
- * The VBScript that starts the agent hidden: sets the env, then `conhost.exe --headless cmd /s /c ""exe" args >> out.log 2>> err.log"`.
+ * The VBScript that starts the agent hidden: sets the env, then `cmd /s /c ""exe" args >> out.log 2>> err.log"`.
  * cmd (a console program) needs a console. Started bare, Windows 11 may hand that console to the default terminal app (Windows
- * Terminal), which ignores the hidden window style: an empty "cmd.exe" window that kills the agent when closed. conhost.exe
- * --headless hosts the console itself, with no window, so the default terminal is never asked (Windows 10 1809 and later).
+ * Terminal), which ignores the hidden window style: an empty "cmd.exe" window that kills the agent when closed. There (build
+ * 22000 and later) conhost.exe --headless hosts the console itself, with no window. conhost splits its command line again and
+ * drops the quotes, so a path with a space (C:\Users\Tuan Long) broke the 0.7.0 launcher: the line goes into run.cmd next to
+ * the launcher and conhost runs `cmd /d /c run.cmd` from that folder, a line with no path in it. Windows 10 has no
+ * default-terminal handoff: the bare cmd, as before 0.7.0.
  */
 export function buildLauncher(o: { program: string[]; env?: Record<string, string>; logDir: string; port?: number }): string {
   const args = [...o.program];
@@ -40,20 +43,51 @@ export function buildLauncher(o: { program: string[]; env?: Record<string, strin
   const line = `${args.map(cmdArg).join(" ")} >> ${cmdArg(join(o.logDir, "agent.out.log"))} 2>> ${cmdArg(join(o.logDir, "agent.err.log"))}`;
   const lines = ["' Starts Nookdeck without a console window. Written by `nookdeck service install`.", 'Set sh = CreateObject("WScript.Shell")'];
   for (const [k, v] of Object.entries({ NOOKDECK_SERVICE: "1", ...(o.env ?? {}) })) lines.push(`sh.Environment("Process")(${q(k)}) = ${q(v)}`);
-  lines.push(`sh.Run ${q(`conhost.exe --headless cmd /s /c "${line}"`)}, 0, False`);
+  lines.push(...runLines(q(`cmd /s /c "${line}"`)));
   return lines.join("\r\n") + "\r\n";
+}
+
+/** The batch file the Windows 11 launcher writes and runs (its folder is the launcher's). */
+export const RUN_CMD = "run.cmd";
+
+/** Runs the cmd line (a VBScript string literal, `cmd /s /c "..."`) hidden: on Windows 11 through run.cmd under a headless conhost. */
+function runLines(cmdLiteral: string): string[] {
+  return [
+    `c = ${cmdLiteral}`,
+    "' Windows 11 may give cmd's console to Windows Terminal (a visible window): a headless conhost hosts it. conhost drops the quotes",
+    `' around paths with spaces, so it runs ${RUN_CMD} from this folder. Windows 10 runs the bare cmd. Any error: the bare cmd.`,
+    "b = 0",
+    "On Error Resume Next",
+    'b = CLng(sh.RegRead("HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\CurrentBuildNumber"))',
+    "Err.Clear",
+    "If b >= 22000 Then",
+    '  Set fso = CreateObject("Scripting.FileSystemObject")',
+    "  d = fso.GetParentFolderName(WScript.ScriptFullName)",
+    `  Set f = fso.CreateTextFile(d & "\\${RUN_CMD}", True)`,
+    '  f.WriteLine "@" & Mid(c, 12, Len(c) - 12)',
+    "  f.Close",
+    "  If Err.Number = 0 Then",
+    "    sh.CurrentDirectory = d",
+    `    c = "conhost.exe --headless cmd /d /c ${RUN_CMD}"`,
+    "  End If",
+    "End If",
+    "On Error GoTo 0",
+    "sh.Run c, 0, False",
+  ];
 }
 
 export const launcherPath = (dir: string) => join(dir, "launch.vbs");
 
 /**
- * A launcher written before 0.7.0 runs cmd bare (a Windows Terminal window on Windows 11): the same text with cmd under a headless
- * conhost, everything else (env, program, port, logs) kept. null when there is nothing to change.
+ * A launcher written before 0.7.1 runs cmd bare (a Windows Terminal window on Windows 11) or, 0.7.0, under a headless conhost
+ * with the paths on its command line (the agent never starts when a path has a space): the same text with the 0.7.1 run lines,
+ * everything else (env, program, port, logs) kept. null when there is nothing to change.
  */
 export function upgradeLauncher(text: string): string | null {
-  if (text.includes("conhost.exe --headless cmd /s /c ")) return null;
-  const next = text.replace(/^(sh\.Run ")cmd \/s \/c /m, "$1conhost.exe --headless cmd /s /c ");
-  return next === text ? null : next;
+  if (text.includes(RUN_CMD)) return null;
+  const m = /^sh\.Run "(?:conhost\.exe --headless )?(cmd \/s \/c .*)", 0, False$/m.exec(text);
+  if (!m) return null;
+  return text.replace(m[0], runLines(`"${m[1]}"`).join("\r\n"));
 }
 
 /** Upgrades launch.vbs in place before it is run (an update only restarts the service, it does not install it again). */
@@ -63,7 +97,7 @@ async function freshLauncher(c: Pick<WinServiceCtx, "dir" | "log">): Promise<voi
   const next = text === null ? null : upgradeLauncher(text);
   if (next === null) return;
   await writeFile(file, next);
-  c.log("Launcher updated: the agent now starts without a console window.");
+  c.log("Launcher updated: the agent starts without a console window, also when the user folder has a space.");
 }
 
 /** The task definition: at logon of this user, no admin, runs on battery, never times out, restarts after a crash. */
@@ -167,6 +201,7 @@ export async function winUninstall(c: WinServiceCtx): Promise<{ removed: boolean
   await c.run(schtasksDelete());
   await c.run(regDeleteRun());
   await rm(launcher, { force: true });
+  await rm(join(c.dir, RUN_CMD), { force: true });
   c.log(had ? "Service removed." : "Service was not installed.");
   return { removed: had };
 }

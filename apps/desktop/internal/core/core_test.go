@@ -74,6 +74,11 @@ func TestVersionsAndLauncher(t *testing.T) {
 	if got := ProgramFromLauncher(headless); got != `C:\Users\a b\AppData\Local\Nookdeck\bin\nookdeck.exe` || PortFromLauncher(headless) != 7422 {
 		t.Errorf("headless launcher: %q %d", got, PortFromLauncher(headless))
 	}
+	// 0.7.1: the cmd line sits in a variable (Windows 11 writes it to run.cmd)
+	v071 := "c = \"cmd /s /c \"\"\"\"C:\\Users\\Tuan Long\\AppData\\Local\\Nookdeck\\bin\\nookdeck.exe\"\" --port 7423 >> x.log 2>> y.log\"\"\"\r\nsh.Run c, 0, False"
+	if got := ProgramFromLauncher(v071); got != `C:\Users\Tuan Long\AppData\Local\Nookdeck\bin\nookdeck.exe` || PortFromLauncher(v071) != 7423 {
+		t.Errorf("0.7.1 launcher: %q %d", got, PortFromLauncher(v071))
+	}
 }
 
 // fakeSys is a Windows machine in memory.

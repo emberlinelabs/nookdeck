@@ -352,8 +352,13 @@ describe("win32 service (Task Scheduler)", () => {
     expect(vbs).toContain('sh.Environment("Process")("NOOKDECK_SERVICE") = "1"');
     expect(vbs).toContain('sh.Environment("Process")("NOOKDECK_HOME") = "D:\\data ""x"""');
     expect(vbs).toContain(', 0, False'); // window style 0 = hidden, do not wait
-    // conhost hosts cmd's console headless: no default-terminal handoff (Windows Terminal ignores the hidden style)
-    expect(vbs).toContain('sh.Run "conhost.exe --headless cmd /s /c ""');
+    expect(vbs).toContain('c = "cmd /s /c ""');
+    // Windows 11 only: a headless conhost (no Windows Terminal window) runs run.cmd, so no path with a space is on its command line
+    expect(vbs).toContain("If b >= 22000 Then");
+    expect(vbs).toContain('c = "conhost.exe --headless cmd /d /c run.cmd"');
+    expect(vbs).toContain('f.WriteLine "@" & Mid(c, 12, Len(c) - 12)');
+    expect(vbs).toContain("sh.Run c, 0, False");
+    expect(vbs).not.toMatch(/conhost[^\r\n]*nookdeck\.exe/);
     expect(vbs).toContain('""C:\\Program Files\\Nookdeck\\nookdeck.exe"" --port 7500');
     expect(vbs).toContain('agent.out.log');
     expect(WS.buildLauncher({ program: prog, logDir: "L" })).not.toContain("--port");
@@ -422,16 +427,22 @@ describe("win32 service (Task Scheduler)", () => {
     expect(b.calls.some((c) => c[0] === "powershell.exe" && c[c.length - 1]!.includes("Stop-Process"))).toBe(true);
   });
 
-  test("a launcher from before 0.7.0 is upgraded to the headless conhost: on its own, and at restart and start", async () => {
-    const old = [
+  test("launchers from before 0.7.1 (bare cmd, or 0.7.0's conhost with the paths) are upgraded: on their own, and at restart and start", async () => {
+    const head = [
       "' Starts Nookdeck without a console window. Written by `nookdeck service install`.",
       'Set sh = CreateObject("WScript.Shell")',
       'sh.Environment("Process")("NOOKDECK_SERVICE") = "1"',
       'sh.Environment("Process")("NOOKDECK_HOME") = "D:\\data"',
-      'sh.Run "cmd /s /c ""C:\\Users\\Admin\\AppData\\Local\\Nookdeck\\bin\\nookdeck.exe --port 7421 >> C:\\L\\agent.out.log 2>> C:\\L\\agent.err.log""", 0, False',
-    ].join("\r\n") + "\r\n";
-    const up = WS.upgradeLauncher(old)!;
-    expect(up).toBe(old.replace('sh.Run "cmd /s /c ', 'sh.Run "conhost.exe --headless cmd /s /c '));
+    ];
+    const cmd = '"cmd /s /c ""C:\\Users\\Tuan Long\\AppData\\Local\\Nookdeck\\bin\\nookdeck.exe --port 7421 >> C:\\L\\agent.out.log 2>> C:\\L\\agent.err.log"""';
+    const old06 = [...head, `sh.Run ${cmd}, 0, False`].join("\r\n") + "\r\n";
+    const old070 = old06.replace('sh.Run "cmd /s /c ', 'sh.Run "conhost.exe --headless cmd /s /c ');
+    const up = WS.upgradeLauncher(old06)!;
+    expect(up).toContain(`\r\nc = ${cmd}\r\n`);
+    expect(up.startsWith(head.join("\r\n") + "\r\n")).toBe(true);
+    expect(up).toContain("sh.Run c, 0, False\r\n");
+    expect(up).not.toContain("\n\n");
+    expect(WS.upgradeLauncher(old070)).toBe(up);
     expect(WS.upgradeLauncher(up)).toBeNull(); // already new
     expect(WS.upgradeLauncher(WS.buildLauncher({ program: prog, logDir: "L" }))).toBeNull();
     expect(WS.upgradeLauncher("something else")).toBeNull();
@@ -439,10 +450,10 @@ describe("win32 service (Task Scheduler)", () => {
     for (const run of [WS.winRestart, WS.winStartService]) {
       const a = ctx();
       await WS.winInstall(a.c);
-      writeFileSync(WS.launcherPath(a.dir), old);
+      writeFileSync(WS.launcherPath(a.dir), old070);
       await run(a.c);
       expect(readFileSync(WS.launcherPath(a.dir), "utf8")).toBe(up);
-      expect(a.log).toContain("Launcher updated: the agent now starts without a console window.");
+      expect(a.log).toContain("Launcher updated: the agent starts without a console window, also when the user folder has a space.");
     }
   });
 
