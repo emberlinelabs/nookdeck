@@ -543,28 +543,63 @@ describe("win32 doctor", () => {
     expect(ssh.detail).toContain("Service-0x0-3e7$");
     expect((await run({}, { helperPing: async () => false })).by("helper")).toMatchObject({ status: "missing" });
   });
-  test("firewall: off / allowed / blocked / no rule (with the netsh hint)", async () => {
+  test("firewall, judged for the profile of the active network: off / allowed / blocked / no rule (with the netsh hint)", async () => {
     const fw = (out: string) => ({ "Get-NetFirewallProfile": { code: 0, out } });
-    expect((await run(fw("profile=False"))).by("firewall").status).toBe("ok");
-    expect((await run(fw("profile=True\nrule=Phone;enabled=True;action=Allow;dir=Inbound;profile=Private"))).by("firewall").status).toBe("ok");
-    expect((await run(fw("profile=True\nrule=Phone;enabled=True;action=Block;dir=Inbound;profile=Any"))).by("firewall")).toMatchObject({ status: "denied", fix: { settingsUrl: expect.any(String) } });
-    // Windows makes BLOCK rules when its popup is unanswered; they beat an allow rule
-    const both = (await run(fw("profile=True\nrule=Nookdeck;enabled=True;action=Allow;dir=Inbound;profile=Any\nrule=nookdeck.exe;enabled=True;action=Block;dir=Inbound;profile=Public"))).by("firewall");
+    const PROFILES = "fw=Domain;enabled=True;inbound=NotConfigured\nfw=Private;enabled=True;inbound=NotConfigured\nfw=Public;enabled=True;inbound=NotConfigured";
+    const home = "net=Home;category=Private\n" + PROFILES, cafe = "net=Cafe;category=Public\n" + PROFILES;
+    const rule = (action: string, profile: string) => `\nrule=R;enabled=True;action=${action};dir=Inbound;profile=${profile}`;
+    expect((await run(fw("net=Home;category=Private\nfw=Private;enabled=False;inbound=NotConfigured"))).by("firewall").status).toBe("ok");
+    expect((await run(fw(home + rule("Allow", "Private")))).by("firewall").status).toBe("ok");
+    expect((await run(fw(home + rule("Block", "Any")))).by("firewall")).toMatchObject({ status: "denied", fix: { settingsUrl: expect.any(String) } });
+    // Windows makes BLOCK rules when its popup is unanswered; they beat an allow rule on the profile they cover
+    const both = (await run(fw(cafe + rule("Allow", "Any") + rule("Block", "Public")))).by("firewall");
     expect(both.status).toBe("denied");
     expect(both.fix!.text).toContain("delete rule name=all");
-    const none = (await run(fw("profile=True"))).by("firewall");
+    expect((await run(fw(home + rule("Allow", "Any") + rule("Block", "Public")))).by("firewall").status).toBe("ok"); // the block is for Public only
+    const none = (await run(fw(home))).by("firewall");
     expect(none.status).toBe("missing");
     expect(none.fix!.text).toContain("netsh advfirewall firewall add rule");
     expect(none.fix!.text).toContain(EXE);
     expect((await run({ "Get-NetFirewallProfile": { code: 1, out: "" } })).by("firewall").status).toBe("unknown");
   });
+  test("firewall on a Public network: a Private-only rule, Block all incoming, and a rule that covers it", async () => {
+    const fw = (out: string) => ({ "Get-NetFirewallProfile": { code: 0, out } });
+    const pub = (inbound: string) => `net=TP-Link_66DC;category=Public\nfw=Private;enabled=True;inbound=NotConfigured\nfw=Public;enabled=True;inbound=${inbound}`;
+    // the rule Windows' popup makes when only Private is ticked
+    const privOnly = await run(fw(pub("NotConfigured") + "\nrule=nookdeck.exe;enabled=True;action=Allow;dir=Inbound;profile=Private"));
+    expect(privOnly.by("firewall")).toMatchObject({ status: "denied", fix: { text: expect.stringContaining("profile=any") } });
+    expect(privOnly.by("firewall").detail).toContain("not on this Public network");
+    expect(privOnly.by("network")).toMatchObject({ status: "unknown", fix: { settingsUrl: "ms-settings:network-status" } });
+    // "Block all incoming connections" ignores every allow rule
+    const shields = (await run(fw(pub("False") + "\nrule=Nookdeck;enabled=True;action=Allow;dir=Inbound;profile=Any"))).by("firewall");
+    expect(shields).toMatchObject({ status: "denied" });
+    expect(shields.detail).toContain("Block all incoming connections");
+    // Nookdeck's own rule (profile=any): Public is fine, and the network item says so
+    const ok = await run(fw(pub("NotConfigured") + "\nrule=Nookdeck;enabled=True;action=Allow;dir=Inbound;profile=Any"));
+    expect(ok.by("firewall").status).toBe("ok");
+    expect(ok.by("network")).toMatchObject({ status: "ok" });
+    expect(ok.by("network").detail).toContain("TP-Link_66DC is a Public network, and the firewall lets phones reach Nookdeck");
+    // two real networks: the worst counts (the phone may be on the Public one, where every incoming connection is blocked)
+    const two = await run(fw("net=Cafe;category=Public\nnet=Office;category=DomainAuthenticated\nfw=Domain;enabled=True;inbound=NotConfigured\nfw=Public;enabled=True;inbound=False\nrule=N;enabled=True;action=Allow;dir=Inbound;profile=Any"));
+    expect(two.by("firewall").status).toBe("denied");
+    expect(two.by("network").status).toBe("ok");
+    // a Private Tailscale says nothing about the Public LAN the phone is on (seen on a test PC)
+    const ts = (rule: string) => fw("net=Tailscale;category=Private\nnet=Network;category=Public\nfw=Private;enabled=True;inbound=NotConfigured\nfw=Public;enabled=True;inbound=NotConfigured\nrule=N;enabled=True;action=Allow;dir=Inbound;profile=" + rule);
+    const lanOk = await run(ts("Any"));
+    expect(lanOk.by("firewall").status).toBe("ok");
+    expect(lanOk.by("network").detail).toContain("Network is a Public network, and the firewall lets phones reach Nookdeck");
+    expect((await run(ts("Private"))).by("firewall").status).toBe("denied");
+    expect((await run(fw("net=Tailscale;category=Private\nfw=Private;enabled=True;inbound=NotConfigured\nrule=N;enabled=True;action=Allow;dir=Inbound;profile=Private"))).by("firewall").status).toBe("ok"); // only a VPN: judged on it
+    expect(two.calls.filter((c) => c[0] === "powershell.exe" && /NetConnectionProfile|NetFirewall/.test(c[c.length - 1]!)).length).toBe(1); // one probe for both items
+  });
   test("network profile: Private ok, Public needs switching", async () => {
-    expect((await run({ ps: { code: 0, out: "net=Home Wi-Fi;category=Private" } })).by("network")).toMatchObject({ status: "ok" });
-    const pub = (await run({ ps: { code: 0, out: "net=Cafe;category=Public" } })).by("network");
+    const net = (out: string) => ({ "Get-NetFirewallProfile": { code: 0, out } });
+    expect((await run(net("net=Home Wi-Fi;category=Private"))).by("network")).toMatchObject({ status: "ok" });
+    const pub = (await run(net("net=Cafe;category=Public"))).by("network");
     expect(pub).toMatchObject({ status: "unknown", fix: { settingsUrl: "ms-settings:network-status" } });
     expect(pub.detail).toContain("Cafe is a Public network");
-    expect((await run({ ps: { code: 0, out: "net=A;category=Public\nnet=B;category=Private" } })).by("network").status).toBe("ok");
-    expect((await run({ ps: { code: 0, out: "" } })).by("network").status).toBe("unknown");
+    expect((await run(net("net=A;category=Public\nnet=B;category=Private"))).by("network").status).toBe("ok");
+    expect((await run(net(""))).by("network").status).toBe("unknown");
   });
   test("Claude sign-in (credentials file), HA token, service", async () => {
     expect((await run({}, { fileExists: () => false })).by("keychain-claude")).toMatchObject({ status: "missing" });

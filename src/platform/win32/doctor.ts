@@ -9,11 +9,12 @@ const q = (s: string) => `'${s.replace(/'/g, "''")}'`;
 export const signatureArgv = (exe: string) => PS(`$s = Get-AuthenticodeSignature -LiteralPath ${q(exe)}; "status=$($s.Status)"; "subject=$($s.SignerCertificate.Subject)"`);
 /** Mark-of-the-Web: a Zone.Identifier stream on the exe (set by browsers) makes SmartScreen warn on every update. */
 export const motwArgv = (exe: string) => PS(`$z = Get-Content -LiteralPath ${q(exe)} -Stream Zone.Identifier -ErrorAction SilentlyContinue; if ($z) { "motw=yes" } else { "motw=no" }`);
-/** Windows Firewall: is the Private profile on, and which inbound rules name this program. */
+/**
+ * Network and Windows Firewall in one PowerShell run: the category of each active connection (net=), each firewall profile (fw=:
+ * on, and whether "Block all incoming connections" ignores the allow rules), and the inbound rules that name this program (rule=).
+ */
 export const firewallArgv = (exe: string) =>
-  PS(`"profile=$((Get-NetFirewallProfile -Profile Private).Enabled)"; Get-NetFirewallApplicationFilter -Program ${q(exe)} -ErrorAction SilentlyContinue | Get-NetFirewallRule | ForEach-Object { "rule=$($_.DisplayName);enabled=$($_.Enabled);action=$($_.Action);dir=$($_.Direction);profile=$($_.Profile)" }`);
-/** The network profile of each active connection: Public networks block incoming connections whatever the rules say. */
-export const networkArgv = () => PS(`Get-NetConnectionProfile | ForEach-Object { "net=$($_.Name);category=$($_.NetworkCategory)" }`);
+  PS(`Get-NetConnectionProfile | ForEach-Object { "net=$($_.Name);category=$($_.NetworkCategory)" }; Get-NetFirewallProfile | ForEach-Object { "fw=$($_.Name);enabled=$($_.Enabled);inbound=$($_.AllowInboundRules)" }; Get-NetFirewallApplicationFilter -Program ${q(exe)} -ErrorAction SilentlyContinue | Get-NetFirewallRule | ForEach-Object { "rule=$($_.DisplayName);enabled=$($_.Enabled);action=$($_.Action);dir=$($_.Direction);profile=$($_.Profile)" }`);
 export const taskArgv = () => ["schtasks", "/Query", "/TN", "Nookdeck", "/FO", "LIST"];
 
 export const WIN_PANES = {
@@ -49,37 +50,81 @@ export async function smartscreen(p: Probes): Promise<DoctorItem> {
   return { id: "smartscreen", title, status: "ok", detail: t("no downloaded-file mark on nookdeck.exe") };
 }
 
-export async function firewall(p: Probes): Promise<DoctorItem> {
-  const title = t("Firewall");
-  const r = await p.run(firewallArgv(p.exe));
-  if (r.code !== 0 && !/profile=/.test(r.out)) return { id: "firewall", title, status: "unknown", detail: t("could not read the firewall state") };
-  const kv = parseKv(r.out);
-  if (/^false$/i.test(kv.profile ?? "")) return { id: "firewall", title, status: "ok", detail: t("the Windows firewall is off for private networks: phones can connect") };
-  const rules = r.out.split(/\r?\n/).filter((l) => l.startsWith("rule=")).map((l) => parseKv(l.replace(/;/g, "\n").replace(/^rule=/, "rule=")));
-  const inbound = rules.filter((x) => /inbound|^1$/i.test(x.dir ?? "") && /^true$/i.test(x.enabled ?? ""));
-  if (inbound.some((x) => /block|^4$/i.test(x.action ?? ""))) {
-    return { id: "firewall", title, status: "denied", detail: t("blocked by a firewall BLOCK rule for nookdeck.exe (Windows creates it when its first-run popup is not answered): phones cannot connect"), fix: { text: t("Run as administrator: netsh advfirewall firewall delete rule name=all program=\"{exe}\" & netsh advfirewall firewall add rule name=\"Nookdeck\" dir=in action=allow program=\"{exe}\" profile=any remoteip=localsubnet", { exe: p.exe }), settingsUrl: WIN_PANES.firewall } };
+type Verdict = { status: "ok" | "denied" | "missing"; detail: string; fix?: DoctorItem["fix"] };
+const ORDER = { ok: 0, missing: 1, denied: 2 } as const;
+
+/** The firewall profile a connection category uses (DomainAuthenticated: Domain). */
+const fwProfile = (category: string) => (/domain/i.test(category) ? "Domain" : /private/i.test(category) ? "Private" : "Public");
+/** Connection names of VPNs and virtual switches: phones on the LAN do not come through them. */
+const VIRTUAL = /tailscale|zerotier|wireguard|openvpn|vpn|hyper-v|vethernet|wsl|docker|virtualbox|vmware/i;
+const kvLine = (l: string) => parseKv(l.replace(/;/g, "\n"));
+
+/** Can a phone on a network of this firewall profile reach the agent? */
+function verdictFor(profile: string, fw: Record<string, string> | undefined, rules: Record<string, string>[], exe: string): Verdict {
+  const name = t(profile);
+  if (fw && /^false$/i.test(fw.enabled ?? "")) return { status: "ok", detail: t("the Windows firewall is off for {profile} networks: phones can connect", { profile: name }) };
+  const replace = { text: t("Run as administrator: netsh advfirewall firewall delete rule name=all program=\"{exe}\" & netsh advfirewall firewall add rule name=\"Nookdeck\" dir=in action=allow program=\"{exe}\" profile=any remoteip=localsubnet", { exe }), settingsUrl: WIN_PANES.firewall };
+  if (fw && /^false$/i.test(fw.inbound ?? "")) {
+    return { status: "denied", detail: t("\"Block all incoming connections\" is on for {profile} networks, so no allow rule counts: phones cannot connect", { profile: name }), fix: { text: t("Open Windows Security > Firewall & network protection > {profile} network and untick \"Block all incoming connections\", or switch this network to Private.", { profile: name }), settingsUrl: WIN_PANES.firewall } };
   }
-  if (inbound.some((x) => /allow|^2$/i.test(x.action ?? ""))) return { id: "firewall", title, status: "ok", detail: t("the firewall is on and allows incoming connections to nookdeck") };
+  const covers = (r: Record<string, string>) => /any/i.test(r.profile ?? "") || new RegExp(profile, "i").test(r.profile ?? "") || !r.profile;
+  const here = rules.filter(covers);
+  if (here.some((x) => /block|^4$/i.test(x.action ?? ""))) {
+    return { status: "denied", detail: t("blocked by a firewall BLOCK rule for nookdeck.exe (Windows creates it when its first-run popup is not answered): phones cannot connect"), fix: replace };
+  }
+  if (here.some((x) => /allow|^2$/i.test(x.action ?? ""))) return { status: "ok", detail: t("the firewall is on and allows incoming connections to nookdeck") };
+  if (rules.some((x) => /allow|^2$/i.test(x.action ?? ""))) {
+    return { status: "denied", detail: t("the firewall allows nookdeck only on other networks, not on this {profile} network: phones cannot connect", { profile: name }), fix: replace };
+  }
   return {
-    id: "firewall", title, status: "missing",
+    status: "missing",
     detail: t("the firewall is on and has no rule for nookdeck: phones on your network cannot connect until it is allowed"),
-    fix: { text: t("Click Allow when Windows asks, or run as administrator: netsh advfirewall firewall add rule name=\"Nookdeck\" dir=in action=allow program=\"{exe}\" profile=any remoteip=localsubnet", { exe: p.exe }), settingsUrl: WIN_PANES.firewall },
+    fix: { text: t("Click Allow when Windows asks, or run as administrator: netsh advfirewall firewall add rule name=\"Nookdeck\" dir=in action=allow program=\"{exe}\" profile=any remoteip=localsubnet", { exe }), settingsUrl: WIN_PANES.firewall },
   };
 }
 
-export async function network(p: Probes): Promise<DoctorItem> {
-  const title = t("Network profile");
-  const r = await p.run(networkArgv());
-  const nets = r.out.split(/\r?\n/).filter((l) => l.startsWith("net=")).map((l) => parseKv(l.replace(/;/g, "\n")));
-  if (!nets.length) return { id: "network", title, status: "unknown", detail: t("no active network connection found") };
-  const priv = nets.filter((n) => /private|domain/i.test(n.category ?? ""));
-  if (priv.length) return { id: "network", title, status: "ok", detail: t("connected to a Private network ({name}): phones can reach this PC", { name: priv[0]!.net ?? "?" }) };
-  const name = nets[0]!.net ?? "?";
-  return {
-    id: "network", title, status: "unknown", detail: t("{name} is a Public network: Windows may block incoming connections on it; if your phone cannot connect, switch it to Private", { name }),
-    fix: { text: t("Open Settings > Network & internet, choose your Wi-Fi or Ethernet connection and set the network profile type to Private."), settingsUrl: "ms-settings:network-status" },
-  };
+/**
+ * The Network profile and Firewall items, from one probe. The firewall is judged for the profile of each active connection (a
+ * rule made by Windows' popup may cover Private only, and Public can be set to block every incoming connection), and the worst
+ * answer counts: the phone is on one of them. Tailscale, VPN and virtual adapters are left out while a real one is up (a Private
+ * Tailscale said nothing about the Public Wi-Fi the phone uses). A Public network is fine when the firewall lets phones in on it.
+ */
+export async function networkAndFirewall(p: Probes): Promise<[DoctorItem, DoctorItem]> {
+  const ntitle = t("Network profile"), ftitle = t("Firewall");
+  const r = await p.run(firewallArgv(p.exe));
+  const lines = r.out.split(/\r?\n/);
+  const all = lines.filter((l) => l.startsWith("net=")).map(kvLine);
+  const real = all.filter((n) => !VIRTUAL.test(n.net ?? ""));
+  const nets = real.length ? real : all;
+  const fws = new Map(lines.filter((l) => l.startsWith("fw=")).map(kvLine).map((x) => [String(x.fw).toLowerCase(), x]));
+  const rules = lines.filter((l) => l.startsWith("rule=")).map(kvLine).filter((x) => /inbound|^1$/i.test(x.dir ?? "") && /^true$/i.test(x.enabled ?? ""));
+
+  let firewall: DoctorItem;
+  const checks = (nets.length ? nets : [{ net: "?", category: "Private" }]).map((n) => {
+    const profile = fwProfile(n.category ?? "");
+    return { net: n, profile, v: verdictFor(profile, fws.get(profile.toLowerCase()), rules, p.exe) };
+  });
+  if (r.code !== 0 && !fws.size) firewall = { id: "firewall", title: ftitle, status: "unknown", detail: t("could not read the firewall state") };
+  else {
+    const pick = [...checks].sort((a, b) => ORDER[b.v.status] - ORDER[a.v.status])[0]!;
+    firewall = { id: "firewall", title: ftitle, status: pick.v.status, detail: pick.v.detail, ...(pick.v.fix ? { fix: pick.v.fix } : {}) };
+  }
+
+  let network: DoctorItem;
+  const priv = checks.filter((c) => nets.length && c.profile !== "Public");
+  if (!nets.length) network = { id: "network", title: ntitle, status: "unknown", detail: t("no active network connection found") };
+  else if (priv.length) network = { id: "network", title: ntitle, status: "ok", detail: t("connected to a Private network ({name}): phones can reach this PC", { name: priv[0]!.net.net ?? "?" }) };
+  else {
+    const pub = checks[0]!;
+    const name = pub.net.net ?? "?";
+    network = pub.v.status === "ok"
+      ? { id: "network", title: ntitle, status: "ok", detail: t("{name} is a Public network, and the firewall lets phones reach Nookdeck on it", { name }) }
+      : {
+        id: "network", title: ntitle, status: "unknown", detail: t("{name} is a Public network: Windows may block incoming connections on it; if your phone cannot connect, switch it to Private", { name }),
+        fix: { text: t("Open Settings > Network & internet, choose your Wi-Fi or Ethernet connection and set the network profile type to Private."), settingsUrl: "ms-settings:network-status" },
+      };
+  }
+  return [network, firewall];
 }
 
 /** SendInput only works in the signed-in desktop session (window station WinSta0): over SSH or as a service it cannot press keys. */

@@ -237,8 +237,8 @@ async function runWindows(p: Probes, ctx: DoctorCtx): Promise<DoctorReport> {
   const W = await import("./platform/win32/doctor");
   const items: DoctorItem[] = [{ id: "agent", title: t("Nookdeck"), status: "ok", detail: `${p.version} · ${p.exe}` }];
   // every probe is bounded (see realProbes.run / helperPing) and they run side by side: the whole check takes as long as the slowest one
-  const [startup, signature, smartscreen, helper, claude, network, firewall, hookItems] = await Promise.all([
-    W.startup(p), W.signature(p), W.smartscreen(p), W.helper(p), W.claudeSignIn(p, ctx), W.network(p), W.firewall(p), hooks(p, ctx),
+  const [startup, signature, smartscreen, helper, claude, [network, firewall], hookItems] = await Promise.all([
+    W.startup(p), W.signature(p), W.smartscreen(p), W.helper(p), W.claudeSignIn(p, ctx), W.networkAndFirewall(p), hooks(p, ctx),
   ]);
   items.push(startup, signature, smartscreen, W.desktopSession(p), helper, claude, W.haToken(ctx), network, firewall, ...hookItems);
   return { version: p.version, exe: p.exe, asService: p.asService, platform: p.platform, items };
