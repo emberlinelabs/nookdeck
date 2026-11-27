@@ -1,3 +1,11 @@
+## Nookdeck 0.7.1
+
+Upgrading: use **Install and restart** in the app, run the install command below again, or `nookdeck update`. If Nookdeck on Windows is stuck stopped after 0.7.0, the tray cannot check for updates: download and run `Nookdeck-Setup.exe` from [nookdeck.app/download](https://nookdeck.app/download) once.
+
+### Fixed
+
+- **Windows: Nookdeck stayed stopped after 0.7.0** when the Windows user name has a space (for example `C:\Users\Tuan Long`), and Start in the tray did nothing. The 0.7.0 launcher ran the agent through a hidden console host that lost the quotes around such paths, so the agent never started. The launcher now starts it on every user folder, still with no console window, and an existing launcher is fixed when the update restarts the agent.
+
 ## Nookdeck 0.7.0: On Air, OBS and five languages
 
 Upgrading: use **Install and restart** in the app, run the install command below again, or `nookdeck update`.
