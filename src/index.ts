@@ -332,7 +332,8 @@ try {
 const wantPort = parsePort(argv);
 let app: Awaited<ReturnType<typeof startServer>>;
 try {
-  app = await startServer({ port: wantPort, onPinChange: (pin) => { console.log("Too many failed attempts, PIN regenerated."); void printPairing(pin); } });
+  // NOOKDECK_HOST=127.0.0.1 listens on this computer only (behind `tailscale serve`); unset: every network, as before
+  app = await startServer({ port: wantPort, hostname: process.env.NOOKDECK_HOST, onPinChange: (pin) => { console.log("Too many failed attempts, PIN regenerated."); void printPairing(pin); } });
 } catch (err: any) {
   if (err?.code === "EADDRINUSE" || /in use/i.test(String(err?.message))) {
     const { explainBusyPort } = await import("./busy");
