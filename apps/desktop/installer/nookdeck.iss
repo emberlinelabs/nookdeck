@@ -109,7 +109,7 @@ begin
   Result := True;
   RemoveData := False;
   if not UninstallSilent then
-    RemoveData := MsgBox('Also delete your Nookdeck data (layout, paired phones, icons, sounds) in ' + ExpandConstant('{userprofile}\.nookdeck') + '?' + #13#10 + #13#10 +
+    RemoveData := MsgBox('Also delete your Nookdeck data (layout, paired phones, icons, sounds) in ' + ExpandConstant('{%USERPROFILE}\.nookdeck') + '?' + #13#10 + #13#10 +
       'Choose No to keep it, for example to install Nookdeck again later.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
 end;
 
@@ -134,6 +134,6 @@ begin
   begin
     DelTree(ExpandConstant('{localappdata}\Nookdeck'), True, True, True);
     if RemoveData then
-      DelTree(ExpandConstant('{userprofile}\.nookdeck'), True, True, True);
+      DelTree(ExpandConstant('{%USERPROFILE}\.nookdeck'), True, True, True);
   end;
 end;
