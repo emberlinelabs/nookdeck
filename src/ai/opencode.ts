@@ -124,8 +124,10 @@ export function readOpencodeSessions(file = opencodeDbPath(), now = Date.now(), 
     const out: AiSession[] = [];
     const seen = new Set<string>();
     for (const r of rows) {
-      if (r.parent_id || r.time_archived || seen.has(String(r.id))) continue; // sub-agent sessions, archived ones and an id listed in both tables stay out
-      seen.add(String(r.id));
+      const id = String(r.id);
+      if (seen.has(id)) continue; // an id in both tables: its newest copy decides, even when that copy is archived or a sub-agent
+      seen.add(id);
+      if (r.parent_id || r.time_archived) continue; // sub-agent sessions and archived ones stay out
       const at = Number(r.time_updated ?? 0);
       if (!at || now - at >= windowMs) continue;
       const model = modelName(r.model);

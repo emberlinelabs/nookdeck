@@ -109,7 +109,7 @@ describe("OpenCode sessions from opencode.db (read-only)", () => {
     expect(() => ro.run("DELETE FROM session")).toThrow();
     ro.close();
   });
-  test("2.x keeps new sessions in session_v2: both tables are read, newest first, an id in both counts once", () => {
+  test("2.x keeps new sessions in session_v2: both tables are read, newest first, an id in both counts once and its newest copy decides", () => {
     const d3 = tmp(); const f3 = join(d3, "o.db");
     const x = new Database(f3);
     const cols = "id TEXT, parent_id TEXT, directory TEXT, title TEXT, model TEXT, time_updated INTEGER, time_archived INTEGER";
@@ -120,6 +120,8 @@ describe("OpenCode sessions from opencode.db (read-only)", () => {
     v2.run("b", null, "/p/both", "in both", "m", NOW - 1_000, null);
     v2.run("c", null, "/p/new", "2.x chat", "m", NOW - 5_000, null);
     v2.run("d", "c", "/p/new", "sub agent", "m", NOW - 500, null); // sub-agent sessions stay out
+    legacy.run("e", null, "/p/gone", "stale copy", "m", NOW - 3_000, null); // not archived in the old table...
+    v2.run("e", null, "/p/gone", "archived copy", "m", NOW - 800, NOW - 700); // ...but archived in the newer copy, which decides
     x.close();
     const s = OC.readOpencodeSessions(f3, NOW);
     expect(s.map((r) => r.id)).toEqual(["b", "c", "a"]);
