@@ -33,7 +33,29 @@ export interface ReportInput {
   errLog: string;
   /** ~/.nookdeck/logs/phone-check.log when recent */
   phoneCheck?: string;
+  /** where the agent listens, its own networks, and who reached it since it started */
+  network?: { listen: string; port: number; startedAt: number; nets: Array<{ name: string; address: string; subnet: string }>; visitors: Visit[] };
 }
+
+/** How a remote address relates to the computer's networks: "same network as Wi-Fi", "Tailscale", "another network". */
+export function relation(address: string, nets: Array<{ name: string; subnet: string }>): string {
+  const own = nets.find((n) => inSubnet(address, n.subnet));
+  if (own) return `same network as ${own.name}`;
+  if (isTailnetIp(address)) return "Tailscale";
+  if (address.includes(":")) return "IPv6";
+  return "another network (not on any network of this computer)";
+}
+
+/** "10.0.26100" -> "11 (build 26100)": Windows 11 still reports kernel 10.0. Other systems unchanged. */
+export function windowsVersion(release: string): string {
+  const m = /^10\.0\.(\d+)/.exec(release);
+  if (!m) return release;
+  const build = Number(m[1]);
+  return `${build >= 22000 ? "11" : "10"} (build ${build})`;
+}
+
+import { inSubnet, isTailnetIp } from "./net";
+import type { Visit } from "./visitors";
 
 export interface MaskCtx { home?: string; user?: string; hosts?: string[] }
 
@@ -98,7 +120,25 @@ export function buildReport(r: ReportInput, ctx: MaskCtx = {}): string {
   lines.push(`- Created: ${new Date(r.now).toISOString()}`, "");
   if (r.doctor.length) {
     lines.push("#### Doctor", "");
-    for (const d of r.doctor) lines.push(`- ${d.status === "ok" ? "ok" : d.status.toUpperCase()}: ${m(d.title)}${d.status === "ok" || d.status === "n/a" ? "" : ` - ${m(d.detail)}`}`);
+    // the network items keep their detail when ok: which network, and what the firewall allows on it
+    const always = new Set(["network", "firewall"]);
+    for (const d of r.doctor) lines.push(`- ${d.status === "ok" ? "ok" : d.status.toUpperCase()}: ${m(d.title)}${(d.status === "ok" && !always.has(d.id)) || d.status === "n/a" ? "" : ` - ${m(d.detail)}`}`);
+    lines.push("");
+  }
+  if (r.network) {
+    const n = r.network;
+    lines.push("#### Network", "");
+    lines.push(`- Listening on ${n.listen}:${n.port}${n.listen === "0.0.0.0" ? " (every network)" : ""}; the agent started ${ago(r.now, new Date(n.startedAt).toISOString())}`);
+    if (!n.nets.length) lines.push("- no network connection (only localhost)");
+    for (const x of n.nets) lines.push(`- ${m(x.name)}: ${m(x.address)} in ${m(x.subnet)}${isTailnetIp(x.address) ? " (Tailscale)" : ""}`);
+    lines.push("", "#### Who reached this computer (since the agent started)", "");
+    if (!n.visitors.length) {
+      lines.push("- nobody: no phone or other device has opened Nookdeck on this computer. A phone that cannot load the page is stopped before it gets here: it is on another network or mobile data, the router keeps its devices apart (guest Wi-Fi, AP isolation), or the firewall blocks it.");
+    }
+    for (const v of n.visitors) {
+      const did = [v.page && "opened the page", v.paired && "paired", v.pinFails && `${v.pinFails} wrong PIN${v.pinFails > 1 ? "s" : ""}`, v.device && `connected as ${m(v.device)}`].filter(Boolean).join(", ") || "made requests";
+      lines.push(`- ${m(v.address)} (${relation(v.address, n.nets)}): ${did}; ${v.hits} request${v.hits > 1 ? "s" : ""}, last ${ago(r.now, new Date(v.last).toISOString())}`);
+    }
     lines.push("");
   }
   lines.push("#### Phones", "");

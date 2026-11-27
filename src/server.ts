@@ -5,7 +5,7 @@ import { resolveAsset } from "./assets";
 /** Embedded text assets served gzipped when the client accepts it; compressed once and kept (they never change). */
 const COMPRESSIBLE = /^(text\/|application\/(javascript|json|manifest\+json)|image\/svg\+xml)/;
 const gzCache = new Map<string, Uint8Array>();
-import { defaultAddress, isLocal, lanIp, localHostName, localResolves, phoneAddresses, tailnetName } from "./net";
+import { defaultAddress, isLocal, lanIp, localHostName, localResolves, ownNetworks, phoneAddresses, tailnetName } from "./net";
 import { Pairing, cookieToken, expiryFrom, tokenCookie, withDevicesLock } from "./pairing";
 import { SOUND_MAX, SOUND_TYPES, SoundLibrary, SoundPlayer, bareId, SOUND_ID_HEX, type SpawnFn } from "./sounds";
 import type { HassLike } from "./automation-types";
@@ -81,7 +81,8 @@ import { ERR_DISABLED, ERR_MISSING, ERR_NOT_GRANTED } from "./plugins/types";
 import type { SourceDeps } from "./plugins/sources";
 import { forbiddenPage, pickLanguage, wantsPage } from "./forbidden-page";
 import { layoutFrames, unusualClose } from "./ws-frames";
-import { DropLog, buildReport } from "./report";
+import { DropLog, buildReport, windowsVersion } from "./report";
+import { VisitorLog } from "./visitors";
 import { homedir, hostname as osHostname, release as osRelease, userInfo } from "node:os";
 import { join } from "node:path";
 
@@ -289,6 +290,8 @@ export async function startServer(opts: StartOptions = {}) {
   await history.push(layout).catch(() => {});
   const sockets = new Set<ServerWebSocket<WsData>>();
   const drops = new DropLog();
+  const visitors = new VisitorLog();
+  const startedAt = Date.now();
   const pairing = new Pairing(opts.onPinChange, opts.pin);
 
   const send = (ws: ServerWebSocket<WsData>, msg: unknown) => {
@@ -717,6 +720,8 @@ export async function startServer(opts: StartOptions = {}) {
     fetch: slowWatch(async (req: Request, server: any) => {
       const url = new URL(req.url);
       const path = url.pathname;
+      const peer: string | undefined = server.requestIP(req)?.address;
+      if (path !== "/ws" && path !== "/api/pair") visitors.seen(peer, path === "/" || path === "/index.html" ? "page" : "request");
 
       if (path === "/ws" || path === "/api/pair" || sndPhone.test(path) || camPhone.test(path)) {
         const bad = await guardPhone(server, req);
@@ -728,6 +733,7 @@ export async function startServer(opts: StartOptions = {}) {
         // the token comes from ?token= or from the pd_token cookie set at pairing
         const token = url.searchParams.get("token") || cookieToken(req.headers.get("cookie"));
         const device = await pairing.findDevice(token);
+        visitors.seen(peer, "ws", device?.name);
         // a valid connect renews the cookie for another year
         const headers = device && token ? { "set-cookie": tokenCookie(token) } : undefined;
         if (server.upgrade(req, { data: { deviceId: device?.id ?? null }, ...(headers ? { headers } : {}) })) return undefined;
@@ -737,6 +743,7 @@ export async function startServer(opts: StartOptions = {}) {
       if (path === "/api/pair" && req.method === "POST") {
         const body = await readBody(req);
         const res = await pairing.pair(body?.pin, body?.name);
+        visitors.seen(peer, res ? "pair-ok" : "pair-fail");
         return res ? new Response(JSON.stringify(res), { headers: { "content-type": "application/json", "set-cookie": tokenCookie(res.token) } }) : json({ error: "invalid pin" }, 401);
       }
 
@@ -1297,13 +1304,14 @@ export async function startServer(opts: StartOptions = {}) {
         };
         const frames = layoutFrames(layout, layoutAssets);
         const markdown = buildReport({
-          now: Date.now(), version: about.version, commit: about.commit || undefined, os: `${platform.label} ${osRelease()}`, arch: about.arch,
+          now: Date.now(), version: about.version, commit: about.commit || undefined, os: `${platform.label} ${platform.id === "win32" ? windowsVersion(osRelease()) : osRelease()}`, arch: about.arch,
           doctor: (await doctorReport().catch(() => ({ items: [] as DoctorReport["items"] }))).items,
           layout: { pages: layout.pages.length, tiles: layout.pages.reduce((n, p) => n + p.items.length, 0), bytes: frames.reduce((n, f) => n + f.length, 0), assets: Object.keys(layoutAssets).length, assetBytes: JSON.stringify(layoutAssets).length },
           devices: devices.map((d) => ({ name: d.name, lastSeen: d.lastSeen, createdAt: d.createdAt })),
           drops: drops.list().map((d) => ({ ...d, device: names.get(d.device) ?? "unknown device" })),
           errLog: await tail("agent.err.log").catch(() => ""),
           phoneCheck: await tail("phone-check.log", 7 * 86_400_000).catch(() => ""),
+          network: { listen: opts.hostname ?? "0.0.0.0", port: server.port, startedAt, nets: ownNetworks(), visitors: visitors.list() },
         }, { home: homedir(), user: (() => { try { return userInfo().username; } catch { return undefined; } })(), hosts: [osHostname()] });
         return json({ title: `[${about.version}] ${platform.label}: `, markdown, repo: about.repo });
       }

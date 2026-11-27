@@ -60,6 +60,20 @@ export function subnetOf(ip: string, netmask?: string): string {
   const net = (num(ip) & mask) >>> 0;
   return `${[24, 16, 8, 0].map((sh) => (net >>> sh) & 255).join(".")}/${bits}`;
 }
+/** Is ip inside "192.168.50.0/24"? */
+export function inSubnet(ip: string, cidr: string): boolean {
+  const [base, bits] = cidr.split("/");
+  if (!/^\d+\.\d+\.\d+\.\d+$/.test(ip) || !base || !bits) return false;
+  return inRange(ip, base, Number(bits));
+}
+/** The computer's own IPv4 networks a phone could be on (not loopback): name, address and subnet. */
+export function ownNetworks(): Array<{ name: string; address: string; subnet: string }> {
+  const out: Array<{ name: string; address: string; subnet: string }> = [];
+  for (const [name, addrs] of Object.entries(networkInterfaces())) {
+    for (const a of addrs ?? []) if (a.family === "IPv4" && !a.internal && !isLinkLocal(a.address)) out.push({ name, address: a.address, subnet: subnetOf(a.address, a.netmask) });
+  }
+  return out;
+}
 const isLinkLocal = (ip: string): boolean => inRange(ip, "169.254.0.0", 16);
 
 /** Virtual switches of VMs and containers: a phone cannot use them. */
