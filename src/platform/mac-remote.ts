@@ -67,9 +67,10 @@ export type StreamSpawn = (argv: string[]) => StreamProc;
 /**
  * The adapter only writes when Now Playing changes, so an agent that died without stopping it (SIGKILL, a killed test run) left it
  * running for good. A watcher holds our stdin pipe: when this process is gone the pipe closes and the watcher stops the adapter
- * (`$$` is the adapter itself after `exec`). Stopping it ourselves closes the pipe too, so the watcher never outlives it.
+ * (`$$` is the adapter itself after `exec`). The pipe goes through fd 3: dash gives a background job /dev/null as its stdin.
+ * Stopping it ourselves closes the pipe too, so the watcher never outlives it.
  */
-export const WATCHED = ["/bin/sh", "-c", '(cat >/dev/null; kill $$ 2>/dev/null) <&0 & exec "$@" </dev/null', "nookdeck-mediaremote"];
+export const WATCHED = ["/bin/sh", "-c", 'exec 3<&0; (cat <&3 >/dev/null; kill $$ 2>/dev/null) & exec "$@" </dev/null 3<&-', "nookdeck-mediaremote"];
 
 export const realStreamSpawn: StreamSpawn = (argv) => {
   const p = Bun.spawn([...WATCHED, ...argv], { stdin: "pipe", stdout: "pipe", stderr: "ignore" });
