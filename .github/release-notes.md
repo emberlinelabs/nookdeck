@@ -1,3 +1,14 @@
+## Nookdeck 0.7.2
+
+Upgrading: use **Install and restart** in the app, run the install command below again, or `nookdeck update`.
+
+### Fixed
+
+- **Windows: phones that could not connect while the check said the firewall was fine.** The firewall check looked at Private networks only, and any rule for Nookdeck counted. It now checks the network your PC is really on: a rule made by Windows' own popup for Private networks only, a BLOCK rule, and "Block all incoming connections" on Public networks are all reported, with the fix. Tailscale and other VPNs no longer hide a Public Wi-Fi, and a Public network whose firewall lets phones in is no longer flagged.
+- **Windows: "Allow phones to connect…" in the tray menu** appears while the firewall keeps phones out. It replaces Nookdeck's rule with one for every network type (one administrator prompt), or opens the firewall settings when "Block all incoming connections" is on.
+- Windows: uninstalling stopped with "Unknown constant userprofile".
+- macOS: the Now Playing helper could keep running after Nookdeck was stopped abruptly. It now always stops with Nookdeck.
+
 ## Nookdeck 0.7.1
 
 Upgrading: use **Install and restart** in the app, run the install command below again, or `nookdeck update`. If Nookdeck on Windows is stuck stopped after 0.7.0, the tray cannot check for updates: download and run `Nookdeck-Setup.exe` from [nookdeck.app/download](https://nookdeck.app/download) once.
