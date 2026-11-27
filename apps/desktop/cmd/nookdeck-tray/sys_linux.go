@@ -290,3 +290,8 @@ func openDoctor() {
 
 func afterSetup(context.Context, string) {} // the firewall (ufw) is a doctor item with its command, never changed from here
 func beforePair(context.Context)         {}
+
+// The firewall (ufw) is a doctor item with its command, never changed from the tray.
+const firewallFixable = false
+
+func fixFirewall() {}

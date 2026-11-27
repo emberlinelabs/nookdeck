@@ -93,8 +93,14 @@ type fakeSys struct {
 
 func (f *fakeSys) ops() Ops {
 	return Ops{
-		Exists:   func(p string) bool { _, ok := f.files[p]; return ok },
-		ReadFile: func(p string) (string, error) { s, ok := f.files[p]; if !ok { return "", os.ErrNotExist }; return s, nil },
+		Exists: func(p string) bool { _, ok := f.files[p]; return ok },
+		ReadFile: func(p string) (string, error) {
+			s, ok := f.files[p]
+			if !ok {
+				return "", os.ErrNotExist
+			}
+			return s, nil
+		},
 		Copy: func(src, dst string) error {
 			f.files[dst] = f.files[src]
 			f.versions[dst] = f.versions[src]
@@ -471,5 +477,25 @@ func TestEnsureAgentStartsAStoppedAgent(t *testing.T) {
 	f.down = true
 	if r = EnsureAgent(context.Background(), p, `B\nookdeck.exe`, f.ops()); r.Err != nil || !has(f.runs, `D:\mine\nookdeck.exe service start`) {
 		t.Errorf("custom install: %+v %v", r, f.runs)
+	}
+}
+
+func TestFirewallProblem(t *testing.T) {
+	var d Doctor
+	if err := json.Unmarshal([]byte(`{"items":[{"id":"network","status":"unknown","detail":"x"},{"id":"firewall","status":"denied","detail":"only Private","fix":{"text":"Run as administrator: netsh advfirewall ...","settingsUrl":"windowsdefender://network"}}]}`), &d); err != nil {
+		t.Fatal(err)
+	}
+	it := FirewallProblem(&d)
+	if it == nil || it.Fix == nil || it.Fix.SettingsURL != "windowsdefender://network" || !FirewallRuleFixes(it) {
+		t.Fatalf("problem %+v", it)
+	}
+	// "Block all incoming connections": the owner's setting, only opened
+	d.Items[1].Fix.Text = "Open Windows Security > Firewall & network protection"
+	if FirewallRuleFixes(FirewallProblem(&d)) {
+		t.Error("block-all is not fixed by a rule")
+	}
+	d.Items[1].Status = "ok"
+	if FirewallProblem(&d) != nil || FirewallProblem(nil) != nil {
+		t.Error("ok / nil")
 	}
 }

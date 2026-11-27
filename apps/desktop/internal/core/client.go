@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -70,10 +71,35 @@ type Pairing struct {
 }
 
 type DoctorItem struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Status string `json:"status"`
-	Detail string `json:"detail"`
+	ID     string     `json:"id"`
+	Title  string     `json:"title"`
+	Status string     `json:"status"`
+	Detail string     `json:"detail"`
+	Fix    *DoctorFix `json:"fix,omitempty"`
+}
+
+type DoctorFix struct {
+	Text        string `json:"text"`
+	SettingsURL string `json:"settingsUrl,omitempty"`
+}
+
+// FirewallProblem is the Firewall item when phones cannot reach the agent through it (denied or missing), else nil.
+func FirewallProblem(d *Doctor) *DoctorItem {
+	if d == nil {
+		return nil
+	}
+	for i := range d.Items {
+		if it := &d.Items[i]; it.ID == "firewall" && (it.Status == "denied" || it.Status == "missing") {
+			return it
+		}
+	}
+	return nil
+}
+
+// FirewallRuleFixes says whether replacing the rule (FirewallAddCommand) fixes the problem; "Block all incoming connections"
+// is the owner's own setting and is only opened, never changed.
+func FirewallRuleFixes(it *DoctorItem) bool {
+	return it != nil && (it.Fix == nil || strings.Contains(it.Fix.Text, "netsh"))
 }
 
 type Doctor struct {
@@ -108,6 +134,12 @@ func (c *Client) NewPIN(ctx context.Context) (Pairing, error) {
 func (c *Client) Doctor(ctx context.Context) (Doctor, error) {
 	var d Doctor
 	return d, c.do(ctx, "GET", "/api/doctor", &d)
+}
+
+// DoctorFresh runs the checks again instead of the agent's 30-second answer (after the tray changed something).
+func (c *Client) DoctorFresh(ctx context.Context) (Doctor, error) {
+	var d Doctor
+	return d, c.do(ctx, "GET", "/api/doctor?fresh=1", &d)
 }
 
 func (c *Client) Update(ctx context.Context, refresh bool) (Update, error) {

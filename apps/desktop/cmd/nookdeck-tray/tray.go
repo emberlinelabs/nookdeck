@@ -8,8 +8,8 @@ package main
 import (
 	"context"
 	"errors"
-	"net/http"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,15 +76,16 @@ func setupOnce(tray bool) int {
 // ---------- state shared between the poller and the menu ----------
 
 var state struct {
-	mu        sync.Mutex
-	exe       string
-	port      int
-	phones    int
-	st        core.State
-	busy      string // a status key while Start/Stop/Restart/setup run
-	update    core.Update
-	checking  bool
-	unreach   bool
+	mu       sync.Mutex
+	exe      string
+	port     int
+	phones   int
+	st       core.State
+	busy     string // a status key while Start/Stop/Restart/setup run
+	update   core.Update
+	checking bool
+	unreach  bool
+	firewall bool // the doctor's Firewall item says phones cannot connect (Windows)
 }
 
 func client() *core.Client {
@@ -110,10 +111,10 @@ func manageURL() string { return client().ManageURL() }
 // ---------- the menu (A6) ----------
 
 var (
-	mStatus, mPhones, mPair, mManage, mToggle, mRestart, mUpdate, mUpdateNow, mLogin *systray.MenuItem
-	mHelp, mDoctor, mLogs, mDocs, mSite, mVersion, mQuit                           *systray.MenuItem
-	mStar, mKofi                                                                   *systray.MenuItem
-	pair                                                                           *core.PairServer
+	mStatus, mPhones, mPair, mManage, mFirewall, mToggle, mRestart, mUpdate, mUpdateNow, mLogin *systray.MenuItem
+	mHelp, mDoctor, mLogs, mDocs, mSite, mVersion, mQuit                                        *systray.MenuItem
+	mStar, mKofi                                                                                *systray.MenuItem
+	pair                                                                                        *core.PairServer
 )
 
 func t(key string, vars ...string) string { return core.T(lang, key, vars...) }
@@ -129,6 +130,8 @@ func onReady() {
 	systray.AddSeparator()
 	mPair = systray.AddMenuItem(t("menu.pair"), "")
 	mManage = systray.AddMenuItem(t("menu.openManage"), "")
+	mFirewall = systray.AddMenuItem(t("menu.allowPhones"), "") // Windows: shown while the firewall keeps phones out
+	mFirewall.Hide()
 	systray.AddSeparator()
 	mToggle = systray.AddMenuItem(t("menu.stop"), "")
 	mRestart = systray.AddMenuItem(t("menu.restart"), "")
@@ -170,6 +173,8 @@ func onReady() {
 				go openPair()
 			case <-mManage.ClickedCh:
 				openURL(manageURL())
+			case <-mFirewall.ClickedCh:
+				go fixFirewall()
 			case <-mToggle.ClickedCh:
 				go toggle()
 			case <-mRestart.ClickedCh:
@@ -208,7 +213,13 @@ func onReady() {
 			}
 		}
 	}()
-	go func() { time.Sleep(20 * time.Second); checkUpdate(false); for range time.Tick(6 * time.Hour) { checkUpdate(false) } }()
+	go func() {
+		time.Sleep(20 * time.Second)
+		checkUpdate(false)
+		for range time.Tick(6 * time.Hour) {
+			checkUpdate(false)
+		}
+	}()
 	platformReady()
 }
 
@@ -230,6 +241,25 @@ var (
 	lastDoctor   *core.Doctor
 	lastDoctorAt time.Time
 )
+
+// currentDoctor is the last answer of the permission checks (nil before the first one).
+func currentDoctor() *core.Doctor {
+	doctorMu.Lock()
+	defer doctorMu.Unlock()
+	return lastDoctor
+}
+
+// refreshDoctor runs the checks again now (after the tray changed the firewall) and shows the result.
+func refreshDoctor() {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if d, err := client().DoctorFresh(ctx); err == nil {
+		doctorMu.Lock()
+		lastDoctor, lastDoctorAt = &d, time.Now()
+		doctorMu.Unlock()
+	}
+	poll()
+}
 
 // poll asks the agent (cheap: the device list), the permission checks once a minute, and the Task Scheduler only when the agent does not answer.
 func poll() {
@@ -259,6 +289,7 @@ func poll() {
 	state.mu.Lock()
 	state.st = core.StateOf(reachable, running, doc)
 	state.unreach = !reachable
+	state.firewall = reachable && firewallFixable && core.FirewallProblem(doc) != nil
 	state.phones = core.Online(ds)
 	state.mu.Unlock()
 	render()
@@ -267,10 +298,15 @@ func poll() {
 // render shows the state: tray icon and tooltip, the status line, the phone count and the labels of Start/Stop.
 func render() {
 	state.mu.Lock()
-	st, phones, busy, up, unreach := state.st, state.phones, state.busy, state.update, state.unreach
+	st, phones, busy, up, unreach, fw := state.st, state.phones, state.busy, state.update, state.unreach, state.firewall
 	state.mu.Unlock()
 	if mStatus == nil {
 		return
+	}
+	if fw {
+		mFirewall.Show()
+	} else {
+		mFirewall.Hide()
 	}
 	line := map[core.State]string{core.StateRunning: "status.running", core.StateStopped: "status.stopped", core.StateAttention: "status.needsPermission"}[st]
 	if st == core.StateAttention && unreach {
@@ -405,7 +441,6 @@ func checkUpdate(user bool) {
 	}
 	mUpdate.SetTitle(t("menu.checkUpdates"))
 }
-
 
 var (
 	askOnce sync.Once

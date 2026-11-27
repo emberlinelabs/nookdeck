@@ -53,20 +53,49 @@ func bundledAgent() string {
 type fwState struct{ asked bool }
 
 // firewallFlow offers the inbound rule (UAC) when the agent has none. Asked once per app run at most.
+// A rule that exists can still leave phones out (one Windows' popup made for Private only while this network is Public): the
+// agent's doctor judges the active network, so its answer counts too.
 func firewallFlow(ctx context.Context, exe string, ask bool) {
 	out, _ := powershell(ctx, core.FirewallScript(exe))
-	if core.FirewallOK(out) {
+	problem := core.FirewallProblem(currentDoctor())
+	if core.FirewallOK(out) && (problem == nil || !core.FirewallRuleFixes(problem)) {
 		return
 	}
-	logf("no firewall rule for %s (%q)", exe, strings.TrimSpace(out))
+	logf("no usable firewall rule for %s (%q)", exe, strings.TrimSpace(out))
 	if !ask || !messageBox(core.T(lang, "app.name"), core.T(lang, "firewall.ask"), true) {
 		return
 	}
-	// one elevated command (UAC), the same rule setup.ps1 adds: local subnet only
+	addFirewallRule(ctx, exe)
+}
+
+// addFirewallRule replaces every rule for exe with the one setup.ps1 adds (any network profile, local subnet only): one UAC prompt.
+func addFirewallRule(ctx context.Context, exe string) {
 	script := "Start-Process -FilePath cmd.exe -ArgumentList @('/c', '" + strings.ReplaceAll(core.FirewallAddCommand(exe), "'", "''") + "') -Verb RunAs -Wait -WindowStyle Hidden"
 	if o, code := powershell(ctx, script); code != 0 {
 		logf("firewall rule not added: %d %s", code, strings.TrimSpace(o))
 	}
+}
+
+const firewallFixable = true
+
+// fixFirewall is the "Allow phones to connect" menu item: it replaces the rule (UAC), or, for "Block all incoming connections"
+// (the owner's own setting), explains and opens the firewall settings. The checks run again right after.
+func fixFirewall() {
+	it := core.FirewallProblem(currentDoctor())
+	if it == nil {
+		return
+	}
+	if !core.FirewallRuleFixes(it) {
+		messageBox(core.T(lang, "app.name"), it.Detail+"\n\n"+it.Fix.Text, false)
+		if it.Fix.SettingsURL != "" {
+			openURL(it.Fix.SettingsURL)
+		}
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	addFirewallRule(ctx, agentExe())
+	refreshDoctor()
 }
 
 var firewallAsked bool
@@ -117,7 +146,6 @@ func icon(st core.State) []byte {
 	}
 	return b
 }
-
 
 // updateNow downloads the installer of the latest release (checked against SHA256SUMS), runs it and quits; the installer replaces
 // the app, then runs `Nookdeck.exe --setup` to update the agent, then starts the app again (A7).
