@@ -8,6 +8,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { localeLanguage, setLanguage, t } from "./i18n";
 import { platform } from "./platform";
+import { isCompiled } from "./about";
 import pkg from "../package.json" with { type: "json" };
 
 function parsePort(argv: string[]): number {
@@ -341,6 +342,20 @@ try {
   throw err;
 }
 printed.port = app.port;
+// From source (a dev, test or preview run; never the service): stop when the process that started it is gone, so a killed run
+// does not leave a server behind (75 of them had piled up on a dev Mac). Bun keeps the first ppid, so ask whether that one lives.
+if (!isCompiled() && process.env.NOOKDECK_SERVICE !== "1" && platform.id !== "win32") {
+  const parent = process.ppid;
+  if (parent > 1) {
+    setInterval(() => {
+      try { process.kill(parent, 0); } catch (e: any) {
+        if (e?.code !== "ESRCH") return;
+        console.log("The process that started Nookdeck is gone: stopping.");
+        process.exit(0);
+      }
+    }, 5000).unref();
+  }
+}
 // Event-loop watchdog: when something blocks the main thread (a synchronous call that never returns) the agent looks dead from outside.
 // A blocked loop cannot log while it is stuck, but a long stall that ends is recorded, with its length, in agent.err.log.
 { let last = Date.now(); setInterval(() => { const now = Date.now(); if (now - last > 3000) console.warn(`[watchdog] the event loop was blocked for ${Math.round((now - last) / 1000)} s`); last = now; }, 1000).unref(); }

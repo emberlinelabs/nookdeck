@@ -64,9 +64,18 @@ export interface StreamProc {
 }
 export type StreamSpawn = (argv: string[]) => StreamProc;
 
+/**
+ * The adapter only writes when Now Playing changes, so an agent that died without stopping it (SIGKILL, a killed test run) left it
+ * running for good. A watcher holds our stdin pipe: when this process is gone the pipe closes and the watcher stops the adapter
+ * (`$$` is the adapter itself after `exec`). Stopping it ourselves closes the pipe too, so the watcher never outlives it.
+ */
+export const WATCHED = ["/bin/sh", "-c", '(cat >/dev/null; kill $$ 2>/dev/null) <&0 & exec "$@" </dev/null', "nookdeck-mediaremote"];
+
 export const realStreamSpawn: StreamSpawn = (argv) => {
-  const p = Bun.spawn(argv, { stdin: "ignore", stdout: "pipe", stderr: "ignore" });
-  return { stdout: p.stdout as ReadableStream<Uint8Array>, exited: p.exited, kill: () => { try { p.kill(); } catch { /* gone */ } } };
+  const p = Bun.spawn([...WATCHED, ...argv], { stdin: "pipe", stdout: "pipe", stderr: "ignore" });
+  const close = () => { try { p.stdin.end(); } catch { /* closed */ } };
+  void p.exited.then(close, close);
+  return { stdout: p.stdout as ReadableStream<Uint8Array>, exited: p.exited, kill: () => { try { p.kill(); } catch { /* gone */ } close(); } };
 };
 
 export interface RemoteDeps {

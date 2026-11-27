@@ -229,3 +229,35 @@ describe("extractAdapter", () => {
     expect(readdirSync(lib).filter((n) => n.startsWith("mediaremote-")).length).toBe(1); // the old version is gone
   });
 });
+
+describe.skipIf(WIN)("the adapter process never outlives the agent", () => {
+  const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  const childOf = (ppid: number) => Number(Bun.spawnSync(["pgrep", "-P", String(ppid), "-x", "sleep"]).stdout.toString().trim().split("\n")[0] || 0);
+
+  test("an agent killed with SIGKILL takes the adapter with it", async () => {
+    const script = join(mkdtempSync(join(tmpdir(), "nd-mr-")), "agent.ts");
+    writeFileSync(script, `import { realStreamSpawn } from ${JSON.stringify(join(import.meta.dir, "../src/platform/mac-remote.ts"))};\nrealStreamSpawn(["sleep", "60"]);\nconsole.log("up");\nawait new Promise(() => {});\n`);
+    const agent = Bun.spawn([process.execPath, script], { stdout: "pipe", stderr: "ignore" });
+    await agent.stdout.getReader().read(); // "up"
+    let adapter = 0;
+    for (let i = 0; i < 50 && !adapter; i++) { await Bun.sleep(50); adapter = childOf(agent.pid); }
+    expect(adapter).toBeGreaterThan(0);
+    agent.kill("SIGKILL");
+    await agent.exited;
+    for (let i = 0; i < 40 && alive(adapter); i++) await Bun.sleep(50);
+    expect(alive(adapter)).toBe(false);
+  });
+
+  test("stopping it leaves no watcher behind", async () => {
+    const { realStreamSpawn } = await import("../src/platform/mac-remote");
+    const p = realStreamSpawn(["sleep", "60"]);
+    await Bun.sleep(200);
+    const adapter = childOf(process.pid);
+    expect(adapter).toBeGreaterThan(0);
+    p.kill();
+    await p.exited;
+    await Bun.sleep(200);
+    expect(alive(adapter)).toBe(false);
+    expect(Bun.spawnSync(["pgrep", "-f", `nookdeck-mediaremote sleep 60`]).stdout.toString().trim()).toBe("");
+  });
+});
